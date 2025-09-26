@@ -228,14 +228,16 @@ CREATE TABLE kudos (
     ip_address INET,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
-    CONSTRAINT kudos_identity CHECK (user_id IS NOT NULL OR guest_session IS NOT NULL),
-    UNIQUE(work_id, user_id) WHERE user_id IS NOT NULL,
-    UNIQUE(work_id, guest_session) WHERE guest_session IS NOT NULL
+    CONSTRAINT kudos_identity CHECK (user_id IS NOT NULL OR guest_session IS NOT NULL)
 );
 
 CREATE INDEX idx_kudos_work_id ON kudos(work_id);
 CREATE INDEX idx_kudos_user_id ON kudos(user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX idx_kudos_created_at ON kudos(created_at);
+
+-- Unique constraints implemented as partial unique indexes
+CREATE UNIQUE INDEX idx_kudos_unique_user ON kudos(work_id, user_id) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_kudos_unique_guest ON kudos(work_id, guest_session) WHERE guest_session IS NOT NULL;
 
 -- Bookmarks table
 CREATE TABLE bookmarks (
