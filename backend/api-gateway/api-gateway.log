@@ -1,0 +1,132 @@
+2025/10/10 22:09:59 No .env file found, using system environment variables
+2025/10/10 22:09:59 🔧 Initializing Nuclear AO3 API Gateway...
+2025/10/10 22:09:59 ✅ Redis connected successfully
+2025/10/10 22:09:59 ✅ API Gateway initialized successfully
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /health                   --> main.(*APIGateway).HealthCheck-fm (6 handlers)
+[GIN-debug] GET    /metrics                  --> main.setupRouter.WrapH.func4 (6 handlers)
+[GIN-debug] GET    /status                   --> main.(*APIGateway).ServiceStatus-fm (6 handlers)
+[GIN-debug] POST   /graphql                  --> main.(*APIGateway).GraphQLHandler-fm (7 handlers)
+[GIN-debug] GET    /graphql                  --> main.(*APIGateway).GraphQLPlaygroundHandler-fm (6 handlers)
+[GIN-debug] GET    /graphql/ws               --> main.(*APIGateway).GraphQLSubscriptionHandler-fm (6 handlers)
+[GIN-debug] GET    /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] POST   /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/auth/*path        --> main.(*APIGateway).ProxyToAuth-fm (7 handlers)
+[GIN-debug] GET    /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/works/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] POST   /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/tags/*path        --> main.(*APIGateway).ProxyToTag-fm (7 handlers)
+[GIN-debug] GET    /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] POST   /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/search/*path      --> main.(*APIGateway).ProxyToSearch-fm (7 handlers)
+[GIN-debug] GET    /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/my/*path          --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/users/*path       --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/series/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/collections/*path --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/bookmarks/*path   --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/comments/*path    --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] GET    /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] POST   /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PUT    /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] PATCH  /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] HEAD   /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] OPTIONS /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] DELETE /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] CONNECT /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+[GIN-debug] TRACE  /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
+2025/10/10 22:09:59 🚀 Nuclear AO3 API Gateway starting on port 8080
+2025/10/10 22:09:59 📊 GraphQL Playground: http://localhost:8080/graphql
+2025/10/10 22:09:59 📈 Metrics: http://localhost:8080/metrics
+2025/10/10 22:09:59 ⚠️ Health check failed for auth-service: Get "http://localhost:8081/health": dial tcp [::1]:8081: connect: connection refused
+2025/10/10 22:09:59 ⚠️ Health check failed for tag-service: Get "http://localhost:8083/health": dial tcp [::1]:8083: connect: connection refused
+2025/10/10 22:09:59 ⚠️ Health check failed for work-service: Get "http://localhost:8082/health": dial tcp [::1]:8082: connect: connection refused
+2025/10/10 22:09:59 ⚠️ Health check failed for search-service: Get "http://localhost:8084/health": dial tcp [::1]:8084: connect: connection refused
+2025/10/10 22:10:06 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:10:06 | 503 |     242.333µs |             ::1 | GET     "/health"
+2025/10/10 22:10:42 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:10:42 | 503 |      46.167µs |             ::1 | GET     "/health"
+2025/10/10 22:14:33 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:14:33 | 200 |    4.027875ms |             ::1 | POST    "/graphql"
+2025/10/10 22:14:44 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:14:44 | 200 |    1.188917ms |             ::1 | POST    "/graphql"
+2025/10/10 22:14:49 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:14:49 | 200 |      1.2495ms |             ::1 | POST    "/graphql"
+2025/10/10 22:15:38 CORS: Origin  not in allowed list
+[GATEWAY] 2025/10/10 - 22:15:38 | 200 |    1.456583ms |             ::1 | POST    "/graphql"

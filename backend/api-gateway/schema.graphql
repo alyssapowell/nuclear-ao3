@@ -1,0 +1,930 @@
+# =============================================================================
+# Nuclear AO3 - Unified GraphQL Schema
+# High-performance, bulletproof API that the community has been asking for
+# =============================================================================
+
+# =============================================================================
+# SCALARS & DIRECTIVES
+# =============================================================================
+
+scalar DateTime
+scalar JSON
+scalar Upload
+
+directive @auth(roles: [String!]) on FIELD_DEFINITION | OBJECT
+directive @rateLimit(max: Int!, window: String!) on FIELD_DEFINITION
+directive @cache(ttl: Int!) on FIELD_DEFINITION
+
+# =============================================================================
+# CORE TYPES - USER & AUTHENTICATION
+# =============================================================================
+
+type User @auth {
+  id: ID!
+  username: String!
+  email: String!
+  pseuds: [Pseud!]!
+  profile: UserProfile
+  preferences: UserPreferences
+  statistics: UserStatistics
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  
+  # Relationships
+  works(first: Int, after: String, filters: WorkFilters): WorkConnection!
+  bookmarks(first: Int, after: String, filters: BookmarkFilters): BookmarkConnection!
+  subscriptions: [Subscription!]!
+  kudos: [Kudos!]!
+  comments: [Comment!]!
+  collections: [Collection!]!
+  
+  # Privacy & Security
+  isAnonymous: Boolean!
+  isRestricted: Boolean!
+  mutedUsers: [User!]! @auth(roles: ["self", "admin"])
+  blockedUsers: [User!]! @auth(roles: ["self", "admin"])
+}
+
+type Pseud {
+  id: ID!
+  name: String!
+  description: String
+  iconUrl: String
+  isDefault: Boolean!
+  user: User!
+  works: [Work!]!
+  createdAt: DateTime!
+}
+
+type UserProfile {
+  bio: String
+  location: String
+  dateOfBirth: DateTime
+  website: String
+  avatarUrl: String
+  bannerUrl: String
+  socialLinks: JSON
+}
+
+type UserPreferences {
+  theme: String!
+  language: String!
+  timezone: String!
+  emailNotifications: NotificationPreferences!
+  privacySettings: PrivacySettings!
+  workDisplaySettings: WorkDisplaySettings!
+}
+
+type UserStatistics {
+  totalWorks: Int!
+  totalWordCount: Int!
+  totalKudos: Int!
+  totalComments: Int!
+  totalBookmarks: Int!
+  totalHits: Int!
+  joinDate: DateTime!
+  lastActive: DateTime!
+}
+
+# =============================================================================
+# WORKS & CONTENT
+# =============================================================================
+
+type Work {
+  id: ID!
+  title: String!
+  summary: String
+  notes: String
+  endNotes: String
+  
+  # Content
+  chapters: [Chapter!]!
+  chapterCount: Int!
+  wordCount: Int!
+  language: String!
+  completionStatus: CompletionStatus!
+  
+  # Authors & Attribution  
+  authors: [WorkAuthor!]!
+  pseuds: [Pseud!]!
+  gifts: [Gift!]!
+  isAnonymous: Boolean!
+  
+  # Tags & Categorization
+  fandoms: [Tag!]!
+  characters: [Tag!]!
+  relationships: [Tag!]!
+  additionalTags: [Tag!]!
+  warnings: [Tag!]!
+  categories: [Tag!]!
+  rating: Rating!
+  
+  # Engagement & Statistics
+  hits: Int!
+  kudos: [Kudos!]!
+  kudosCount: Int!
+  comments: [Comment!]!
+  commentCount: Int!
+  bookmarks: [Bookmark!]!
+  bookmarkCount: Int!
+  subscriptions: [Subscription!]!
+  
+  # Metadata
+  publishedAt: DateTime!
+  updatedAt: DateTime!
+  createdAt: DateTime!
+  isRestricted: Boolean!
+  isComplete: Boolean!
+  
+  # Collections & Series
+  collections: [Collection!]!
+  series: [SeriesEntry!]!
+  
+  # Privacy & Moderation
+  moderationStatus: ModerationStatus!
+  reportCount: Int!
+  isOrphaned: Boolean!
+  
+  # Enhanced Features (from our previous work)
+  tagQuality: TagQualityScore @cache(ttl: 3600)
+  searchRank: Float
+  relatedWorks(limit: Int = 10): [Work!]! @cache(ttl: 1800)
+}
+
+type Chapter {
+  id: ID!
+  title: String
+  content: String!
+  summary: String
+  notes: String
+  wordCount: Int!
+  number: Int!
+  work: Work!
+  publishedAt: DateTime!
+  updatedAt: DateTime!
+  isPublished: Boolean!
+}
+
+type WorkAuthor {
+  pseud: Pseud!
+  user: User!
+  role: AuthorRole!
+  invitationStatus: InvitationStatus!
+  addedAt: DateTime!
+}
+
+# =============================================================================
+# TAGS & TAXONOMY (Enhanced from our Hecate system)
+# =============================================================================
+
+type Tag {
+  id: ID!
+  name: String!
+  type: TagType!
+  canonical: Tag
+  synonyms: [Tag!]!
+  children: [Tag!]!
+  parents: [Tag!]!
+  mergers: [Tag!]!
+  
+  # Statistics & Usage
+  usageCount: Int!
+  worksCount: Int!
+  bookmarksCount: Int!
+  
+  # Enhanced Features
+  prominence: TagProminence! @cache(ttl: 3600)
+  autocompleteScore: Float!
+  trendingScore: Float @cache(ttl: 900)
+  
+  # Relationships
+  works(first: Int, after: String, filters: WorkFilters): WorkConnection!
+  relatedTags(limit: Int = 20): [Tag!]! @cache(ttl: 1800)
+  
+  # Metadata
+  description: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  wrangledAt: DateTime
+  isCanonical: Boolean!
+  isCommon: Boolean!
+  isSynonym: Boolean!
+}
+
+type TagProminence {
+  score: Float!
+  category: TagCategory!
+  binning: TagBinning!
+  isProminent: Boolean!
+  calculatedAt: DateTime!
+}
+
+# =============================================================================
+# SEARCH & DISCOVERY (Leveraging our enhanced search service)
+# =============================================================================
+
+type SearchResult {
+  totalCount: Int!
+  edges: [SearchEdge!]!
+  pageInfo: PageInfo!
+  facets: SearchFacets!
+  suggestions: [SearchSuggestion!]!
+  analytics: SearchAnalytics @auth(roles: ["admin"])
+}
+
+type SearchEdge {
+  node: SearchableContent!
+  score: Float!
+  snippet: String
+  matchedFields: [String!]!
+}
+
+union SearchableContent = Work | Tag | User | Collection | Series
+
+type SearchFacets {
+  fandoms: [FacetValue!]!
+  characters: [FacetValue!]!
+  relationships: [FacetValue!]!
+  tags: [FacetValue!]!
+  ratings: [FacetValue!]!
+  warnings: [FacetValue!]!
+  categories: [FacetValue!]!
+  languages: [FacetValue!]!
+  completionStatus: [FacetValue!]!
+  wordCountRanges: [FacetValue!]!
+  dateRanges: [FacetValue!]!
+  tagQuality: [FacetValue!]! # From our smart tag enhancement
+}
+
+type FacetValue {
+  value: String!
+  count: Int!
+  percentage: Float!
+  isSelected: Boolean!
+}
+
+type SearchSuggestion {
+  text: String!
+  type: SuggestionType!
+  confidence: Float!
+  category: String
+}
+
+type SearchAnalytics @auth(roles: ["admin"]) {
+  queryTime: Float!
+  totalHits: Int!
+  maxScore: Float!
+  complexity: Int!
+  cacheHit: Boolean!
+  serviceLatencies: JSON!
+}
+
+# =============================================================================
+# COLLECTIONS & SERIES
+# =============================================================================
+
+type Collection {
+  id: ID!
+  name: String!
+  title: String!
+  description: String
+  
+  # Configuration
+  settings: CollectionSettings!
+  moderators: [User!]!
+  
+  # Content
+  works: [Work!]!
+  bookmarks: [Bookmark!]!
+  subcollections: [Collection!]!
+  parent: Collection
+  
+  # Statistics
+  worksCount: Int!
+  bookmarksCount: Int!
+  
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  isOpen: Boolean!
+  isRevealed: Boolean!
+  isUnrevealed: Boolean!
+  isAnonymous: Boolean!
+  isModerated: Boolean!
+}
+
+type Series {
+  id: ID!
+  title: String!
+  summary: String
+  notes: String
+  
+  # Content
+  entries: [SeriesEntry!]!
+  works: [Work!]!
+  
+  # Authors
+  creators: [User!]!
+  pseuds: [Pseud!]!
+  
+  # Statistics
+  worksCount: Int!
+  totalWordCount: Int!
+  isComplete: Boolean!
+  
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type SeriesEntry {
+  series: Series!
+  work: Work!
+  position: Int!
+  addedAt: DateTime!
+}
+
+# =============================================================================
+# ENGAGEMENT & SOCIAL FEATURES
+# =============================================================================
+
+type Comment {
+  id: ID!
+  content: String!
+  
+  # Threading
+  parent: Comment
+  children: [Comment!]!
+  thread: CommentThread!
+  depth: Int!
+  
+  # Attribution
+  author: User
+  pseud: Pseud
+  isAnonymous: Boolean!
+  
+  # Target
+  work: Work
+  chapter: Chapter
+  
+  # Engagement
+  kudos: [Kudos!]!
+  replies: [Comment!]!
+  
+  # Moderation
+  isDeleted: Boolean!
+  isHidden: Boolean!
+  moderationStatus: ModerationStatus!
+  
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  editedAt: DateTime
+}
+
+type CommentThread {
+  id: ID!
+  work: Work!
+  chapter: Chapter
+  comments: [Comment!]!
+  totalComments: Int!
+  isLocked: Boolean!
+  createdAt: DateTime!
+}
+
+type Kudos {
+  id: ID!
+  user: User
+  pseud: Pseud
+  isAnonymous: Boolean!
+  work: Work
+  comment: Comment
+  createdAt: DateTime!
+}
+
+type Bookmark {
+  id: ID!
+  user: User!
+  work: Work!
+  
+  # Content
+  notes: String
+  tags: [Tag!]!
+  
+  # Configuration
+  isPrivate: Boolean!
+  isRecommendation: Boolean!
+  
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type Subscription {
+  id: ID!
+  user: User!
+  
+  # Target (one of these will be set)
+  work: Work
+  series: Series
+  user: User
+  tag: Tag
+  
+  # Configuration
+  notificationMethod: NotificationMethod!
+  isActive: Boolean!
+  
+  # Metadata
+  createdAt: DateTime!
+  lastNotifiedAt: DateTime
+}
+
+# =============================================================================
+# REAL-TIME & NOTIFICATIONS
+# =============================================================================
+
+type Notification {
+  id: ID!
+  user: User!
+  type: NotificationType!
+  title: String!
+  message: String!
+  
+  # Content
+  data: JSON!
+  actionUrl: String
+  
+  # Status
+  isRead: Boolean!
+  isArchived: Boolean!
+  
+  # Metadata
+  createdAt: DateTime!
+  readAt: DateTime
+}
+
+type Activity {
+  id: ID!
+  type: ActivityType!
+  actor: User
+  target: ActivityTarget!
+  data: JSON!
+  createdAt: DateTime!
+}
+
+union ActivityTarget = Work | Comment | Kudos | Bookmark | User | Tag
+
+# =============================================================================
+# ANALYTICS & INSIGHTS (From our dashboard work)
+# =============================================================================
+
+type AnalyticsDashboard @auth(roles: ["admin"]) {
+  overview: AnalyticsOverview!
+  performance: PerformanceMetrics!
+  searchTrends: SearchTrendAnalytics!
+  tagQuality: TagQualityAnalytics!
+  userBehavior: UserBehaviorAnalytics!
+  systemHealth: SystemHealthMetrics!
+  generatedAt: DateTime!
+}
+
+type AnalyticsOverview @auth(roles: ["admin"]) {
+  totalUsers: Int!
+  totalWorks: Int!
+  totalSearches24h: Int!
+  averageResponseTime: Float!
+  systemLoad: Float!
+  cacheHitRate: Float!
+}
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+enum TagType {
+  FANDOM
+  CHARACTER
+  RELATIONSHIP
+  FREEFORM
+  WARNING
+  CATEGORY
+  RATING
+}
+
+enum TagCategory {
+  MEDIA
+  PEOPLE
+  CONTENT
+  META
+}
+
+enum TagBinning {
+  POPULAR
+  MODERATE
+  RARE
+  UNUSED
+}
+
+enum Rating {
+  GENERAL_AUDIENCES
+  TEEN_AND_UP
+  MATURE
+  EXPLICIT
+  NOT_RATED
+}
+
+enum CompletionStatus {
+  COMPLETE
+  IN_PROGRESS
+  HIATUS
+  ABANDONED
+}
+
+enum AuthorRole {
+  PRIMARY
+  CO_AUTHOR
+  GUEST
+  TRANSLATOR
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum ModerationStatus {
+  APPROVED
+  PENDING
+  FLAGGED
+  HIDDEN
+  BANNED
+}
+
+enum NotificationType {
+  WORK_UPDATE
+  COMMENT_REPLY
+  KUDOS_RECEIVED
+  BOOKMARK_ADDED
+  SUBSCRIPTION_UPDATE
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum NotificationMethod {
+  EMAIL
+  WEB
+  PUSH
+  SMS
+}
+
+enum ActivityType {
+  WORK_PUBLISHED
+  WORK_UPDATED
+  COMMENT_POSTED
+  KUDOS_GIVEN
+  BOOKMARK_CREATED
+  USER_FOLLOWED
+}
+
+enum SuggestionType {
+  AUTOCOMPLETE
+  SPELLING_CORRECTION
+  SEMANTIC_EXPANSION
+  RELATED_SEARCH
+}
+
+enum SortOrder {
+  ASC
+  DESC
+}
+
+enum WorkSortField {
+  TITLE
+  AUTHOR
+  PUBLISHED_DATE
+  UPDATED_DATE
+  WORD_COUNT
+  HITS
+  KUDOS
+  COMMENTS
+  BOOKMARKS
+  RELEVANCE
+}
+
+# =============================================================================
+# INPUT TYPES
+# =============================================================================
+
+input WorkFilters {
+  fandoms: [String!]
+  characters: [String!]
+  relationships: [String!]
+  additionalTags: [String!]
+  warnings: [String!]
+  categories: [String!]
+  ratings: [Rating!]
+  languages: [String!]
+  completionStatus: [CompletionStatus!]
+  
+  # Numeric ranges
+  wordCountMin: Int
+  wordCountMax: Int
+  chapterCountMin: Int
+  chapterCountMax: Int
+  
+  # Date ranges
+  publishedAfter: DateTime
+  publishedBefore: DateTime
+  updatedAfter: DateTime
+  updatedBefore: DateTime
+  
+  # Enhanced filters (from our smart tag work)
+  minTagQuality: Float
+  excludePoorlyTagged: Boolean
+  requireCompleteTagging: Boolean
+  
+  # Boolean filters
+  isComplete: Boolean
+  isRestricted: Boolean
+  hasKudos: Boolean
+  hasComments: Boolean
+  isBookmarked: Boolean
+  
+  # Collections & Series
+  inCollections: [String!]
+  inSeries: [String!]
+  excludeCollections: [String!]
+  
+  # Text search
+  searchText: String
+  searchFields: [String!]
+}
+
+input WorkSort {
+  field: WorkSortField!
+  order: SortOrder!
+}
+
+input BookmarkFilters {
+  isPrivate: Boolean
+  isRecommendation: Boolean
+  tags: [String!]
+  createdAfter: DateTime
+  createdBefore: DateTime
+}
+
+input SearchInput {
+  query: String!
+  type: SearchType
+  filters: SearchFilters
+  sort: SearchSort
+  facets: [String!]
+  highlight: Boolean
+  suggestions: Boolean
+  analytics: Boolean
+}
+
+input SearchFilters {
+  works: WorkFilters
+  users: UserFilters
+  tags: TagFilters
+  collections: CollectionFilters
+}
+
+input UserFilters {
+  isActive: Boolean
+  joinedAfter: DateTime
+  joinedBefore: DateTime
+  hasWorks: Boolean
+  minWorks: Int
+}
+
+input TagFilters {
+  types: [TagType!]
+  isCanonical: Boolean
+  minUsage: Int
+  isCommon: Boolean
+}
+
+input CollectionFilters {
+  isOpen: Boolean
+  isModerated: Boolean
+  hasWorks: Boolean
+  minWorks: Int
+}
+
+input SearchSort {
+  field: String!
+  order: SortOrder!
+}
+
+enum SearchType {
+  ALL
+  WORKS
+  USERS
+  TAGS
+  COLLECTIONS
+  SERIES
+}
+
+# =============================================================================
+# CONNECTION TYPES (Relay-style pagination)
+# =============================================================================
+
+type WorkConnection {
+  edges: [WorkEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+  facets: SearchFacets
+}
+
+type WorkEdge {
+  node: Work!
+  cursor: String!
+}
+
+type BookmarkConnection {
+  edges: [BookmarkEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type BookmarkEdge {
+  node: Bookmark!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# =============================================================================
+# ROOT OPERATIONS
+# =============================================================================
+
+type Query {
+  # User & Authentication
+  me: User @auth
+  user(id: ID, username: String): User
+  users(first: Int, after: String, filters: UserFilters): UserConnection! @auth(roles: ["admin"])
+  
+  # Works & Content
+  work(id: ID!): Work
+  works(
+    first: Int = 20, 
+    after: String, 
+    filters: WorkFilters, 
+    sort: [WorkSort!]
+  ): WorkConnection! @rateLimit(max: 100, window: "1m")
+  
+  # Enhanced Search (leveraging our smart search service)
+  search(input: SearchInput!): SearchResult! @rateLimit(max: 50, window: "1m")
+  
+  # Tags (from our Hecate system)
+  tag(id: ID, name: String): Tag
+  tags(
+    first: Int = 50, 
+    after: String, 
+    filters: TagFilters, 
+    autocomplete: String
+  ): TagConnection! @cache(ttl: 300)
+  
+  # Collections & Series
+  collection(id: ID!): Collection
+  collections(first: Int, after: String, filters: CollectionFilters): CollectionConnection!
+  series(id: ID!): Series
+  
+  # Comments & Engagement
+  comment(id: ID!): Comment
+  commentThread(workId: ID!, chapterId: ID): CommentThread!
+  
+  # Analytics (from our dashboard)
+  analytics: AnalyticsDashboard! @auth(roles: ["admin"])
+  searchAnalytics(timeRange: String): SearchTrendAnalytics! @auth(roles: ["admin"])
+  
+  # Real-time & Activity
+  notifications(first: Int, after: String, unreadOnly: Boolean): NotificationConnection! @auth
+  activity(first: Int, after: String, types: [ActivityType!]): ActivityConnection! @auth
+  
+  # Health & Status
+  healthCheck: HealthStatus!
+  serviceStatus: [ServiceHealth!]! @auth(roles: ["admin"])
+}
+
+type Mutation {
+  # Authentication
+  login(username: String!, password: String!): AuthPayload!
+  logout: Boolean! @auth
+  register(input: RegisterInput!): AuthPayload!
+  refreshToken: AuthPayload! @auth
+  
+  # User Management
+  updateProfile(input: UpdateProfileInput!): User! @auth
+  updatePreferences(input: UpdatePreferencesInput!): User! @auth
+  createPseud(input: CreatePseudInput!): Pseud! @auth
+  
+  # Works & Content
+  createWork(input: CreateWorkInput!): Work! @auth @rateLimit(max: 10, window: "1h")
+  updateWork(id: ID!, input: UpdateWorkInput!): Work! @auth
+  deleteWork(id: ID!): Boolean! @auth
+  publishWork(id: ID!): Work! @auth
+  
+  # Chapters
+  createChapter(workId: ID!, input: CreateChapterInput!): Chapter! @auth
+  updateChapter(id: ID!, input: UpdateChapterInput!): Chapter! @auth
+  deleteChapter(id: ID!): Boolean! @auth
+  
+  # Engagement
+  giveKudos(workId: ID!, anonymous: Boolean = false): Kudos! @auth @rateLimit(max: 100, window: "1h")
+  removeKudos(workId: ID!): Boolean! @auth
+  createComment(input: CreateCommentInput!): Comment! @auth @rateLimit(max: 20, window: "1h")
+  updateComment(id: ID!, content: String!): Comment! @auth
+  deleteComment(id: ID!): Boolean! @auth
+  
+  # Bookmarks
+  createBookmark(input: CreateBookmarkInput!): Bookmark! @auth
+  updateBookmark(id: ID!, input: UpdateBookmarkInput!): Bookmark! @auth
+  deleteBookmark(id: ID!): Boolean! @auth
+  
+  # Subscriptions
+  subscribe(input: SubscriptionInput!): Subscription! @auth
+  unsubscribe(id: ID!): Boolean! @auth
+  
+  # Collections & Series
+  createCollection(input: CreateCollectionInput!): Collection! @auth
+  updateCollection(id: ID!, input: UpdateCollectionInput!): Collection! @auth
+  createSeries(input: CreateSeriesInput!): Series! @auth
+  addWorkToSeries(seriesId: ID!, workId: ID!, position: Int): SeriesEntry! @auth
+  
+  # Tags (enhanced with our smart system)
+  createTag(input: CreateTagInput!): Tag! @auth(roles: ["tag_wrangler", "admin"])
+  wrangleTag(id: ID!, input: WrangleTagInput!): Tag! @auth(roles: ["tag_wrangler", "admin"])
+  mergeTag(sourceId: ID!, targetId: ID!): Tag! @auth(roles: ["tag_wrangler", "admin"])
+  
+  # Moderation
+  reportContent(input: ReportContentInput!): Report! @auth @rateLimit(max: 5, window: "1h")
+  moderateContent(id: ID!, action: ModerationAction!, reason: String): Boolean! @auth(roles: ["moderator", "admin"])
+  
+  # User Actions
+  muteUser(userId: ID!): Boolean! @auth
+  unmuteUser(userId: ID!): Boolean! @auth
+  blockUser(userId: ID!): Boolean! @auth
+  unblockUser(userId: ID!): Boolean! @auth
+  
+  # File Uploads
+  uploadFile(file: Upload!, type: FileType!): FileUpload! @auth @rateLimit(max: 20, window: "1h")
+}
+
+type Subscription {
+  # Real-time notifications
+  notifications(userId: ID!): Notification! @auth
+  
+  # Work updates
+  workUpdated(workId: ID!): Work!
+  newWorksInFandom(fandom: String!): Work!
+  
+  # Comments
+  newComments(workId: ID!): Comment!
+  commentReplies(commentId: ID!): Comment! @auth
+  
+  # Tag activity
+  tagTrending: Tag!
+  
+  # System events
+  systemAnnouncements: SystemAnnouncement! @auth
+  moderationAlerts: ModerationAlert! @auth(roles: ["moderator", "admin"])
+}
+
+# =============================================================================
+# ADDITIONAL TYPES FOR COMPLETENESS
+# =============================================================================
+
+type AuthPayload {
+  token: String!
+  refreshToken: String!
+  user: User!
+  expiresAt: DateTime!
+}
+
+type HealthStatus {
+  status: String!
+  timestamp: DateTime!
+  services: [ServiceHealth!]!
+  version: String!
+  uptime: Int!
+}
+
+type ServiceHealth {
+  name: String!
+  status: String!
+  latency: Float!
+  lastCheck: DateTime!
+  details: JSON
+}
+
+# Additional input types would be defined here...
+# (Truncated for brevity, but would include all the input types referenced above)
