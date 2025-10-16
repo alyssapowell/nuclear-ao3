@@ -74,9 +74,13 @@ test.describe('New Posts View - Authenticated', () => {
     await expect(page.locator('textarea[name="summary"]')).toBeVisible();
     await expect(page.locator('textarea[name="chapterContent"]')).toBeVisible();
     
+    // Check for TagAutocomplete field
+    await expect(page.locator('input[id="fandoms"]')).toBeVisible();
+    
     // The current simple form should have these basic elements
     const pageContent = await page.textContent('body');
     expect(pageContent).toContain('Post New Work');
+    expect(pageContent).toContain('Fandoms (Test TagAutocomplete)');
   });
 });
 
