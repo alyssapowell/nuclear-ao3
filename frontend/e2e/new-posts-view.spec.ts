@@ -82,6 +82,22 @@ test.describe('New Posts View - Authenticated', () => {
     expect(pageContent).toContain('Post New Work');
     expect(pageContent).toContain('Fandoms (Test TagAutocomplete)');
   });
+
+  test('should allow typing in TagAutocomplete field', async ({ page }) => {
+    test.setTimeout(30000);
+    
+    await page.goto('/works/new');
+    
+    // Wait for the page to load
+    await page.waitForSelector('input[id="fandoms"]', { timeout: 15000 });
+    
+    // Type in the TagAutocomplete field
+    await page.fill('input[id="fandoms"]', 'Harry Potter');
+    
+    // Verify the text was entered
+    const inputValue = await page.inputValue('input[id="fandoms"]');
+    expect(inputValue).toBe('Harry Potter');
+  });
 });
 
 test.describe('Works Browse Page', () => {

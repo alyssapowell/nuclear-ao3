@@ -35,6 +35,7 @@ export default function NewWorkPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fandomInput, setFandomInput] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const router = useRouter();
 
@@ -46,6 +47,24 @@ export default function NewWorkPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  const handleTagSelect = (tag: any) => {
+    const tagName = tag.name || tag;
+    if (tagName && !formData.fandoms.includes(tagName)) {
+      setFormData(prev => ({ 
+        ...prev, 
+        fandoms: [...prev.fandoms, tagName] 
+      }));
+      setFandomInput(''); // Clear input after selection
+    }
+  };
+
+  const removeFandom = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      fandoms: prev.fandoms.filter((_, i) => i !== index)
+    }));
   };
 
   const handleTagsChange = (field: string, tags: string[]) => {
@@ -159,10 +178,34 @@ export default function NewWorkPage() {
               <label htmlFor="fandoms" className="block text-sm font-medium text-slate-700">
                 Fandoms (Test TagAutocomplete)
               </label>
+              
+              {/* Display selected fandoms */}
+              {formData.fandoms.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {formData.fandoms.map((fandom, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200"
+                    >
+                      {fandom}
+                      <button
+                        type="button"
+                        onClick={() => removeFandom(index)}
+                        className="ml-2 text-blue-600 hover:text-blue-800 focus:outline-none"
+                        aria-label={`Remove ${fandom}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              
               <TagAutocomplete
                 id="fandoms"
-                value=""
-                onChange={() => {}} 
+                value={fandomInput}
+                onChange={setFandomInput}
+                onTagSelect={handleTagSelect}
                 placeholder="Start typing a fandom name..."
                 tagType="fandom"
                 className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
