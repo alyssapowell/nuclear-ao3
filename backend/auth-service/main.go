@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -131,6 +132,60 @@ func setupRouter(authService *AuthService) *gin.Engine {
 			admin.DELETE("/users/:user_id/roles/:role", authService.RevokeRole)
 			admin.GET("/security-events", authService.GetAllSecurityEvents)
 			admin.GET("/metrics", authService.GetAuthMetrics)
+
+			// OAuth2 client management
+			admin.GET("/oauth/clients", authService.AdminListClients)
+			admin.GET("/oauth/clients/:client_id", authService.AdminGetClient)
+			admin.PUT("/oauth/clients/:client_id", authService.AdminUpdateClient)
+			admin.DELETE("/oauth/clients/:client_id", authService.AdminDeleteClient)
+			admin.POST("/oauth/clients/:client_id/reset-secret", authService.AdminResetClientSecret)
+			admin.GET("/oauth/tokens", authService.AdminListTokens)
+			admin.DELETE("/oauth/tokens/:token_id", authService.AdminRevokeToken)
+		}
+	}
+
+	// OAuth2/OIDC Discovery endpoints
+	r.GET("/.well-known/openid-configuration", authService.WellKnownOIDC)
+	r.GET("/.well-known/oauth-authorization-server", authService.WellKnownOAuth2)
+
+	// OAuth2/OIDC endpoints
+	oauth := r.Group("/auth")
+	{
+		// Authorization endpoint (GET and POST for different flows)
+		oauth.GET("/authorize", authService.Authorize)
+		oauth.POST("/authorize", authService.Authorize)
+
+		// Token endpoint
+		oauth.POST("/token", authService.Token)
+
+		// User info endpoint (OIDC)
+		oauth.GET("/userinfo", authService.UserInfo)
+		oauth.POST("/userinfo", authService.UserInfo)
+
+		// Token introspection (RFC 7662)
+		oauth.POST("/introspect", authService.Introspect)
+
+		// Token revocation (RFC 7009)
+		oauth.POST("/revoke", authService.Revoke)
+
+		// Client registration (Dynamic Client Registration)
+		oauth.POST("/register-client", authService.RegisterClient)
+
+		// JWKS endpoint for token verification
+		oauth.GET("/jwks", authService.GetJWKS)
+
+		// Consent handling
+		oauth.GET("/consent/:consent_id", authService.ShowConsent)
+		oauth.POST("/consent/:consent_id", authService.ProcessConsent)
+
+		// User consent management
+		protected := oauth.Group("")
+		protected.Use(JWTAuthMiddleware(authService))
+		{
+			protected.GET("/consents", authService.GetUserConsents)
+			protected.DELETE("/consents/:consent_id", authService.RevokeConsent)
+			protected.GET("/authorized-applications", authService.GetAuthorizedApplications)
+			protected.DELETE("/authorized-applications/:client_id", authService.RevokeApplication)
 		}
 	}
 
@@ -145,8 +200,13 @@ type AuthService struct {
 }
 
 func NewAuthService() *AuthService {
-	// Database connection
-	dbURL := getEnv("DATABASE_URL", "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable")
+	// Database connection - use test URL in test mode
+	var dbURL string
+	if testURL := getEnv("TEST_DATABASE_URL", ""); testURL != "" {
+		dbURL = testURL
+	} else {
+		dbURL = getEnv("DATABASE_URL", "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
@@ -162,8 +222,13 @@ func NewAuthService() *AuthService {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(time.Hour)
 
-	// Redis connection
-	redisURL := getEnv("REDIS_URL", "localhost:6379")
+	// Redis connection - use test URL in test mode
+	var redisURL string
+	if testRedisURL := getEnv("TEST_REDIS_URL", ""); testRedisURL != "" {
+		redisURL = testRedisURL
+	} else {
+		redisURL = getEnv("REDIS_URL", "localhost:6379")
+	}
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         redisURL,
 		Password:     getEnv("REDIS_PASSWORD", ""),
@@ -176,22 +241,23 @@ func NewAuthService() *AuthService {
 	// Test Redis connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		log.Fatal("Failed to connect to Redis:", err)
 	}
 
-	// JWT manager
+	// JWT manager with persistent keys
 	jwtManager, err := NewJWTManager(
 		getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-this-in-production"),
 		getEnv("JWT_ISSUER", "nuclear-ao3"),
+		db,
 	)
 	if err != nil {
 		log.Fatal("Failed to create JWT manager:", err)
 	}
 
 	log.Println("Auth service initialized successfully")
-	
+
 	return &AuthService{
 		db:    db,
 		redis: rdb,
@@ -219,11 +285,11 @@ func getEnv(key, defaultValue string) string {
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		
+
 		// Allow specific origins in production
 		allowedOrigins := []string{
 			"http://localhost:3000",
-			"http://localhost:3001", 
+			"http://localhost:3001",
 			"https://nuclear-ao3.com",
 			"https://www.nuclear-ao3.com",
 		}

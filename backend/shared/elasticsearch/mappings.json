@@ -1,0 +1,270 @@
+{
+  "works": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "30s",
+      "max_result_window": 10000,
+      "analysis": {
+        "analyzer": {
+          "ao3_text": {
+            "type": "standard",
+            "stopwords": "_english_"
+          },
+          "ao3_tags": {
+            "type": "keyword",
+            "normalizer": "lowercase"
+          }
+        },
+        "normalizer": {
+          "lowercase": {
+            "type": "custom",
+            "filter": ["lowercase"]
+          }
+        }
+      }
+    },
+    "mappings": {
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "title": {
+          "type": "text",
+          "analyzer": "ao3_text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "summary": {
+          "type": "text",
+          "analyzer": "ao3_text"
+        },
+        "content": {
+          "type": "text",
+          "analyzer": "ao3_text",
+          "store": false
+        },
+        "authors": {
+          "type": "keyword"
+        },
+        "pseuds": {
+          "type": "keyword"
+        },
+        "fandoms": {
+          "type": "keyword",
+          "normalizer": "lowercase"
+        },
+        "characters": {
+          "type": "keyword",
+          "normalizer": "lowercase"
+        },
+        "relationships": {
+          "type": "keyword",
+          "normalizer": "lowercase"
+        },
+        "freeform_tags": {
+          "type": "keyword",
+          "normalizer": "lowercase"
+        },
+        "warnings": {
+          "type": "keyword"
+        },
+        "categories": {
+          "type": "keyword"
+        },
+        "rating": {
+          "type": "keyword"
+        },
+        "language": {
+          "type": "keyword"
+        },
+        "word_count": {
+          "type": "integer"
+        },
+        "chapter_count": {
+          "type": "integer"
+        },
+        "max_chapters": {
+          "type": "integer"
+        },
+        "is_complete": {
+          "type": "boolean"
+        },
+        "is_draft": {
+          "type": "boolean"
+        },
+        "is_anonymous": {
+          "type": "boolean"
+        },
+        "is_unrevealed": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "keyword"
+        },
+        "kudos_count": {
+          "type": "integer"
+        },
+        "comment_count": {
+          "type": "integer"
+        },
+        "bookmark_count": {
+          "type": "integer"
+        },
+        "hit_count": {
+          "type": "integer"
+        },
+        "published_at": {
+          "type": "date"
+        },
+        "updated_at": {
+          "type": "date"
+        },
+        "created_at": {
+          "type": "date"
+        },
+        "collections": {
+          "type": "keyword"
+        },
+        "series": {
+          "type": "keyword"
+        },
+        "all_tags": {
+          "type": "text",
+          "analyzer": "ao3_text"
+        }
+      }
+    }
+  },
+  "tags": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "60s"
+    },
+    "mappings": {
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "name": {
+          "type": "text",
+          "analyzer": "ao3_text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            },
+            "suggest": {
+              "type": "completion"
+            }
+          }
+        },
+        "canonical_name": {
+          "type": "keyword"
+        },
+        "type": {
+          "type": "keyword"
+        },
+        "category": {
+          "type": "keyword"
+        },
+        "popularity": {
+          "type": "integer"
+        },
+        "work_count": {
+          "type": "integer"
+        },
+        "is_canonical": {
+          "type": "boolean"
+        },
+        "is_synonymous": {
+          "type": "boolean"
+        },
+        "parent_tags": {
+          "type": "keyword"
+        },
+        "child_tags": {
+          "type": "keyword"
+        },
+        "synonym_tags": {
+          "type": "keyword"
+        },
+        "created_at": {
+          "type": "date"
+        },
+        "updated_at": {
+          "type": "date"
+        }
+      }
+    }
+  },
+  "users": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "refresh_interval": "120s"
+    },
+    "mappings": {
+      "properties": {
+        "id": {
+          "type": "keyword"
+        },
+        "username": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 64
+            },
+            "suggest": {
+              "type": "completion"
+            }
+          }
+        },
+        "pseuds": {
+          "type": "nested",
+          "properties": {
+            "name": {
+              "type": "text",
+              "fields": {
+                "keyword": {
+                  "type": "keyword"
+                },
+                "suggest": {
+                  "type": "completion"
+                }
+              }
+            },
+            "is_default": {
+              "type": "boolean"
+            }
+          }
+        },
+        "profile": {
+          "type": "text",
+          "analyzer": "ao3_text"
+        },
+        "work_count": {
+          "type": "integer"
+        },
+        "bookmark_count": {
+          "type": "integer"
+        },
+        "is_active": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "date"
+        },
+        "last_activity": {
+          "type": "date"
+        }
+      }
+    }
+  }
+}

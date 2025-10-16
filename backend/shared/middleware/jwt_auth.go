@@ -17,6 +17,16 @@ import (
 	"nuclear-ao3/shared/models"
 )
 
+// contains checks if a slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 // JWTManager handles JWT token operations
 type JWTManager struct {
 	privateKey *rsa.PrivateKey
@@ -48,7 +58,7 @@ func (jm *JWTManager) GenerateTokenPair(user *models.User, roles []string) (stri
 		return "", "", err
 	}
 
-	// Refresh token (long-lived: 30 days) 
+	// Refresh token (long-lived: 30 days)
 	refreshToken, err := jm.GenerateRefreshToken(user.ID)
 	if err != nil {
 		return "", "", err
@@ -132,7 +142,8 @@ func (jm *JWTManager) ValidateRefreshToken(tokenString string) (*jwt.RegisteredC
 
 	if claims, ok := token.Claims.(*jwt.RegisteredClaims); ok && token.Valid {
 		// Verify audience for refresh tokens
-		if !claims.VerifyAudience("nuclear-ao3-refresh", true) {
+		expectedAudience := "nuclear-ao3-refresh"
+		if len(claims.Audience) == 0 || !contains(claims.Audience, expectedAudience) {
 			return nil, errors.New("invalid audience")
 		}
 		return claims, nil
@@ -309,7 +320,7 @@ func RateLimitMiddleware(redis interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get user ID if authenticated
 		userID, _ := c.Get("user_id")
-		
+
 		// Use user ID if available, otherwise use IP
 		key := c.ClientIP()
 		if userID != nil {
@@ -318,29 +329,14 @@ func RateLimitMiddleware(redis interface{}) gin.HandlerFunc {
 			key = fmt.Sprintf("ip:%s", key)
 		}
 
-		// Different limits for different endpoints
-		var limit int
-		var window time.Duration
+		// Rate limiting would be implemented here using Redis
+		// Different limits for different endpoints:
+		// /login: 5 attempts per 15 minutes
+		// /register: 3 registrations per hour
+		// /reset-password: 3 requests per hour
+		// default: 100 requests per minute
+		// TODO: Implement Redis-based rate limiting
 
-		endpoint := c.Request.URL.Path
-		switch {
-		case strings.Contains(endpoint, "/login"):
-			limit = 5 // 5 login attempts per 15 minutes
-			window = 15 * time.Minute
-		case strings.Contains(endpoint, "/register"):
-			limit = 3 // 3 registrations per hour
-			window = time.Hour
-		case strings.Contains(endpoint, "/reset-password"):
-			limit = 3 // 3 reset requests per hour
-			window = time.Hour
-		default:
-			limit = 100 // 100 requests per minute for other endpoints
-			window = time.Minute
-		}
-
-		// Check rate limit (would use Redis in real implementation)
-		// For now, just continue - you'd implement Redis-based rate limiting here
-		
 		c.Next()
 	}
 }

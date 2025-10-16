@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{.work_title}} - New Update</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { color: #990000; }
+        .content { background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .button { background: #990000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 3px; }
+        .footer { font-size: 12px; color: #666; border-top: 1px solid #ddd; margin-top: 30px; padding-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="header">{{.author_name}} has updated "{{.work_title}}"</h2>
+        
+        <div class="content">
+            {{.html}}
+        </div>
+        
+        <p><a href="{{.action_url}}" class="button">Read Update</a></p>
+        
+        <div class="footer">
+            You are receiving this because you subscribed to this work.<br>
+            To manage your subscription preferences, visit your account settings.
+        </div>
+    </div>
+</body>
+</html>

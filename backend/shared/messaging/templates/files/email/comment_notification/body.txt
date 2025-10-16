@@ -1,0 +1,9 @@
+{{.commenter_name}} left a comment on "{{.work_title}}".
+
+{{.plain_text}}
+
+Reply to comment: {{.action_url}}
+
+---
+You are receiving this because you have comment notifications enabled.
+To manage your notification preferences, visit your account settings.

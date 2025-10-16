@@ -78,7 +78,7 @@ services:
   auth-service:
     build: 
       context: ./backend
-      dockerfile: Dockerfile.auth-service
+      dockerfile: auth-service/Dockerfile
     container_name: nuclear-ao3-auth
     environment:
       - PORT=8081
@@ -105,7 +105,7 @@ services:
   work-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.work-service
+      dockerfile: work-service/Dockerfile
     container_name: nuclear-ao3-works
     environment:
       - PORT=8082
@@ -136,7 +136,7 @@ services:
   tag-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.tag-service
+      dockerfile: tag-service/Dockerfile
     container_name: nuclear-ao3-tags
     environment:
       - PORT=8083
@@ -162,7 +162,7 @@ services:
   search-service:
     build:
       context: ./backend
-      dockerfile: Dockerfile.search-service
+      dockerfile: search-service/Dockerfile
     container_name: nuclear-ao3-search
     environment:
       - PORT=8084
@@ -190,7 +190,7 @@ services:
   api-gateway:
     build:
       context: ./backend
-      dockerfile: Dockerfile.api-gateway
+      dockerfile: api-gateway/Dockerfile
     container_name: nuclear-ao3-gateway
     environment:
       - PORT=8080

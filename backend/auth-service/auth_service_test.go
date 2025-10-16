@@ -12,21 +12,21 @@ import (
 	"testing"
 	"time"
 
+	"nuclear-ao3/shared/models"
+
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"nuclear-ao3/shared/models"
 )
 
 type AuthServiceTestSuite struct {
 	suite.Suite
-	service *AuthService
-	router  *gin.Engine
-	db      *sql.DB
-	redis   *redis.Client
+	service   *AuthService
+	router    *gin.Engine
+	db        *sql.DB
+	redis     *redis.Client
 	testUsers map[string]*models.User
 }
 
@@ -54,7 +54,7 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 	suite.redis = rdb
 
 	// Create test auth service
-	jwtManager, err := NewJWTManager("test-secret-key", "test-issuer")
+	jwtManager, err := NewJWTManager("test-secret-key", "test-issuer", nil)
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{
@@ -74,7 +74,7 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 func (suite *AuthServiceTestSuite) SetupTest() {
 	// Clear test data
 	suite.cleanupTestData()
-	
+
 	// Clear Redis cache
 	suite.redis.FlushDB(context.Background())
 
@@ -95,7 +95,7 @@ func (suite *AuthServiceTestSuite) TearDownSuite() {
 func (suite *AuthServiceTestSuite) cleanupTestData() {
 	tables := []string{
 		"refresh_tokens",
-		"user_sessions", 
+		"user_sessions",
 		"password_reset_tokens",
 		"email_verification_tokens",
 		"security_events",
@@ -314,7 +314,7 @@ func (suite *AuthServiceTestSuite) TestLogin_UnverifiedUser() {
 
 	// Should still allow login but indicate unverified status
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	
+
 	var response models.AuthResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.False(suite.T(), response.User.IsVerified)
@@ -502,7 +502,7 @@ func (suite *AuthServiceTestSuite) TestGetSecurityEvents_Success() {
 func (suite *AuthServiceTestSuite) TestConcurrentLogins() {
 	const concurrency = 50
 	results := make(chan int, concurrency)
-	
+
 	loginReq := models.LoginRequest{
 		Email:    "test@nuclear-ao3.test",
 		Password: "password123",
@@ -533,10 +533,10 @@ func (suite *AuthServiceTestSuite) TestConcurrentLogins() {
 	}
 
 	elapsed := time.Since(start)
-	
+
 	assert.Equal(suite.T(), concurrency, successCount, "All concurrent logins should succeed")
 	assert.Less(suite.T(), elapsed, 5*time.Second, "Concurrent logins should complete within 5 seconds")
-	
+
 	requestsPerSecond := float64(concurrency) / elapsed.Seconds()
 	assert.Greater(suite.T(), requestsPerSecond, 20.0, "Should handle at least 20 logins per second")
 }
@@ -612,7 +612,7 @@ func (suite *AuthServiceTestSuite) TestRateLimiting() {
 		req.Header.Set("Content-Type", "application/json")
 
 		suite.router.ServeHTTP(w, req)
-		
+
 		if i < 5 {
 			assert.Equal(suite.T(), http.StatusUnauthorized, w.Code)
 		} else {

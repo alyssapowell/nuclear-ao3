@@ -1,0 +1,9 @@
+{{.author_name}} has updated "{{.work_title}}".
+
+{{.plain_text}}
+
+View the work: {{.action_url}}
+
+---
+You are receiving this because you subscribed to this work.
+To manage your subscription preferences, visit your account settings.
