@@ -98,6 +98,56 @@ test.describe('New Posts View - Authenticated', () => {
     const inputValue = await page.inputValue('input[id="fandoms"]');
     expect(inputValue).toBe('Harry Potter');
   });
+
+  test('should show autocomplete suggestions when typing', async ({ page }) => {
+    test.setTimeout(30000);
+    
+    // Mock the API response to test suggestion functionality
+    await page.route('**/api/v1/tags/search*', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          { name: 'Harry Potter - J. K. Rowling', type: 'fandom', use_count: 12000 },
+          { name: 'Harry Potter', type: 'fandom', use_count: 8000 },
+          { name: 'Harry Potter & the Cursed Child', type: 'fandom', use_count: 1500 }
+        ])
+      });
+    });
+    
+    await page.goto('/works/new');
+    
+    // Wait for the page to load
+    await page.waitForSelector('input[id="fandoms"]', { timeout: 15000 });
+    
+    // Type something that should trigger autocomplete
+    await page.type('input[id="fandoms"]', 'Harry');
+    
+    // Wait for API call and debounce (TagAutocomplete has 150ms debounce)
+    await page.waitForTimeout(500);
+    
+    // Look for the suggestions listbox that TagAutocomplete renders
+    const suggestionsListbox = page.locator('[role="listbox"]');
+    
+    // With mocked data, suggestions should appear
+    await expect(suggestionsListbox).toBeVisible();
+    
+    // Look for individual suggestion options
+    const suggestionOptions = page.locator('[role="option"]');
+    const optionCount = await suggestionOptions.count();
+    
+    // Should have the 3 mocked suggestions
+    expect(optionCount).toBe(3);
+    
+    // Verify suggestion content
+    await expect(suggestionOptions.first()).toContainText('Harry Potter');
+    
+    console.log(`Found ${optionCount} autocomplete suggestions with mocked data`);
+    
+    // The input should still work
+    const inputValue = await page.inputValue('input[id="fandoms"]');
+    expect(inputValue).toBe('Harry');
+  });
 });
 
 test.describe('Works Browse Page', () => {
