@@ -1,4 +1,5 @@
 import Navigation from '@/components/Navigation'
+import Footer from '@/components/Footer'
 import { ApolloProvider } from '@/components/ApolloProvider'
 import GDPRConsentBanner from '@/components/GDPRConsentBanner'
 import ServiceStatus from '@/components/ServiceStatus'
@@ -21,6 +22,7 @@ export default function RootLayout({
             <main className="flex-1">
               {children}
             </main>
+            <Footer />
           </div>
           <GDPRConsentBanner />
           <ServiceStatus />

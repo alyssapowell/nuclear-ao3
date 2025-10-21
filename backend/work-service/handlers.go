@@ -468,6 +468,21 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 		updates = append(updates, fmt.Sprintf("is_complete = $%d", argIndex))
 		args = append(args, *req.IsComplete)
 		argIndex++
+
+		// When marking a work as complete, automatically set max_chapters to current chapter_count
+		if *req.IsComplete {
+			var currentChapterCount int
+			err := ws.db.QueryRow("SELECT chapter_count FROM works WHERE id = $1", workID).Scan(&currentChapterCount)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch current chapter count", "details": err.Error()})
+				return
+			}
+
+			// Set max_chapters to current chapter_count
+			updates = append(updates, fmt.Sprintf("max_chapters = $%d", argIndex))
+			args = append(args, currentChapterCount)
+			argIndex++
+		}
 	}
 	if req.Status != nil {
 		updates = append(updates, fmt.Sprintf("status = $%d", argIndex))
@@ -1119,10 +1134,6 @@ func countWords(text string) int {
 func (ws *WorkService) GetChapters(c *gin.Context) {
 	log.Printf("GetChapters called for work_id: %s", c.Param("work_id"))
 
-	// For now, just return empty chapters array to unblock work viewing
-	c.JSON(http.StatusOK, gin.H{"chapters": []interface{}{}})
-	return
-
 	workID, err := uuid.Parse(c.Param("work_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid work ID"})
@@ -1152,8 +1163,14 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 
 	log.Printf("About to query chapters for work %s", workID)
 	rows, err := ws.db.Query(`
-		SELECT id, work_id, chapter_number, title, summary, notes, end_notes, 
-			content, word_count, CASE WHEN is_draft THEN 'draft' ELSE 'posted' END as status, 
+		SELECT id, work_id, chapter_number, 
+			COALESCE(title, '') as title, 
+			COALESCE(summary, '') as summary, 
+			COALESCE(notes, '') as notes, 
+			COALESCE(end_notes, '') as end_notes, 
+			COALESCE(content, '') as content, 
+			COALESCE(word_count, 0) as word_count, 
+			CASE WHEN is_draft THEN 'draft' ELSE 'posted' END as status, 
 			published_at, created_at, updated_at
 		FROM chapters 
 		WHERE work_id = $1 

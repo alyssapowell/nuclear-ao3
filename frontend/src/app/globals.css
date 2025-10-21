@@ -114,3 +114,91 @@ a {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Reader Mode Themes */
+.theme-light {
+  background-color: #ffffff;
+  color: #1f2937;
+}
+
+.theme-dark {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+.theme-dark .bg-white {
+  background-color: #374151 !important;
+}
+
+.theme-dark .text-slate-900 {
+  color: #f9fafb !important;
+}
+
+.theme-dark .text-slate-700 {
+  color: #d1d5db !important;
+}
+
+.theme-dark .border-slate-200 {
+  border-color: #4b5563 !important;
+}
+
+.theme-sepia {
+  background-color: #f7f3e9;
+  color: #5c4b37;
+}
+
+.theme-sepia .bg-white {
+  background-color: #f0ead6 !important;
+}
+
+.theme-high-contrast {
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.theme-high-contrast .bg-white {
+  background-color: #000000 !important;
+  border: 2px solid #ffffff !important;
+}
+
+.theme-high-contrast .text-slate-900,
+.theme-high-contrast .text-slate-700 {
+  color: #ffffff !important;
+}
+
+/* Reader Content Styles */
+.reader-content {
+  transition: all 0.3s ease;
+}
+
+.reader-content.high-contrast {
+  font-weight: 600;
+}
+
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Responsive Chapter Navigation */
+.chapter-navigation {
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .chapter-navigation .btn {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+  }
+  
+  .chapter-navigation .hidden.sm\:inline {
+    display: none !important;
+  }
+}
+
+/* Focus improvements */
+.focus-enhanced *:focus {
+  outline: 3px solid #f59e0b !important;
+  outline-offset: 2px !important;
+}
