@@ -6,9 +6,14 @@ import { useParams } from 'next/navigation';
 import Comments from '@/components/Comments';
 import KudosButton from '@/components/KudosButton';
 import { BookmarkButton } from '@/components/BookmarkButton';
+import { GiftButton } from '@/components/GiftButton';
+import { GiftList } from '@/components/GiftList';
+import { SubscriptionButton } from '@/components/SubscriptionButton';
+import RespectfulExportButton from '@/components/RespectfulExportButton';
 import ChapterNavigation from '@/components/ChapterNavigation';
 import ReaderControls from '@/components/ReaderControls';
 import { getWork, getWorkChapters } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { useReaderPreferences } from '@/hooks/useReaderPreferences';
 import { useReadingProgress } from '@/hooks/useReadingProgress';
 
@@ -35,6 +40,8 @@ interface Work {
   kudos: number;
   comments: number;
   bookmarks: number;
+  offline_reading_override?: 'files_and_pwa' | 'pwa_only' | 'none' | 'use_default';
+  author_default_offline_reading?: 'files_and_pwa' | 'pwa_only' | 'none';
 }
 
 interface Author {
@@ -64,6 +71,7 @@ interface Chapter {
 export default function WorkPage() {
   const params = useParams();
   const workId = params.id as string;
+  const { user, token } = useAuth();
   
   const [work, setWork] = useState<Work | null>(null);
   const [authors, setAuthors] = useState<Author[]>([]);
@@ -72,9 +80,13 @@ export default function WorkPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showReaderControls, setShowReaderControls] = useState(false);
+  const [gifts, setGifts] = useState([]);
 
   const { preferences } = useReaderPreferences();
-  const { progress, updateProgress } = useReadingProgress(workId);
+  const { progress, saveProgress } = useReadingProgress(workId, chapters.length);
+
+  // Check if current user is an author of this work
+  const isAuthor = user && authors.some(author => author.user_id === user.id);
 
 
   useEffect(() => {
@@ -204,6 +216,11 @@ export default function WorkPage() {
                 </span>
               ))}
             </div>
+            
+            <GiftList 
+              workId={work.id}
+              authToken={token}
+            />
           </div>
           
           <div className="flex flex-col items-end text-sm text-slate-600">
@@ -286,17 +303,42 @@ export default function WorkPage() {
               <KudosButton 
                 workId={work.id}
                 initialKudos={work.kudos}
-                hasGivenKudos={false}
-                authToken={typeof window !== 'undefined' ? localStorage.getItem('auth_token') || localStorage.getItem('token') || undefined : undefined}
+                authToken={token}
               />
               
               <BookmarkButton 
                 workId={work.id}
-                authToken={typeof window !== 'undefined' ? localStorage.getItem('auth_token') || localStorage.getItem('token') || undefined : undefined}
+                authToken={token}
                 onBookmarkChange={(isBookmarked) => {
                   // Optionally update UI or show notification
                   console.log('Bookmark status changed:', isBookmarked);
                 }}
+              />
+
+              <GiftButton
+                workId={work.id}
+                isAuthor={isAuthor || false}
+                onGiftCreated={(gift) => {
+                  setGifts(prev => [...prev, gift]);
+                }}
+              />
+
+              <SubscriptionButton
+                type="work"
+                targetId={work.id}
+                targetName={work.title}
+              />
+
+              <RespectfulExportButton
+                workId={work.id}
+                workTitle={work.title}
+                authToken={token}
+                authorOfflinePreference={
+                  work.offline_reading_override === 'use_default' || !work.offline_reading_override
+                    ? work.author_default_offline_reading || 'pwa_only'
+                    : work.offline_reading_override
+                }
+                isAuthor={isAuthor}
               />
             </div>
           </div>
@@ -398,13 +440,7 @@ export default function WorkPage() {
             currentChapter={currentChapter - 1}
             onChapterChange={(index) => {
               setCurrentChapter(index + 1);
-              updateProgress({
-                workId,
-                chapterId: chapters[index]?.id,
-                position: 0,
-                lastRead: new Date().toISOString(),
-                totalTimeRead: (progress?.totalTimeRead || 0)
-              });
+              saveProgress(index, 0);
             }}
             className="relative"
           />
@@ -477,7 +513,7 @@ export default function WorkPage() {
         <Comments 
           workId={work.id}
           chapterId={currentChapterData?.id}
-          allowComments={work.status === 'posted'}
+          allowComments={work.status === 'posted' || work.status === 'published'}
         />
       </div>
     </div>
