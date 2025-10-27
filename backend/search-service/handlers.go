@@ -15,26 +15,42 @@ import (
 
 // Search request/response types
 type WorkSearchRequest struct {
-	Query         string   `json:"query,omitempty"`
-	Title         string   `json:"title,omitempty"`
-	Author        string   `json:"author,omitempty"`
-	Fandoms       []string `json:"fandoms,omitempty"`
-	Characters    []string `json:"characters,omitempty"`
-	Relationships []string `json:"relationships,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	Rating        []string `json:"rating,omitempty"`
-	Category      []string `json:"category,omitempty"`
-	Warnings      []string `json:"warnings,omitempty"`
-	Status        string   `json:"status,omitempty"`
-	Language      []string `json:"language,omitempty"`
-	WordCountMin  *int     `json:"word_count_min,omitempty"`
-	WordCountMax  *int     `json:"word_count_max,omitempty"`
-	UpdatedAfter  string   `json:"updated_after,omitempty"`
-	UpdatedBefore string   `json:"updated_before,omitempty"`
-	SortBy        string   `json:"sort_by,omitempty"`
-	SortOrder     string   `json:"sort_order,omitempty"`
-	Page          int      `json:"page,omitempty"`
-	Limit         int      `json:"limit,omitempty"`
+	Query             string   `json:"query,omitempty"`
+	Title             string   `json:"title,omitempty"`
+	Author            string   `json:"author,omitempty"`
+	Fandoms           []string `json:"fandoms,omitempty"`
+	Characters        []string `json:"characters,omitempty"`
+	Relationships     []string `json:"relationships,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+	Rating            []string `json:"rating,omitempty"`
+	Category          []string `json:"category,omitempty"`
+	Warnings          []string `json:"warnings,omitempty"`
+	Status            string   `json:"status,omitempty"`
+	Language          []string `json:"language,omitempty"`
+	WordCountMin      *int     `json:"word_count_min,omitempty"`
+	WordCountMax      *int     `json:"word_count_max,omitempty"`
+	UpdatedAfter      string   `json:"updated_after,omitempty"`
+	UpdatedBefore     string   `json:"updated_before,omitempty"`
+	SortBy            string   `json:"sort_by,omitempty"`
+	SortOrder         string   `json:"sort_order,omitempty"`
+	Page              int      `json:"page,omitempty"`
+	Limit             int      `json:"limit,omitempty"`
+	RelationshipCount string   `json:"relationship_count,omitempty"` // '1-2', '3-5', '6-10', '10+'
+	TagProminence     string   `json:"tag_prominence,omitempty"`     // 'primary', 'secondary', 'any'
+	// Content filtering
+	BlockedTags         []string `json:"blocked_tags,omitempty"`
+	HideIncomplete      bool     `json:"hide_incomplete,omitempty"`
+	HideCrossovers      bool     `json:"hide_crossovers,omitempty"`
+	HideNoRelationships bool     `json:"hide_no_relationships,omitempty"`
+	// Date filtering
+	UpdatedWithin   string `json:"updated_within,omitempty"` // 'week', 'month', '3months', 'year'
+	PublishedAfter  string `json:"published_after,omitempty"`
+	PublishedBefore string `json:"published_before,omitempty"`
+	// Engagement filtering
+	MinKudos     *int `json:"min_kudos,omitempty"`
+	MinComments  *int `json:"min_comments,omitempty"`
+	MinBookmarks *int `json:"min_bookmarks,omitempty"`
+	HideOrphaned bool `json:"hide_orphaned,omitempty"`
 }
 
 type SearchResponse struct {
@@ -104,6 +120,39 @@ func (ss *SearchService) SearchWorks(c *gin.Context) {
 	// Parse date ranges
 	req.UpdatedAfter = c.Query("updated_after")
 	req.UpdatedBefore = c.Query("updated_before")
+
+	// Parse new filter parameters
+	req.RelationshipCount = c.Query("relationship_count")
+	req.TagProminence = c.Query("tag_prominence")
+
+	// Content filtering
+	req.BlockedTags = c.QueryArray("blocked_tags")
+	req.HideIncomplete = c.Query("hide_incomplete") == "true"
+	req.HideCrossovers = c.Query("hide_crossovers") == "true"
+	req.HideNoRelationships = c.Query("hide_no_relationships") == "true"
+
+	// Date filtering
+	req.UpdatedWithin = c.Query("updated_within")
+	req.PublishedAfter = c.Query("published_after")
+	req.PublishedBefore = c.Query("published_before")
+
+	// Engagement filtering
+	if minKudos := c.Query("min_kudos"); minKudos != "" {
+		if kudos, err := strconv.Atoi(minKudos); err == nil {
+			req.MinKudos = &kudos
+		}
+	}
+	if minComments := c.Query("min_comments"); minComments != "" {
+		if comments, err := strconv.Atoi(minComments); err == nil {
+			req.MinComments = &comments
+		}
+	}
+	if minBookmarks := c.Query("min_bookmarks"); minBookmarks != "" {
+		if bookmarks, err := strconv.Atoi(minBookmarks); err == nil {
+			req.MinBookmarks = &bookmarks
+		}
+	}
+	req.HideOrphaned = c.Query("hide_orphaned") == "true"
 
 	// Build Elasticsearch query
 	log.Printf("Building query for request: %+v", req)
@@ -338,6 +387,200 @@ func (ss *SearchService) buildWorkSearchQuery(req WorkSearchRequest) map[string]
 		})
 	}
 
+	// Relationship count filter
+	if req.RelationshipCount != "" {
+		var minCount, maxCount int
+		switch req.RelationshipCount {
+		case "1-2":
+			minCount, maxCount = 1, 2
+		case "3-5":
+			minCount, maxCount = 3, 5
+		case "6-10":
+			minCount, maxCount = 6, 10
+		case "10+":
+			minCount = 10
+			// No max limit for 10+
+		}
+
+		if minCount > 0 {
+			// Use script query to count relationship tags
+			scriptQuery := map[string]interface{}{
+				"script": map[string]interface{}{
+					"source": "doc['relationships'].size() >= params.min" +
+						func() string {
+							if req.RelationshipCount != "10+" {
+								return " && doc['relationships'].size() <= params.max"
+							}
+							return ""
+						}(),
+					"params": map[string]interface{}{
+						"min": minCount,
+					},
+				},
+			}
+			if req.RelationshipCount != "10+" {
+				scriptQuery["script"].(map[string]interface{})["params"].(map[string]interface{})["max"] = maxCount
+			}
+			filter = append(filter, scriptQuery)
+		}
+	}
+
+	// Tag prominence filter (requires integration with tag prominence system)
+	if req.TagProminence != "" && len(req.Relationships) > 0 {
+		// For now, implement basic prominence filtering
+		// In the future, this would query the tag_prominence_rules table
+		switch req.TagProminence {
+		case "primary":
+			// Only show works where searched relationships are primary
+			// This would require ES document to include prominence data
+			log.Printf("Primary prominence filter requested - requires tag prominence data in ES")
+		case "secondary":
+			// Show works where relationships are secondary or higher
+			log.Printf("Secondary prominence filter requested - requires tag prominence data in ES")
+		case "any":
+			// Default behavior - no additional filtering needed
+		}
+	}
+
+	// Content filtering - crossover detection (basic implementation)
+	if req.HideCrossovers {
+		// Add script query to detect crossovers
+		// This is a simplified version - full implementation would use tag relationships table
+		crossoverScript := map[string]interface{}{
+			"script": map[string]interface{}{
+				"source": `
+					// Simple crossover detection based on known universe families
+					def fandoms = doc['fandoms'];
+					if (fandoms.size() <= 1) return true; // Not a crossover if 1 or fewer fandoms
+					
+					// Define universe families (simplified)
+					def marvelTags = ['Marvel', 'Marvel Cinematic Universe', 'Thor (Marvel)', 'Iron Man (Movies)'];
+					def harryPotterTags = ['Harry Potter - J. K. Rowling', 'Harry Potter (Movies)'];
+					def dcTags = ['DC Comics', 'Batman - All Media Types', 'Superman - All Media Types'];
+					
+					def universes = new HashSet();
+					for (fandom in fandoms) {
+						def fandomStr = fandom.toString().toLowerCase();
+						if (marvelTags.stream().anyMatch(tag -> fandomStr.contains(tag.toLowerCase()))) {
+							universes.add('marvel');
+						} else if (harryPotterTags.stream().anyMatch(tag -> fandomStr.contains(tag.toLowerCase()))) {
+							universes.add('harry_potter');
+						} else if (dcTags.stream().anyMatch(tag -> fandomStr.contains(tag.toLowerCase()))) {
+							universes.add('dc');
+						} else {
+							universes.add(fandomStr); // Treat as unique universe
+						}
+					}
+					
+					return universes.size() <= 1; // True if same universe family
+				`,
+			},
+		}
+		filter = append(filter, crossoverScript)
+		log.Printf("Crossover filtering enabled - excluding works with multiple universe families")
+	}
+
+	// Other content filtering
+	if req.HideIncomplete {
+		filter = append(filter, map[string]interface{}{
+			"term": map[string]interface{}{
+				"is_complete": true,
+			},
+		})
+	}
+
+	if req.HideNoRelationships {
+		filter = append(filter, map[string]interface{}{
+			"exists": map[string]interface{}{
+				"field": "relationships",
+			},
+		})
+		filter = append(filter, map[string]interface{}{
+			"script": map[string]interface{}{
+				"script": map[string]interface{}{
+					"source": "doc['relationships'].size() > 0",
+				},
+			},
+		})
+	}
+
+	// Date filtering
+	if req.UpdatedWithin != "" {
+		var days int
+		switch req.UpdatedWithin {
+		case "week":
+			days = 7
+		case "month":
+			days = 30
+		case "3months":
+			days = 90
+		case "year":
+			days = 365
+		}
+
+		if days > 0 {
+			filter = append(filter, map[string]interface{}{
+				"range": map[string]interface{}{
+					"updated_at": map[string]interface{}{
+						"gte": fmt.Sprintf("now-%dd", days),
+					},
+				},
+			})
+		}
+	}
+
+	// Engagement filtering
+	if req.MinKudos != nil && *req.MinKudos > 0 {
+		filter = append(filter, map[string]interface{}{
+			"range": map[string]interface{}{
+				"kudos_count": map[string]interface{}{
+					"gte": *req.MinKudos,
+				},
+			},
+		})
+	}
+
+	if req.MinComments != nil && *req.MinComments > 0 {
+		filter = append(filter, map[string]interface{}{
+			"range": map[string]interface{}{
+				"comments_count": map[string]interface{}{
+					"gte": *req.MinComments,
+				},
+			},
+		})
+	}
+
+	if req.MinBookmarks != nil && *req.MinBookmarks > 0 {
+		filter = append(filter, map[string]interface{}{
+			"range": map[string]interface{}{
+				"bookmarks_count": map[string]interface{}{
+					"gte": *req.MinBookmarks,
+				},
+			},
+		})
+	}
+
+	// Blocked tags filtering
+	if len(req.BlockedTags) > 0 {
+		for _, blockedTag := range req.BlockedTags {
+			// Add must_not clause for each blocked tag
+			mustNot := query["bool"].(map[string]interface{})["must_not"]
+			if mustNot == nil {
+				query["bool"].(map[string]interface{})["must_not"] = []map[string]interface{}{}
+				mustNot = query["bool"].(map[string]interface{})["must_not"]
+			}
+
+			mustNotSlice := mustNot.([]map[string]interface{})
+			mustNotSlice = append(mustNotSlice, map[string]interface{}{
+				"multi_match": map[string]interface{}{
+					"query":  blockedTag,
+					"fields": []string{"fandoms", "characters", "relationships", "freeform_tags"},
+				},
+			})
+			query["bool"].(map[string]interface{})["must_not"] = mustNotSlice
+		}
+	}
+
 	// If no search conditions, use match_all to return all documents
 	if len(must) == 0 && len(filter) == 0 {
 		query = map[string]interface{}{
@@ -367,10 +610,7 @@ func (ss *SearchService) buildWorkSearchQuery(req WorkSearchRequest) map[string]
 		"aggs":  ss.buildWorksFacets(),
 	}
 
-	// Debug: Print the query being generated
-	if queryJSON, err := json.MarshalIndent(result, "", "  "); err == nil {
-		log.Printf("Generated query: %s", string(queryJSON))
-	}
+	// Query logging can be enabled for debugging if needed
 
 	return result
 }
@@ -406,6 +646,7 @@ func (ss *SearchService) buildSortClause(sortBy, sortOrder string) []map[string]
 		return []map[string]interface{}{
 			{"author.keyword": map[string]interface{}{"order": sortOrder}},
 		}
+	// Traditional engagement metrics (gaming-prone)
 	case "hits":
 		return []map[string]interface{}{
 			{"hits_count": map[string]interface{}{"order": sortOrder}},
@@ -421,6 +662,120 @@ func (ss *SearchService) buildSortClause(sortBy, sortOrder string) []map[string]
 	case "bookmarks":
 		return []map[string]interface{}{
 			{"bookmarks_count": map[string]interface{}{"order": sortOrder}},
+		}
+	// Smart anti-gaming engagement metrics
+	case "quality_score":
+		// Balanced quality score that resists gaming
+		return []map[string]interface{}{
+			{
+				"_script": map[string]interface{}{
+					"type": "number",
+					"script": map[string]interface{}{
+						"source": `
+							// Anti-gaming quality algorithm
+							def hits = Math.max(doc['hits_count'].value, 1);
+							def kudos = doc['kudos_count'].value;
+							def comments = doc['comments_count'].value;
+							def bookmarks = doc['bookmarks_count'].value;
+							def wordCount = Math.max(doc['word_count'].value, 1);
+							
+							// Engagement ratios (resist raw number gaming)
+							def kudosRatio = Math.min(kudos / hits, 0.5); // Cap at 50%
+							def commentRatio = Math.min(comments / hits, 0.1); // Cap at 10%
+							def bookmarkRatio = Math.min(bookmarks / hits, 0.2); // Cap at 20%
+							
+							// Length normalization (prevent short-fic gaming)
+							def lengthBonus = Math.min(Math.log10(wordCount / 1000.0 + 1), 2.0);
+							
+							// Quality indicators
+							def hasComments = comments > 0 ? 1.2 : 1.0;
+							def hasBookmarks = bookmarks > 0 ? 1.1 : 1.0;
+							
+							// Combined quality score
+							return (kudosRatio * 100 + commentRatio * 200 + bookmarkRatio * 150) 
+								   * lengthBonus * hasComments * hasBookmarks;
+						`,
+					},
+					"order": sortOrder,
+				},
+			},
+		}
+	case "engagement_rate":
+		// Engagement rate that normalizes by exposure
+		return []map[string]interface{}{
+			{
+				"_script": map[string]interface{}{
+					"type": "number",
+					"script": map[string]interface{}{
+						"source": `
+							def hits = Math.max(doc['hits_count'].value, 1);
+							def kudos = doc['kudos_count'].value;
+							def comments = doc['comments_count'].value;
+							def bookmarks = doc['bookmarks_count'].value;
+							
+							// Calculate engagement rate as percentage
+							def totalEngagement = kudos + (comments * 2) + (bookmarks * 3);
+							return (totalEngagement / hits) * 100;
+						`,
+					},
+					"order": sortOrder,
+				},
+			},
+		}
+	case "comment_quality":
+		// Prioritize works that generate discussion
+		return []map[string]interface{}{
+			{
+				"_script": map[string]interface{}{
+					"type": "number",
+					"script": map[string]interface{}{
+						"source": `
+							def hits = Math.max(doc['hits_count'].value, 1);
+							def comments = doc['comments_count'].value;
+							def wordCount = Math.max(doc['word_count'].value, 1);
+							
+							// Comments per reader, normalized by length
+							def commentDensity = (comments / hits) * 100;
+							def lengthFactor = Math.log10(wordCount / 1000.0 + 1);
+							
+							return commentDensity * lengthFactor;
+						`,
+					},
+					"order": sortOrder,
+				},
+			},
+		}
+	case "discovery_boost":
+		// Boost newer works and works with recent activity
+		return []map[string]interface{}{
+			{
+				"_script": map[string]interface{}{
+					"type": "number",
+					"script": map[string]interface{}{
+						"source": `
+							def now = System.currentTimeMillis();
+							def publishedTime = doc['published_at'].value.getMillis();
+							def updatedTime = doc['updated_at'].value.getMillis();
+							def hits = Math.max(doc['hits_count'].value, 1);
+							def kudos = doc['kudos_count'].value;
+							
+							// Recency bonuses (30 days = full bonus)
+							def daysSincePublished = (now - publishedTime) / (1000.0 * 60 * 60 * 24);
+							def daysSinceUpdated = (now - updatedTime) / (1000.0 * 60 * 60 * 24);
+							
+							def publishBonus = Math.max(0, (30 - daysSincePublished) / 30.0);
+							def updateBonus = Math.max(0, (7 - daysSinceUpdated) / 7.0);
+							
+							// Base quality
+							def baseQuality = Math.min(kudos / hits, 0.3) * 100;
+							
+							// Discovery score
+							return baseQuality * (1 + publishBonus + updateBonus);
+						`,
+					},
+					"order": sortOrder,
+				},
+			},
 		}
 	default:
 		return []map[string]interface{}{

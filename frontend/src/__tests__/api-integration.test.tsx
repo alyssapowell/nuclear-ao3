@@ -217,16 +217,20 @@ beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-// Mock authentication context
-jest.mock('../contexts/AuthContext', () => ({
+// Mock authentication utilities
+jest.mock('../utils/auth', () => ({
   useAuth: jest.fn(() => ({
     user: { id: '1', username: 'testuser' },
-    isLoading: false,
     isAuthenticated: true,
-    login: jest.fn(),
+    token: 'mock-jwt-token',
     logout: jest.fn(),
-    register: jest.fn(),
   })),
+  getAuthState: jest.fn(() => ({
+    user: { id: '1', username: 'testuser' },
+    isAuthenticated: true,
+    token: 'mock-jwt-token',
+  })),
+  isAuthenticated: jest.fn(() => true),
 }));
 
 describe('API Integration Tests', () => {

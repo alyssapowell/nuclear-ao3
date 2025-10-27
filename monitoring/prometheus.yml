@@ -1,0 +1,60 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Nuclear AO3 Services
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8080']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8081']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: 'work-service'
+    static_configs:
+      - targets: ['work-service:8082']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: 'tag-service'
+    static_configs:
+      - targets: ['tag-service:8083']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: 'search-service'
+    static_configs:
+      - targets: ['search-service:8084']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  # Infrastructure Services
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+    scrape_interval: 30s
+
+  # Self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

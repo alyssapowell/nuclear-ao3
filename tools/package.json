@@ -1,0 +1,17 @@
+{
+  "name": "tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "comprehensive-data-generator.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.9.0",
+    "pg": "^8.16.3"
+  }
+}

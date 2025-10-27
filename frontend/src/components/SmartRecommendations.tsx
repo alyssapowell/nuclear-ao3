@@ -70,7 +70,7 @@ export default function SmartRecommendations({
     <div className={`space-y-4 ${className}`}>
       <div className="flex items-center space-x-2">
         <span className="text-lg">🤖</span>
-        <h3 className="text-lg font-semibold text-gray-900">Smart Recommendations</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Smart Tag Suggestions</h3>
         <span className="text-sm text-gray-500">({recommendations.length})</span>
       </div>
 
@@ -134,7 +134,7 @@ export default function SmartRecommendations({
         <div className="flex items-start space-x-2">
           <span>ℹ️</span>
           <div>
-            <p className="font-medium">How Smart Recommendations Work:</p>
+            <p className="font-medium">How Smart Tag Suggestions Work:</p>
             <ul className="mt-1 space-y-1">
               <li>• <strong>Missing Characters:</strong> Detected from relationship tags (e.g., "Agatha/Reader" suggests adding "Reader" character)</li>
               <li>• <strong>Missing Relationships:</strong> Inferred from character combinations and common patterns</li>

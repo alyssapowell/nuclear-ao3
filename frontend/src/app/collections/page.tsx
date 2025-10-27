@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, Plus, User, Calendar, BookOpen, Users, Lock } from 'lucide-react';
-import { getMyCollections, getCollectionWorks, createCollection, CreateCollectionRequest } from '@/lib/api';
+import { getMyCollections, getCollectionWorks, createCollection, CreateCollectionRequest, browseCollections } from '@/lib/api';
 
 interface Collection {
   id: string;
@@ -64,14 +64,13 @@ export default function CollectionsPage() {
       setLoading(true);
       setError('');
       
-      // For now, we'll show empty state as the backend collections API might not be fully implemented
-      setCollections([]);
-      setPagination({
-        page: 1,
-        limit: 20,
-        total: 0,
-        total_pages: 0
+      const response = await browseCollections({
+        page: pagination.page,
+        limit: pagination.limit
       });
+
+      setCollections(response.collections || []);
+      setPagination(response.pagination || pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load collections');
     } finally {
@@ -111,14 +110,14 @@ export default function CollectionsPage() {
       setLoading(true);
       setError('');
       
-      // Basic search implementation - for now showing empty results
-      setCollections([]);
-      setPagination({
+      const response = await browseCollections({
+        q: searchQuery,
         page: 1,
-        limit: 20,
-        total: 0,
-        total_pages: 0
+        limit: pagination.limit
       });
+
+      setCollections(response.collections || []);
+      setPagination(response.pagination || { ...pagination, page: 1 });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Search failed');
     } finally {

@@ -1,0 +1,136 @@
+name: Accessibility CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/accessibility-ci.yml'
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  accessibility-tests:
+    name: Accessibility Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Run accessibility unit tests
+        working-directory: ./frontend
+        run: npm run test:accessibility
+        
+      - name: Build application
+        working-directory: ./frontend
+        run: npm run build
+        
+      - name: Start application
+        working-directory: ./frontend
+        run: |
+          npm start &
+          sleep 10
+          
+      - name: Run accessibility E2E tests
+        working-directory: ./frontend
+        run: npx playwright test --config=playwright.accessibility.config.ts
+        
+      - name: Upload accessibility test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: accessibility-test-results
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+            
+      - name: Comment PR with accessibility results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let comment = '## ♿ Accessibility Test Results\n\n';
+            
+            try {
+              // Read accessibility test results if available
+              const testResults = fs.readFileSync('frontend/accessibility-results.json', 'utf8');
+              const results = JSON.parse(testResults);
+              
+              if (results.violations && results.violations.length > 0) {
+                comment += '❌ **Accessibility violations found:**\n\n';
+                results.violations.forEach(violation => {
+                  comment += `- **${violation.id}**: ${violation.description}\n`;
+                  comment += `  - Impact: ${violation.impact}\n`;
+                  comment += `  - Nodes: ${violation.nodes.length}\n\n`;
+                });
+                comment += '⚠️ Please fix accessibility issues before merging.\n\n';
+              } else {
+                comment += '✅ **All accessibility tests passed!**\n\n';
+              }
+              
+              comment += `📖 [Accessibility Testing Guide](../blob/main/ACCESSIBILITY_TESTING_GUIDE.md)\n`;
+              comment += `📋 [Frontend Accessibility](../blob/main/frontend/ACCESSIBILITY.md)`;
+              
+            } catch (error) {
+              comment += '❓ **Could not parse accessibility results**\n\n';
+              comment += 'Please ensure all accessibility tests are running correctly.';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  lighthouse-accessibility:
+    name: Lighthouse Accessibility Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+          
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+        
+      - name: Build and start application
+        working-directory: ./frontend
+        run: |
+          npm run build
+          npm start &
+          sleep 15
+          
+      - name: Run Lighthouse accessibility audit
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun --config=lighthouserc.js
+          
+      - name: Upload Lighthouse results
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-results
+          path: .lighthouseci/

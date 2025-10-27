@@ -100,6 +100,24 @@ interface SearchFilters {
   status?: string;
   excludePoorlyTagged?: boolean;
   enableSmartSuggestions?: boolean;
+  relationshipCount?: string; // '1-2', '3-5', '6-10', '10+'
+  tagProminence?: string; // 'primary', 'secondary', 'any'
+  // Content filtering
+  blockedTags: string[];
+  hideIncomplete?: boolean;
+  hideCrossovers?: boolean;
+  hideNoRelationships?: boolean;
+  // Date filtering
+  updatedWithin?: string; // 'week', 'month', 'year'
+  publishedAfter?: string;
+  publishedBefore?: string;
+  // Engagement filtering
+  minKudos?: number;
+  minComments?: number;
+  minBookmarks?: number;
+  hideOrphaned?: boolean;
+  // Sorting
+  sort?: string;
 }
 
 interface Work {
@@ -163,6 +181,22 @@ const SearchForm = React.memo(function SearchForm({
     fandoms: [],
     excludePoorlyTagged: false,
     enableSmartSuggestions: true,
+    relationshipCount: '',
+    tagProminence: '',
+    // Content filtering
+    blockedTags: [],
+    hideIncomplete: false,
+    hideCrossovers: false,
+    hideNoRelationships: false,
+    // Date filtering
+    updatedWithin: '',
+    publishedAfter: '',
+    publishedBefore: '',
+    // Engagement filtering
+    minKudos: undefined,
+    minComments: undefined,
+    minBookmarks: undefined,
+    hideOrphaned: false,
     ...initialFilters
   });
   
@@ -170,7 +204,8 @@ const SearchForm = React.memo(function SearchForm({
     relationships: '',
     characters: '',
     freeformTags: '',
-    fandoms: ''
+    fandoms: '',
+    blockedTags: ''
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [announceResults, setAnnounceResults] = useState('');
@@ -208,24 +243,56 @@ const SearchForm = React.memo(function SearchForm({
         wordCountMax: searchParams.filters.word_count_max,
         language: searchParams.filters.language ? [searchParams.filters.language] : [],
         status: searchParams.filters.status,
+        relationshipCount: searchParams.filters.relationship_count,
+        tagProminence: searchParams.filters.tag_prominence,
+        sort: searchParams.filters.sort || 'quality_score',
       };
 
       const data = await searchWorks(query, apiParams);
       
       // Normalize the data to match expected structure
-      const normalizedWorks = (data.works || []).map((work: any) => ({
-        ...work,
-        fandoms: work.fandoms || [],
-        characters: work.characters || [],
-        relationships: work.relationships || [],
-        freeform_tags: work.freeform_tags || [],
-        // Map snake_case to camelCase for consistency
-        wordCount: work.word_count,
-        chapterCount: work.chapter_count,
-        maxChapters: work.max_chapters,
-        publishedAt: work.published_at,
-        updatedAt: work.updated_at,
-      }));
+      const normalizedWorks = (data.works || []).map((work: any) => {
+        // Helper function to parse stringified JSON arrays
+        const parseTagArray = (tagArray: any): Array<{ name: string; category: string }> => {
+          if (!tagArray) return [];
+          if (Array.isArray(tagArray)) {
+            return tagArray.map(tag => {
+              if (typeof tag === 'string') {
+                try {
+                  // Parse stringified JSON like "{\"Harry Potter - J. K. Rowling\"}"
+                  const parsed = JSON.parse(tag);
+                  if (Array.isArray(parsed)) {
+                    return parsed.map(t => ({ name: t, category: '' }));
+                  } else if (typeof parsed === 'object') {
+                    // Handle object format
+                    return Object.values(parsed).map(t => ({ name: t as string, category: '' }));
+                  } else {
+                    return [{ name: parsed, category: '' }];
+                  }
+                } catch {
+                  return [{ name: tag, category: '' }];
+                }
+              }
+              return { name: tag?.name || tag, category: tag?.category || '' };
+            }).flat();
+          }
+          return [];
+        };
+
+        return {
+          ...work,
+          fandoms: parseTagArray(work.fandoms),
+          characters: parseTagArray(work.characters),
+          relationships: parseTagArray(work.relationships),
+          freeform_tags: parseTagArray(work.freeform_tags),
+          // Map snake_case to camelCase for consistency
+          wordCount: work.word_count,
+          chapterCount: work.chapter_count,
+          maxChapters: work.max_chapters,
+          publishedAt: work.published_at,
+          updatedAt: work.updated_at,
+        };
+      });
       
       onResults(normalizedWorks);
       setAnnounceResults(`Search completed. Found ${normalizedWorks.length} results.`);
@@ -268,7 +335,20 @@ const SearchForm = React.memo(function SearchForm({
         word_count_min: filters.wordCountMin,
         word_count_max: filters.wordCountMax,
         language: filters.language,
-        status: filters.status
+        status: filters.status,
+        relationship_count: filters.relationshipCount,
+        tag_prominence: filters.tagProminence,
+        blocked_tags: filters.blockedTags,
+        hide_incomplete: filters.hideIncomplete,
+        hide_crossovers: filters.hideCrossovers,
+        hide_no_relationships: filters.hideNoRelationships,
+        updated_within: filters.updatedWithin,
+        published_after: filters.publishedAfter,
+        published_before: filters.publishedBefore,
+        min_kudos: filters.minKudos,
+        min_comments: filters.minComments,
+        min_bookmarks: filters.minBookmarks,
+        hide_orphaned: filters.hideOrphaned
       },
       options: {
         exclude_poorly_tagged: filters.excludePoorlyTagged,
@@ -335,7 +415,28 @@ const SearchForm = React.memo(function SearchForm({
       freeformTags: [],
       fandoms: [],
       excludePoorlyTagged: false,
-      enableSmartSuggestions: true
+      enableSmartSuggestions: true,
+      relationshipCount: '',
+      tagProminence: '',
+      blockedTags: [],
+      hideIncomplete: false,
+      hideCrossovers: false,
+      hideNoRelationships: false,
+      updatedWithin: '',
+      publishedAfter: '',
+      publishedBefore: '',
+      minKudos: undefined,
+      minComments: undefined,
+      minBookmarks: undefined,
+      hideOrphaned: false,
+      sort: 'quality_score'
+    });
+    setTagInputs({
+      relationships: '',
+      characters: '',
+      freeformTags: '',
+      fandoms: '',
+      blockedTags: ''
     });
     setAnnounceResults('All search filters cleared');
     titleInputRef.current?.focus();
@@ -574,20 +675,35 @@ const SearchForm = React.memo(function SearchForm({
               </div>
 
               <div>
-                <label htmlFor={`${formId}-status`} className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
+                <label htmlFor={`${formId}-sort`} className="block text-sm font-medium text-gray-700 mb-2">
+                  Sort Results By
                 </label>
                 <select
-                  id={`${formId}-status`}
-                  value={filters.status || ''}
-                  onChange={(e) => handleInputChange('status', e.target.value)}
+                  id={`${formId}-sort`}
+                  value={filters.sort || 'quality_score'}
+                  onChange={(e) => handleInputChange('sort', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">Any Status</option>
-                  <option value="complete">Complete</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="hiatus">On Hiatus</option>
+                  <optgroup label="Anti-Gaming Algorithms">
+                    <option value="quality_score">Quality Score (engagement + length balanced)</option>
+                    <option value="engagement_rate">Engagement Rate (kudos/hits ratio)</option>
+                    <option value="comment_quality">Comment Quality (discussion-generating)</option>
+                    <option value="discovery_boost">Discovery Boost (recent activity)</option>
+                  </optgroup>
+                  <optgroup label="Traditional Metrics">
+                    <option value="relevance">Relevance (search matching)</option>
+                    <option value="updated_at">Recently Updated</option>
+                    <option value="published_at">Recently Published</option>
+                    <option value="kudos">Most Kudos</option>
+                    <option value="hits">Most Hits</option>
+                    <option value="comments">Most Comments</option>
+                    <option value="bookmarks">Most Bookmarks</option>
+                    <option value="word_count">Word Count</option>
+                  </optgroup>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Quality algorithms resist gaming and promote genuinely engaging works
+                </p>
               </div>
             </section>
           </section>
@@ -673,6 +789,169 @@ const SearchForm = React.memo(function SearchForm({
                   <option value="ko">Korean</option>
                   <option value="zh">Chinese</option>
                 </select>
+              </div>
+
+              <div>
+                <label htmlFor={`${formId}-tag-prominence`} className="block text-sm font-medium text-gray-700 mb-2">
+                  ⭐ Relationship Focus
+                </label>
+                <select
+                  id={`${formId}-tag-prominence`}
+                  value={filters.tagProminence || ''}
+                  onChange={(e) => handleInputChange('tagProminence', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Any role in story</option>
+                  <option value="primary">Main relationship (story centers on this pairing)</option>
+                  <option value="secondary">Important subplot (significant romantic arc)</option>
+                  <option value="any">Background mentions (appears but not central)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">How central are your selected relationships to the story's main plot?</p>
+              </div>
+
+              <div>
+                <label htmlFor={`${formId}-relationship-count`} className="block text-sm font-medium text-gray-700 mb-2">
+                  📊 Relationship Scope
+                </label>
+                <select
+                  id={`${formId}-relationship-count`}
+                  value={filters.relationshipCount || ''}
+                  onChange={(e) => handleInputChange('relationshipCount', e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Any scope</option>
+                  <option value="1-2">Focused (1-2 relationships total)</option>
+                  <option value="3-5">Moderate cast (3-5 relationships total)</option>
+                  <option value="6-10">Large ensemble (6-10 relationships total)</option>
+                  <option value="10+">Comprehensive (10+ relationships total)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Total number of relationships in the story - some readers prefer focused romance, others like multi-pairing stories</p>
+              </div>
+            </section>
+
+            {/* Content Filtering Section */}
+            <section className="border-t border-gray-200 pt-4 mt-6">
+              <h4 className="text-md font-medium text-gray-800 mb-4">🚫 Content Filtering</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor={`${formId}-blocked-tags`} className="block text-sm font-medium text-gray-700 mb-2">
+                    Blocked Tags
+                  </label>
+                  <TagAutocomplete
+                    id={`${formId}-blocked-tags`}
+                    value={tagInputs.blockedTags || ''}
+                    onChange={(value) => setTagInputs(prev => ({ ...prev, blockedTags: value }))}
+                    onTagSelect={(tag) => addTag('blockedTags', tag.name || tag)}
+                    placeholder="Tags to avoid..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {filters.blockedTags && filters.blockedTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {filters.blockedTags.map((tag, index) => (
+                        <span key={index} className="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => removeTag('blockedTags', index, tag)}
+                            className="ml-1 text-red-600 hover:text-red-800 focus:outline-none"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Hide works containing these tags</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Content Preferences</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.hideIncomplete || false}
+                        onChange={(e) => handleInputChange('hideIncomplete', e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Hide incomplete works</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.hideCrossovers || false}
+                        onChange={(e) => handleInputChange('hideCrossovers', e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Hide crossovers</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.hideNoRelationships || false}
+                        onChange={(e) => handleInputChange('hideNoRelationships', e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">Hide gen fic (no relationships)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Date & Engagement Filtering Section */}
+            <section className="border-t border-gray-200 pt-4 mt-6">
+              <h4 className="text-md font-medium text-gray-800 mb-4">📅 Date & Engagement Filters</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor={`${formId}-updated-within`} className="block text-sm font-medium text-gray-700 mb-2">
+                    Updated Within
+                  </label>
+                  <select
+                    id={`${formId}-updated-within`}
+                    value={filters.updatedWithin || ''}
+                    onChange={(e) => handleInputChange('updatedWithin', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Any time</option>
+                    <option value="week">Past week</option>
+                    <option value="month">Past month</option>
+                    <option value="3months">Past 3 months</option>
+                    <option value="year">Past year</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor={`${formId}-min-kudos`} className="block text-sm font-medium text-gray-700 mb-2">
+                    Minimum Kudos
+                  </label>
+                  <input
+                    id={`${formId}-min-kudos`}
+                    type="number"
+                    min="0"
+                    value={filters.minKudos || ''}
+                    onChange={(e) => handleInputChange('minKudos', parseInt(e.target.value) || undefined)}
+                    placeholder="e.g., 10"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor={`${formId}-min-comments`} className="block text-sm font-medium text-gray-700 mb-2">
+                    Minimum Comments
+                  </label>
+                  <input
+                    id={`${formId}-min-comments`}
+                    type="number"
+                    min="0"
+                    value={filters.minComments || ''}
+                    onChange={(e) => handleInputChange('minComments', parseInt(e.target.value) || undefined)}
+                    placeholder="e.g., 5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
               </div>
             </section>
           </fieldset>

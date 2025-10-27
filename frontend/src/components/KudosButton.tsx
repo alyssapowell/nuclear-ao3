@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { giveKudos } from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { giveKudos, getWorkKudos } from '@/lib/api';
 
 interface KudosButtonProps {
   workId: string;
@@ -15,9 +15,36 @@ export default function KudosButton({ workId, initialKudos, hasGivenKudos = fals
   const [hasKudos, setHasKudos] = useState(hasGivenKudos);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchingStatus, setFetchingStatus] = useState(true);
+
+  // Fetch kudos status on mount
+  useEffect(() => {
+    const fetchKudosStatus = async () => {
+      try {
+        const kudosData = await getWorkKudos(workId, authToken);
+        if (kudosData.has_given_kudos !== undefined) {
+          setHasKudos(kudosData.has_given_kudos);
+        }
+        if (kudosData.total_count !== undefined) {
+          setKudosCount(kudosData.total_count);
+        }
+      } catch (err) {
+        // If fetching fails, fall back to initial props
+        console.warn('Failed to fetch kudos status:', err);
+      } finally {
+        setFetchingStatus(false);
+      }
+    };
+
+    if (authToken) {
+      fetchKudosStatus();
+    } else {
+      setFetchingStatus(false);
+    }
+  }, [workId, authToken]);
 
   const handleGiveKudos = async () => {
-    if (hasKudos || loading) return;
+    if (hasKudos || loading || fetchingStatus) return;
 
     try {
       setLoading(true);
@@ -38,13 +65,15 @@ export default function KudosButton({ workId, initialKudos, hasGivenKudos = fals
     <div className="flex items-center gap-3">
       <button
         onClick={handleGiveKudos}
-        disabled={hasKudos || loading}
+        disabled={hasKudos || loading || fetchingStatus}
         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
           hasKudos 
             ? 'bg-red-100 text-red-700 cursor-not-allowed' 
+            : fetchingStatus
+            ? 'bg-gray-100 text-gray-500 cursor-wait'
             : 'bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700'
         }`}
-        title={hasKudos ? 'You have already left kudos' : 'Leave kudos'}
+        title={hasKudos ? 'You have already left kudos' : fetchingStatus ? 'Loading...' : 'Leave kudos'}
       >
         <svg 
           className={`w-5 h-5 ${loading ? 'animate-pulse' : ''}`} 
@@ -60,7 +89,7 @@ export default function KudosButton({ workId, initialKudos, hasGivenKudos = fals
           />
         </svg>
         <span className="font-medium">
-          {loading ? 'Giving...' : hasKudos ? 'Kudos Given' : 'Give Kudos'}
+          {fetchingStatus ? 'Loading...' : loading ? 'Giving...' : hasKudos ? 'Kudos Given' : 'Give Kudos'}
         </span>
         <span className="text-sm">({kudosCount})</span>
       </button>

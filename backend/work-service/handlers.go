@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"nuclear-ao3/shared/models"
+	"nuclear-ao3/shared/notifications"
 )
 
 // Work CRUD operations
@@ -198,6 +200,15 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 
 	// Index work in search service asynchronously
 	go ws.indexWorkInSearch(workID, work)
+
+	// Trigger notification for new work
+	go func() {
+		ctx := context.Background()
+		// For new works, we might want to notify author subscribers
+		// The triggerWorkNotification function handles work-specific subscriptions,
+		// but we might also want author-level notifications here
+		ws.triggerWorkNotification(ctx, workID, models.EventNewWork, work.Title, "New work has been published")
+	}()
 
 	c.JSON(http.StatusCreated, gin.H{"work": work, "first_chapter": chapter})
 }
@@ -568,6 +579,12 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated work"})
 		return
 	}
+
+	// Trigger notification for work update
+	go func() {
+		ctx := context.Background()
+		ws.triggerWorkNotification(ctx, workID, models.EventWorkUpdated, work.Title, "Work has been updated")
+	}()
 
 	c.JSON(http.StatusOK, gin.H{"work": work})
 }
@@ -1580,6 +1597,19 @@ func (ws *WorkService) UpdateChapter(c *gin.Context) {
 	chapterCacheKey := fmt.Sprintf("chapter:%s", chapterID)
 	ws.redis.Del(c.Request.Context(), chapterCacheKey)
 
+	// Trigger notification for chapter update
+	go func() {
+		ctx := context.Background()
+		// Get work title for notification
+		var workTitle string
+		err := ws.db.QueryRow("SELECT title FROM works WHERE id = $1", workID).Scan(&workTitle)
+		if err != nil {
+			log.Printf("Failed to get work title for notification: %v", err)
+			workTitle = "Unknown Work"
+		}
+		ws.triggerWorkNotification(ctx, workID, models.EventWorkUpdated, workTitle, "New chapter has been posted")
+	}()
+
 	c.JSON(http.StatusOK, gin.H{"message": "Chapter updated successfully"})
 }
 
@@ -1801,8 +1831,95 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 }
 
 func (ws *WorkService) GetKudos(c *gin.Context) {
-	// TODO: Implement kudos listing
-	c.JSON(http.StatusOK, gin.H{"kudos": []gin.H{}})
+	workID, err := uuid.Parse(c.Param("work_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid work ID"})
+		return
+	}
+
+	// Get user ID to check if current user has given kudos
+	userID, hasUser := c.Get("user_id")
+	var userUUID *uuid.UUID
+	if hasUser {
+		userIDStr := userID.(string)
+		if userVal, err := uuid.Parse(userIDStr); err == nil {
+			userUUID = &userVal
+		}
+	}
+
+	// Get client IP for guest kudos checking
+	clientIP := c.ClientIP()
+
+	// First, get total kudos count
+	var totalCount int
+	countQuery := `SELECT COUNT(*) FROM kudos WHERE work_id = $1`
+	err = ws.db.QueryRow(countQuery, workID).Scan(&totalCount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos count"})
+		return
+	}
+
+	// Check if current user has given kudos
+	hasGivenKudos := false
+	if userUUID != nil {
+		var exists bool
+		userKudosQuery := `SELECT EXISTS(SELECT 1 FROM kudos WHERE work_id = $1 AND user_id = $2)`
+		err = ws.db.QueryRow(userKudosQuery, workID, *userUUID).Scan(&exists)
+		if err == nil {
+			hasGivenKudos = exists
+		}
+	} else {
+		// Check for guest kudos by IP
+		var exists bool
+		guestKudosQuery := `SELECT EXISTS(SELECT 1 FROM kudos WHERE work_id = $1 AND ip_address = $2 AND user_id IS NULL)`
+		err = ws.db.QueryRow(guestKudosQuery, workID, clientIP).Scan(&exists)
+		if err == nil {
+			hasGivenKudos = exists
+		}
+	}
+
+	// Get recent kudos for display (limit to 20 most recent)
+	query := `
+		SELECT k.id, k.created_at, COALESCE(u.username, 'Guest') as username
+		FROM kudos k
+		LEFT JOIN users u ON k.user_id = u.id
+		WHERE k.work_id = $1
+		ORDER BY k.created_at DESC
+		LIMIT 20
+	`
+
+	rows, err := ws.db.Query(query, workID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos list"})
+		return
+	}
+	defer rows.Close()
+
+	var kudosList []map[string]interface{}
+	for rows.Next() {
+		var kudosID uuid.UUID
+		var createdAt time.Time
+		var username string
+
+		err := rows.Scan(&kudosID, &createdAt, &username)
+		if err != nil {
+			continue
+		}
+
+		kudosItem := map[string]interface{}{
+			"id":         kudosID,
+			"username":   username,
+			"created_at": createdAt,
+		}
+
+		kudosList = append(kudosList, kudosItem)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"kudos":           kudosList,
+		"has_given_kudos": hasGivenKudos,
+		"total_count":     totalCount,
+	})
 }
 
 func (ws *WorkService) GiveKudos(c *gin.Context) {
@@ -7105,4 +7222,378 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+// Subscription handlers
+
+// CreateSubscription creates a new subscription for a user
+func (ws *WorkService) CreateSubscription(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var req struct {
+		Type         string   `json:"type" binding:"required"`
+		TargetID     string   `json:"target_id" binding:"required"`
+		TargetName   string   `json:"target_name"`
+		Events       []string `json:"events"`
+		Frequency    string   `json:"frequency"`
+		FilterTags   []string `json:"filter_tags"`
+		FilterRating []string `json:"filter_rating"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		return
+	}
+
+	// Validate target ID
+	targetUUID, err := uuid.Parse(req.TargetID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target ID format"})
+		return
+	}
+
+	// Validate subscription type
+	validTypes := []string{"work", "author", "series", "tag", "collection"}
+	isValidType := false
+	for _, validType := range validTypes {
+		if req.Type == validType {
+			isValidType = true
+			break
+		}
+	}
+	if !isValidType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription type"})
+		return
+	}
+
+	// Set default values
+	if req.Frequency == "" {
+		req.Frequency = "immediate"
+	}
+	if len(req.Events) == 0 {
+		switch req.Type {
+		case "work":
+			req.Events = []string{"work_updated", "new_work"}
+		case "author":
+			req.Events = []string{"new_work", "work_updated"}
+		case "series":
+			req.Events = []string{"series_updated", "work_updated"}
+		default:
+			req.Events = []string{"new_work"}
+		}
+	}
+
+	// Get target name if not provided
+	if req.TargetName == "" {
+		switch req.Type {
+		case "work":
+			ws.db.QueryRow("SELECT title FROM works WHERE id = $1", targetUUID).Scan(&req.TargetName)
+		case "author":
+			ws.db.QueryRow("SELECT username FROM users WHERE id = $1", targetUUID).Scan(&req.TargetName)
+		case "series":
+			ws.db.QueryRow("SELECT title FROM series WHERE id = $1", targetUUID).Scan(&req.TargetName)
+		}
+	}
+
+	// Create subscription
+	subscriptionID := uuid.New()
+	_, err = ws.db.Exec(`
+		INSERT INTO subscriptions (
+			id, user_id, type, target_id, target_name, events, frequency, 
+			filter_tags, filter_rating, is_active, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, NOW(), NOW())
+		ON CONFLICT (user_id, type, target_id) 
+		DO UPDATE SET 
+			events = $6, frequency = $7, filter_tags = $8, filter_rating = $9,
+			is_active = true, updated_at = NOW()`,
+		subscriptionID, userID, req.Type, targetUUID, req.TargetName,
+		pq.Array(req.Events), req.Frequency, pq.Array(req.FilterTags), pq.Array(req.FilterRating))
+
+	if err != nil {
+		log.Printf("Error creating subscription: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Subscription created successfully",
+		"subscription": gin.H{
+			"id":          subscriptionID,
+			"type":        req.Type,
+			"target_id":   req.TargetID,
+			"target_name": req.TargetName,
+			"events":      req.Events,
+			"frequency":   req.Frequency,
+		},
+	})
+}
+
+// GetUserSubscriptions retrieves all subscriptions for a user
+func (ws *WorkService) GetUserSubscriptions(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	rows, err := ws.db.Query(`
+		SELECT id, type, target_id, target_name, events, frequency, 
+			   filter_tags, filter_rating, is_active, created_at, updated_at
+		FROM subscriptions 
+		WHERE user_id = $1 AND is_active = true
+		ORDER BY created_at DESC`, userID)
+
+	if err != nil {
+		log.Printf("Error fetching subscriptions: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
+		return
+	}
+	defer rows.Close()
+
+	var subscriptions []map[string]interface{}
+	for rows.Next() {
+		var sub struct {
+			ID           uuid.UUID      `db:"id"`
+			Type         string         `db:"type"`
+			TargetID     uuid.UUID      `db:"target_id"`
+			TargetName   string         `db:"target_name"`
+			Events       pq.StringArray `db:"events"`
+			Frequency    string         `db:"frequency"`
+			FilterTags   pq.StringArray `db:"filter_tags"`
+			FilterRating pq.StringArray `db:"filter_rating"`
+			IsActive     bool           `db:"is_active"`
+			CreatedAt    time.Time      `db:"created_at"`
+			UpdatedAt    time.Time      `db:"updated_at"`
+		}
+
+		err := rows.Scan(&sub.ID, &sub.Type, &sub.TargetID, &sub.TargetName,
+			&sub.Events, &sub.Frequency, &sub.FilterTags, &sub.FilterRating,
+			&sub.IsActive, &sub.CreatedAt, &sub.UpdatedAt)
+		if err != nil {
+			log.Printf("Error scanning subscription: %v", err)
+			continue
+		}
+
+		subscriptions = append(subscriptions, map[string]interface{}{
+			"id":            sub.ID,
+			"type":          sub.Type,
+			"target_id":     sub.TargetID,
+			"target_name":   sub.TargetName,
+			"events":        []string(sub.Events),
+			"frequency":     sub.Frequency,
+			"filter_tags":   []string(sub.FilterTags),
+			"filter_rating": []string(sub.FilterRating),
+			"is_active":     sub.IsActive,
+			"created_at":    sub.CreatedAt,
+			"updated_at":    sub.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"subscriptions": subscriptions})
+}
+
+// CheckSubscriptionStatus checks if user is subscribed to a specific target
+func (ws *WorkService) CheckSubscriptionStatus(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	targetType := c.Query("type")
+	targetID := c.Query("target_id")
+
+	if targetType == "" || targetID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "type and target_id parameters required"})
+		return
+	}
+
+	targetUUID, err := uuid.Parse(targetID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target ID format"})
+		return
+	}
+
+	var subscriptionID uuid.UUID
+	var isActive bool
+	err = ws.db.QueryRow(`
+		SELECT id, is_active FROM subscriptions 
+		WHERE user_id = $1 AND type = $2 AND target_id = $3`,
+		userID, targetType, targetUUID).Scan(&subscriptionID, &isActive)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{
+				"subscribed":      false,
+				"subscription_id": nil,
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check subscription status"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"subscribed":      isActive,
+		"subscription_id": subscriptionID,
+	})
+}
+
+// UpdateSubscription updates an existing subscription
+func (ws *WorkService) UpdateSubscription(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	subscriptionID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+		return
+	}
+
+	var req struct {
+		Events       []string `json:"events"`
+		Frequency    string   `json:"frequency"`
+		FilterTags   []string `json:"filter_tags"`
+		FilterRating []string `json:"filter_rating"`
+		IsActive     *bool    `json:"is_active"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		return
+	}
+
+	// Verify subscription belongs to user
+	var ownerID uuid.UUID
+	err = ws.db.QueryRow("SELECT user_id FROM subscriptions WHERE id = $1", subscriptionID).Scan(&ownerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify subscription ownership"})
+		}
+		return
+	}
+
+	if ownerID.String() != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	// Build update query dynamically
+	setParts := []string{}
+	args := []interface{}{}
+	argCount := 1
+
+	if len(req.Events) > 0 {
+		setParts = append(setParts, fmt.Sprintf("events = $%d", argCount))
+		args = append(args, pq.Array(req.Events))
+		argCount++
+	}
+
+	if req.Frequency != "" {
+		setParts = append(setParts, fmt.Sprintf("frequency = $%d", argCount))
+		args = append(args, req.Frequency)
+		argCount++
+	}
+
+	if req.FilterTags != nil {
+		setParts = append(setParts, fmt.Sprintf("filter_tags = $%d", argCount))
+		args = append(args, pq.Array(req.FilterTags))
+		argCount++
+	}
+
+	if req.FilterRating != nil {
+		setParts = append(setParts, fmt.Sprintf("filter_rating = $%d", argCount))
+		args = append(args, pq.Array(req.FilterRating))
+		argCount++
+	}
+
+	if req.IsActive != nil {
+		setParts = append(setParts, fmt.Sprintf("is_active = $%d", argCount))
+		args = append(args, *req.IsActive)
+		argCount++
+	}
+
+	if len(setParts) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
+		return
+	}
+
+	setParts = append(setParts, "updated_at = NOW()")
+	query := fmt.Sprintf("UPDATE subscriptions SET %s WHERE id = $%d", strings.Join(setParts, ", "), argCount)
+	args = append(args, subscriptionID)
+
+	_, err = ws.db.Exec(query, args...)
+	if err != nil {
+		log.Printf("Error updating subscription: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update subscription"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscription updated successfully"})
+}
+
+// DeleteSubscription removes a subscription
+func (ws *WorkService) DeleteSubscription(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	subscriptionID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+		return
+	}
+
+	// Verify subscription belongs to user and delete
+	result, err := ws.db.Exec("DELETE FROM subscriptions WHERE id = $1 AND user_id = $2", subscriptionID, userID)
+	if err != nil {
+		log.Printf("Error deleting subscription: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subscription"})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found or access denied"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscription deleted successfully"})
+}
+
+// triggerWorkNotification sends a notification when a work is updated
+func (ws *WorkService) triggerWorkNotification(ctx context.Context, workID uuid.UUID, eventType models.NotificationEvent, title, description string) {
+	if ws.notificationService == nil {
+		log.Printf("Notification service not initialized, skipping notification for work %s", workID)
+		return
+	}
+
+	event := &notifications.EventData{
+		Type:        eventType,
+		SourceID:    workID,
+		SourceType:  "work",
+		Title:       title,
+		Description: description,
+		ActionURL:   fmt.Sprintf("/works/%s", workID),
+		ActorID:     nil, // TODO: Get user ID from context
+		ActorName:   "",  // TODO: Get username from context
+		ExtraData:   make(map[string]interface{}),
+	}
+
+	if err := ws.notificationService.ProcessEvent(ctx, event); err != nil {
+		log.Printf("Failed to process notification event for work %s: %v", workID, err)
+	} else {
+		log.Printf("Successfully triggered notification for work %s", workID)
+	}
 }

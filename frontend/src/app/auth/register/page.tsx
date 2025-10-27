@@ -126,6 +126,7 @@ function RegisterContent() {
           <input
             type="text"
             id="username"
+            data-testid="username"
             value={form.username}
             onChange={(e) => handleInputChange('username', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
@@ -142,6 +143,7 @@ function RegisterContent() {
           <input
             type="email"
             id="email"
+            data-testid="email"
             value={form.email}
             onChange={(e) => handleInputChange('email', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
@@ -158,6 +160,7 @@ function RegisterContent() {
           <input
             type="password"
             id="password"
+            data-testid="password"
             value={form.password}
             onChange={(e) => handleInputChange('password', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
@@ -176,6 +179,7 @@ function RegisterContent() {
           <input
             type="password"
             id="confirmPassword"
+            data-testid="confirm-password"
             value={form.confirmPassword}
             onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
@@ -187,6 +191,7 @@ function RegisterContent() {
         
         <button
           type="submit"
+          data-testid="register-button"
           disabled={loading}
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >

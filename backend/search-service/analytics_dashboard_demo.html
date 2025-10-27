@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuclear AO3 - Search Analytics Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f7fafc;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .trend-up {
+            color: #38a169;
+        }
+        
+        .trend-down {
+            color: #e53e3e;
+        }
+        
+        .trend-stable {
+            color: #3182ce;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #edf2f7;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .quality-excellent { background: #38a169; }
+        .quality-good { background: #3182ce; }
+        .quality-fair { background: #ed8936; }
+        .quality-poor { background: #e53e3e; }
+        
+        .recommendation {
+            background: #f7fafc;
+            border-left: 4px solid #3182ce;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-radius: 4px;
+        }
+        
+        .recommendation.high-priority {
+            border-left-color: #e53e3e;
+            background: #fed7d7;
+        }
+        
+        .recommendation-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .recommendation-impact {
+            font-size: 0.875rem;
+            color: #4a5568;
+            font-style: italic;
+        }
+        
+        .alert {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border: 1px solid #feb2b2;
+        }
+        
+        .success {
+            background: #c6f6d5;
+            color: #2f855a;
+            border-color: #9ae6b4;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-success {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+        
+        .badge-warning {
+            background: #feebc8;
+            color: #c05621;
+        }
+        
+        .badge-error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        
+        .realtime-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #38a169;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 0.5rem;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Nuclear AO3 Search Analytics Dashboard</h1>
+        <p>Real-time insights into search performance, tag quality, and user behavior</p>
+    </div>
+    
+    <div class="container">
+        <!-- Overview Cards -->
+        <div class="dashboard-grid">
+            <!-- Overview Metrics -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">📊 Overview (24h)</h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Total Searches</span>
+                    <span class="metric-value trend-up">25,847 (+12.5%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Unique Users</span>
+                    <span class="metric-value">8,923</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Response Time</span>
+                    <span class="metric-value trend-up">45.2ms (-8%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Success Rate</span>
+                    <span class="metric-value trend-up">94.8%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Avg Tag Quality</span>
+                    <span class="metric-value trend-up">82.3/100</span>
+                </div>
+            </div>
+            
+            <!-- Performance Metrics -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">⚡ Performance</h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">0-25ms</span>
+                    <span class="metric-value">58.9%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-excellent" style="width: 58.9%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">25-50ms</span>
+                    <span class="metric-value">30.2%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-good" style="width: 30.2%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">50-100ms</span>
+                    <span class="metric-value">8.3%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-fair" style="width: 8.3%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">100ms+</span>
+                    <span class="metric-value">2.6%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-poor" style="width: 2.6%"></div>
+                </div>
+            </div>
+            
+            <!-- Popular Searches -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">🔥 Trending Searches</h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Harry Potter</span>
+                    <span class="metric-value trend-up">3,421 (+12.5%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Marvel</span>
+                    <span class="metric-value trend-stable">2,876 (+1.2%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Agatha Harkness</span>
+                    <span class="metric-value trend-up">1,234 (+45.6%)</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Wednesday Addams</span>
+                    <span class="metric-value trend-up">892 🆕</span>
+                </div>
+            </div>
+            
+            <!-- Tag Quality Distribution -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">🏷️ Tag Quality Distribution</h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Excellent (90-100)</span>
+                    <span class="metric-value">425,000 (34%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-excellent" style="width: 34%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Good (75-89)</span>
+                    <span class="metric-value">500,000 (40%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-good" style="width: 40%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Fair (50-74)</span>
+                    <span class="metric-value">250,000 (20%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-fair" style="width: 20%"></div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Poor (0-49)</span>
+                    <span class="metric-value">75,000 (6%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill quality-poor" style="width: 6%"></div>
+                </div>
+            </div>
+            
+            <!-- Real-time Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span class="realtime-indicator"></span>
+                        Real-time Activity
+                    </h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Active Users</span>
+                    <span class="metric-value">1,247</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Searches/minute</span>
+                    <span class="metric-value">89.3</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Live Response Time</span>
+                    <span class="metric-value">42.8ms</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Top Search Now</span>
+                    <span class="metric-value">Wednesday Addams</span>
+                </div>
+            </div>
+            
+            <!-- System Health -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">💚 System Health</h2>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Elasticsearch</span>
+                    <span class="badge badge-success">Excellent</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Indexing Queue</span>
+                    <span class="badge badge-success">45 jobs</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Cache Hit Rate</span>
+                    <span class="badge badge-success">96.8%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Error Rate</span>
+                    <span class="badge badge-success">2.1%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Key Issues and Recommendations -->
+        <div class="dashboard-grid" style="margin-top: 2rem;">
+            <!-- Common Tagging Issues -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">⚠️ Common Tagging Issues</h2>
+                </div>
+                <div class="alert">
+                    <strong>Missing Reader Characters:</strong> 15,234 works have "Character/Reader" relationships but missing "Reader" character tag.
+                </div>
+                <div class="alert">
+                    <strong>Incomplete Cross-Tagging:</strong> 8,923 works have relationship/character inconsistencies.
+                </div>
+                <div class="alert success">
+                    <strong>Improvement Trend:</strong> Tag quality has improved 8.3% this month thanks to smart suggestions!
+                </div>
+            </div>
+            
+            <!-- Analytics Recommendations -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">💡 Smart Recommendations</h2>
+                </div>
+                <div class="recommendation high-priority">
+                    <div class="recommendation-title">🔥 High Priority: Fix Missing Reader Tags</div>
+                    <p>Enable smart tag completion for 15,234 works missing implied character tags.</p>
+                    <div class="recommendation-impact">Impact: 20% improvement in search relevance</div>
+                </div>
+                <div class="recommendation">
+                    <div class="recommendation-title">⚡ Performance: Cache Popular Searches</div>
+                    <p>Top 10 queries account for 45% of traffic. Implement specialized caching.</p>
+                    <div class="recommendation-impact">Impact: 15% reduction in response time</div>
+                </div>
+                <div class="recommendation">
+                    <div class="recommendation-title">🎯 UX: Smart Search Suggestions</div>
+                    <p>123 users searched for "Hagatha Harkness" with zero results. Implement auto-correct.</p>
+                    <div class="recommendation-impact">Impact: 30% reduction in zero-result searches</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API Endpoints Reference -->
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <h2 class="card-title">🔌 Analytics API Endpoints</h2>
+            </div>
+            <div style="font-family: monospace; background: #f7fafc; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
+                <div><strong>GET</strong> /api/v1/analytics/dashboard - Complete dashboard data</div>
+                <div><strong>GET</strong> /api/v1/analytics/metrics/performance - Performance metrics</div>
+                <div><strong>GET</strong> /api/v1/analytics/trends - Search trends analysis</div>
+                <div><strong>GET</strong> /api/v1/analytics/tag-quality - Tag quality insights</div>
+                <div><strong>GET</strong> /api/v1/analytics/realtime - Live metrics</div>
+                <div><strong>GET</strong> /api/v1/analytics/recommendations - Smart recommendations</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

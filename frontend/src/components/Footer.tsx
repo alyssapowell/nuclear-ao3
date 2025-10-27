@@ -83,7 +83,10 @@ export default function Footer() {
         {/* Bottom Section */}
         <div className="border-t border-slate-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
           <div className="text-slate-400 text-sm mb-4 sm:mb-0">
-            © {new Date().getFullYear()} Nuclear AO3. All rights reserved.
+            © {new Date().getFullYear()} Nuclear AO3 Contributors. 
+            <Link href="https://github.com/liberationlicense/license" className="text-slate-300 hover:text-white ml-1" target="_blank" rel="noopener noreferrer">
+              Liberation Licensed
+            </Link>
           </div>
           <div className="flex items-center space-x-4 text-sm">
             <span className="text-slate-500">Version 1.0.0</span>

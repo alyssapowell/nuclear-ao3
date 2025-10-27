@@ -228,10 +228,15 @@ export default function RichTextEditor({
       </div>
 
       {/* Editor Content */}
-      <EditorContent 
-        editor={editor} 
-        className="prose prose-sm max-w-none p-3 min-h-[200px] focus:outline-none"
-      />
+      <div 
+        className="p-3 min-h-[200px] cursor-text"
+        onClick={() => editor?.chain().focus().run()}
+      >
+        <EditorContent 
+          editor={editor} 
+          className="prose prose-sm max-w-none focus:outline-none focus-within:outline-none"
+        />
+      </div>
 
       {/* Link Modal */}
       {isLinkModalOpen && (

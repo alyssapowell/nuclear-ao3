@@ -267,6 +267,7 @@ func setupRouter(gateway *APIGateway) *gin.Engine {
 	// REST API fallback endpoints (for compatibility)
 	api := r.Group("/api/v1")
 	api.Use(gateway.RateLimitMiddleware())
+	api.Use(JWTAuthMiddleware()) // Add JWT authentication middleware
 	{
 		// Authentication - proxy everything under /auth
 		auth := api.Group("/auth")
@@ -274,10 +275,11 @@ func setupRouter(gateway *APIGateway) *gin.Engine {
 			auth.Any("/*path", gateway.ProxyToAuth)
 		}
 
-		// Works - proxy everything under /works
+		// Works - handle both exact match and sub-paths
 		works := api.Group("/works")
 		{
-			works.Any("/*path", gateway.ProxyToWork)
+			works.Any("", gateway.ProxyToWork)       // Exact match /works
+			works.Any("/*path", gateway.ProxyToWork) // Sub-paths /works/*
 		}
 
 		// Tags - proxy everything under /tags
@@ -344,29 +346,37 @@ func setupRouter(gateway *APIGateway) *gin.Engine {
 
 // HealthCheck returns the overall health of the API Gateway and services
 func (gw *APIGateway) HealthCheck(c *gin.Context) {
-	healthStatus := map[string]interface{}{
-		"gateway":   "healthy",
-		"timestamp": time.Now().Unix(),
-		"version":   "1.0.0",
-		"uptime":    time.Since(startTime).Seconds(),
-		"services":  gw.getServiceHealthSummary(),
-	}
-
-	// Determine overall status
-	overallHealthy := true
+	// Count unhealthy services
+	unhealthyCount := 0
+	totalServices := 0
 	for _, service := range []*ServiceClient{gw.authService, gw.workService, gw.tagService, gw.searchService} {
+		totalServices++
 		if !service.Health.IsHealthy {
-			overallHealthy = false
-			break
+			unhealthyCount++
 		}
 	}
 
-	if overallHealthy {
-		c.JSON(http.StatusOK, healthStatus)
+	// Determine overall system status
+	var overallStatus string
+	if unhealthyCount == 0 {
+		overallStatus = "healthy"
+	} else if unhealthyCount < totalServices {
+		overallStatus = "degraded" // Some services down
 	} else {
-		healthStatus["gateway"] = "degraded"
-		c.JSON(http.StatusServiceUnavailable, healthStatus)
+		overallStatus = "outage" // All services down
 	}
+
+	healthStatus := map[string]interface{}{
+		"status":    overallStatus,
+		"gateway":   "healthy", // API Gateway itself is responding
+		"timestamp": time.Now().Unix(),
+		"version":   "1.0.0",
+		"uptime":    time.Since(startTime).Seconds(),
+		"services":  gw.getServiceHealthSummary(), // Flat structure for UI compatibility
+	}
+
+	// Always return 200 OK since the API Gateway itself is healthy and responding
+	c.JSON(http.StatusOK, healthStatus)
 }
 
 // ServiceStatus returns detailed status of all services (admin endpoint)

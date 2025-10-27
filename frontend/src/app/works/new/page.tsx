@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TagInput from '@/components/TagInput';
 import TagAutocomplete from '@/components/TagAutocomplete';
+import RichTextEditor from '@/components/RichTextEditor';
 import EnhancedTagProminenceSelector from '@/components/EnhancedTagProminenceSelector';
 import { createWork, CreateWorkRequest } from '@/lib/api';
 
@@ -12,7 +13,7 @@ export default function NewWorkPage() {
     title: '',
     summary: '',
     notes: '',
-    rating: 'not_rated',
+    rating: 'Not Rated',
     category: [] as string[],
     warnings: [] as string[],
     fandoms: [] as string[],
@@ -35,8 +36,21 @@ export default function NewWorkPage() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [fandomInput, setFandomInput] = useState('');
+  const [tagInputs, setTagInputs] = useState({
+    fandom: '',
+    character: '',
+    relationship: '',
+    freeform: ''
+  });
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [prominenceTags, setProminenceTags] = useState<Array<{
+    tagName: string;
+    tagType: string;
+    prominence: 'primary' | 'secondary' | 'micro';
+    autoSuggested?: boolean;
+    canonical?: boolean;
+    useCount?: number;
+  }>>([]);
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -49,26 +63,73 @@ export default function NewWorkPage() {
     }
   };
 
-  const handleTagSelect = (tag: any) => {
+  const handleTagSelect = (tagType: string, tag: any) => {
     const tagName = tag.name || tag;
-    if (tagName && !formData.fandoms.includes(tagName)) {
+    if (!tagName) return;
+    
+    const fieldMap = {
+      fandom: 'fandoms',
+      character: 'characters', 
+      relationship: 'relationships',
+      freeform: 'freeformTags'
+    } as const;
+    
+    const field = fieldMap[tagType as keyof typeof fieldMap];
+    if (!field) return;
+    
+    // Check if tag already exists
+    if (!formData[field].includes(tagName)) {
       setFormData(prev => ({ 
         ...prev, 
-        fandoms: [...prev.fandoms, tagName] 
+        [field]: [...prev[field], tagName] 
       }));
-      setFandomInput(''); // Clear input after selection
+      
+      // Clear the corresponding input
+      setTagInputs(prev => ({
+        ...prev,
+        [tagType]: ''
+      }));
     }
   };
 
-  const removeFandom = (index: number) => {
+  const removeTag = (tagType: string, index: number) => {
+    const fieldMap = {
+      fandom: 'fandoms',
+      character: 'characters',
+      relationship: 'relationships', 
+      freeform: 'freeformTags'
+    } as const;
+    
+    const field = fieldMap[tagType as keyof typeof fieldMap];
+    if (!field) return;
+    
     setFormData(prev => ({
       ...prev,
-      fandoms: prev.fandoms.filter((_, i) => i !== index)
+      [field]: prev[field].filter((_, i) => i !== index)
     }));
   };
 
   const handleTagsChange = (field: string, tags: string[]) => {
     setFormData(prev => ({ ...prev, [field]: tags }));
+  };
+
+  // Enhanced tag prominence handler
+  const handleProminenceTagsChange = (tags: typeof prominenceTags) => {
+    setProminenceTags(tags);
+    
+    // Update form data from prominence tags
+    const fandoms = tags.filter(t => t.tagType === 'fandom').map(t => t.tagName);
+    const characters = tags.filter(t => t.tagType === 'character').map(t => t.tagName);
+    const relationships = tags.filter(t => t.tagType === 'relationship').map(t => t.tagName);
+    const freeformTags = tags.filter(t => t.tagType === 'freeform').map(t => t.tagName);
+    
+    setFormData(prev => ({
+      ...prev,
+      fandoms,
+      characters,
+      relationships,
+      freeformTags
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,6 +167,13 @@ export default function NewWorkPage() {
         comment_policy: formData.commentPolicy,
         moderate_comments: formData.moderateComments,
         is_anonymous: formData.isAnonymous,
+        // Enhanced tag prominence data
+        tag_prominence: prominenceTags.map(tag => ({
+          tag_name: tag.tagName,
+          tag_type: tag.tagType,
+          prominence: tag.prominence,
+          auto_suggested: tag.autoSuggested
+        })),
       };
 
       const data = await createWork(payload as CreateWorkRequest, token);
@@ -161,55 +229,281 @@ export default function NewWorkPage() {
               <label htmlFor="chapterContent" className="block text-sm font-medium text-slate-700">
                 Chapter Content *
               </label>
-              <textarea
-                id="chapterContent"
-                name="chapterContent"
-                required
-                rows={12}
-                className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
+              <p className="text-xs text-slate-500 mb-2">
+                Use the toolbar for formatting. You can add headings, lists, links, and more.
+              </p>
+              <RichTextEditor
+                content={formData.chapterContent}
+                onChange={(content) => setFormData(prev => ({ ...prev, chapterContent: content }))}
                 placeholder="Write your chapter content here..."
-                value={formData.chapterContent}
-                onChange={handleChange}
+                className="mt-1"
               />
             </div>
 
-            {/* Test TagAutocomplete */}
-            <div>
-              <label htmlFor="fandoms" className="block text-sm font-medium text-slate-700">
-                Fandoms (Test TagAutocomplete)
-              </label>
-              
-              {/* Display selected fandoms */}
-              {formData.fandoms.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {formData.fandoms.map((fandom, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200"
-                    >
-                      {fandom}
-                      <button
-                        type="button"
-                        onClick={() => removeFandom(index)}
-                        className="ml-2 text-blue-600 hover:text-blue-800 focus:outline-none"
-                        aria-label={`Remove ${fandom}`}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
+            {/* Enhanced Tag Selection with Prominence System */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-md font-medium text-slate-700">Enhanced Tagging System</h3>
+                <div className="text-xs text-slate-500 bg-blue-50 px-2 py-1 rounded">
+                  ✨ Smart tag prominence • Prevents tag spam
                 </div>
-              )}
+              </div>
               
-              <TagAutocomplete
-                id="fandoms"
-                value={fandomInput}
-                onChange={setFandomInput}
-                onTagSelect={handleTagSelect}
-                placeholder="Start typing a fandom name..."
-                tagType="fandom"
-                className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+              {/* Required Fandom Selection */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-orange-800 mb-2">Fandom Selection Required</h4>
+                <p className="text-xs text-orange-700 mb-3">
+                  Select at least one fandom before adding other tags for better autocomplete suggestions.
+                </p>
+                
+                {/* Basic fandom input for required selection */}
+                {formData.fandoms.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.fandoms.map((fandom, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800 border border-orange-200"
+                      >
+                        {fandom}
+                        <button
+                          type="button"
+                          onClick={() => removeTag('fandom', index)}
+                          className="ml-2 text-orange-600 hover:text-orange-800 focus:outline-none"
+                          aria-label={`Remove ${fandom}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                <TagAutocomplete
+                  id="fandoms"
+                  value={tagInputs.fandom}
+                  onChange={(value) => setTagInputs(prev => ({ ...prev, fandom: value }))}
+                  onTagSelect={(tag) => handleTagSelect('fandom', tag)}
+                  placeholder="Start typing a fandom name..."
+                  tagType="fandom"
+                  className="mt-1 block w-full px-3 py-2 border border-orange-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                />
+              </div>
+
+              {/* Enhanced Tag Prominence Selector */}
+              <EnhancedTagProminenceSelector
+                tags={prominenceTags}
+                onTagsChange={handleProminenceTagsChange}
+                fandomId={formData.fandoms[0]} // Use first fandom for context
+                className="border border-slate-200 rounded-lg p-4"
               />
+              
+              {/* Guidance Box */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-slate-800 mb-2">🎯 Smart Tagging Guidelines</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600">
+                  <div>
+                    <span className="font-medium text-green-700">Primary:</span> Main focus of your story (2-3 max)
+                  </div>
+                  <div>
+                    <span className="font-medium text-blue-700">Secondary:</span> Important but not central elements
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Micro:</span> Background mentions, past relationships
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  💡 Use "Background", "Past", or "Minor" before tag names for automatic micro prominence
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Basic Work Metadata */}
+          <div className="space-y-4">
+            <h3 className="text-md font-medium text-slate-700">Work Metadata</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Rating */}
+              <div>
+                <label htmlFor="rating" className="block text-sm font-medium text-slate-700">
+                  Rating *
+                </label>
+                <select
+                  id="rating"
+                  name="rating"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  value={formData.rating}
+                  onChange={handleChange}
+                >
+                  <option value="Not Rated">Not Rated</option>
+                  <option value="General Audiences">General Audiences</option>
+                  <option value="Teen And Up Audiences">Teen And Up Audiences</option>
+                  <option value="Mature">Mature</option>
+                  <option value="Explicit">Explicit</option>
+                </select>
+              </div>
+
+              {/* Language */}
+              <div>
+                <label htmlFor="language" className="block text-sm font-medium text-slate-700">
+                  Language *
+                </label>
+                <select
+                  id="language"
+                  name="language"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  value={formData.language}
+                  onChange={handleChange}
+                >
+                  <option value="en">English</option>
+                  <option value="es">Español</option>
+                  <option value="fr">Français</option>
+                  <option value="de">Deutsch</option>
+                  <option value="it">Italiano</option>
+                  <option value="pt">Português</option>
+                  <option value="ru">Русский</option>
+                  <option value="ja">日本語</option>
+                  <option value="zh">中文</option>
+                  <option value="ko">한국어</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Archive Warnings */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Archive Warnings *
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Choose all that apply to your work
+              </p>
+              <div className="space-y-2">
+                {[
+                  { value: 'no_warnings', label: 'No Archive Warnings Apply' },
+                  { value: 'creator_chose_not_to_warn', label: 'Creator Chose Not To Use Archive Warnings' },
+                  { value: 'graphic_violence', label: 'Graphic Depictions Of Violence' },
+                  { value: 'major_character_death', label: 'Major Character Death' },
+                  { value: 'rape_noncon', label: 'Rape/Non-Con' },
+                  { value: 'underage', label: 'Underage' }
+                ].map(warning => (
+                  <label key={warning.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      checked={formData.warnings.includes(warning.value)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            warnings: [...prev.warnings, warning.value] 
+                          }));
+                        } else {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            warnings: prev.warnings.filter(w => w !== warning.value) 
+                          }));
+                        }
+                      }}
+                    />
+                    <span className="ml-2 text-sm text-slate-700">{warning.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Categories */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700">
+                Categories
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Choose all that apply to your work
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {[
+                  { value: 'gen', label: 'Gen' },
+                  { value: 'm_m', label: 'M/M' },
+                  { value: 'f_f', label: 'F/F' },
+                  { value: 'm_f', label: 'M/F' },
+                  { value: 'multi', label: 'Multi' },
+                  { value: 'other', label: 'Other' }
+                ].map(category => (
+                  <label key={category.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      checked={formData.category.includes(category.value)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            category: [...prev.category, category.value] 
+                          }));
+                        } else {
+                          setFormData(prev => ({ 
+                            ...prev, 
+                            category: prev.category.filter(c => c !== category.value) 
+                          }));
+                        }
+                      }}
+                    />
+                    <span className="ml-2 text-sm text-slate-700">{category.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Work Status and Chapter Info */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label htmlFor="status" className="block text-sm font-medium text-slate-700">
+                  Work Status
+                </label>
+                <select
+                  id="status"
+                  name="status"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  value={formData.status}
+                  onChange={handleChange}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="complete">Complete</option>
+                  <option value="in_progress">Work in Progress</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="chapterTitle" className="block text-sm font-medium text-slate-700">
+                  Chapter Title
+                </label>
+                <input
+                  type="text"
+                  id="chapterTitle"
+                  name="chapterTitle"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  placeholder="Chapter 1"
+                  value={formData.chapterTitle}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="maxChapters" className="block text-sm font-medium text-slate-700">
+                  Total Chapters
+                </label>
+                <input
+                  type="text"
+                  id="maxChapters"
+                  name="maxChapters"
+                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                  placeholder="? or 1 or 5"
+                  value={formData.maxChapters}
+                  onChange={handleChange}
+                />
+              </div>
             </div>
           </div>
 

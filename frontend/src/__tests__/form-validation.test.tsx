@@ -7,15 +7,19 @@ import ProfileForm from '../components/profile/ProfileForm';
 import CommentForm from '../components/comments/CommentForm';
 
 // Mock dependencies
-jest.mock('../contexts/AuthContext', () => ({
+jest.mock('../utils/auth', () => ({
   useAuth: jest.fn(() => ({
     user: null,
-    isLoading: false,
     isAuthenticated: false,
-    login: jest.fn(),
+    token: null,
     logout: jest.fn(),
-    register: jest.fn(),
   })),
+  getAuthState: jest.fn(() => ({
+    user: null,
+    isAuthenticated: false,
+    token: null,
+  })),
+  isAuthenticated: jest.fn(() => false),
 }));
 
 jest.mock('next/navigation', () => ({

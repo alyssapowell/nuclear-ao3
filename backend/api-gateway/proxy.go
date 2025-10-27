@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -102,9 +103,11 @@ func (gw *APIGateway) proxyRequest(c *gin.Context, service *ServiceClient, baseP
 		// Original logic for other routes
 		targetPath := strings.TrimPrefix(requestPath, basePath)
 		if targetPath == "" {
-			targetPath = "/"
+			// For exact matches (e.g., /api/v1/works), use the base path without adding "/"
+			targetURL = service.BaseURL + basePath
+		} else {
+			targetURL = service.BaseURL + basePath + targetPath
 		}
-		targetURL = service.BaseURL + basePath + targetPath
 	}
 
 	if c.Request.URL.RawQuery != "" {
@@ -159,9 +162,18 @@ func (gw *APIGateway) proxyRequest(c *gin.Context, service *ServiceClient, baseP
 	// Forward user context if available
 	if userID := c.GetHeader("X-User-ID"); userID != "" {
 		req.Header.Set("X-User-ID", userID)
+		log.Printf("DEBUG PROXY: Forwarding existing X-User-ID header: %s", userID)
+	}
+	// Also check for user_id from JWT middleware context
+	if userIDValue, exists := c.Get("user_id"); exists {
+		if userIDStr, ok := userIDValue.(string); ok {
+			req.Header.Set("X-User-ID", userIDStr)
+			log.Printf("DEBUG PROXY: Setting X-User-ID header from context: %s", userIDStr)
+		}
 	}
 	if authHeader := c.GetHeader("Authorization"); authHeader != "" {
 		req.Header.Set("Authorization", authHeader)
+		log.Printf("DEBUG PROXY: Forwarding Authorization header")
 	}
 
 	// Make the request

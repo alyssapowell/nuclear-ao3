@@ -78,11 +78,12 @@ export default function Navigation() {
     { href: '/collections', label: 'Collections', icon: '📁' },
   ];
 
-  const userLinks = user ? [
-    { href: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { href: '/works/new', label: 'Post Work', icon: '✍️' },
-    { href: '/bookmarks', label: 'Bookmarks', icon: '🔖' },
-  ] : [];
+   const userLinks = user ? [
+     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
+     { href: '/works/new', label: 'Post Work', icon: '✍️' },
+     { href: '/bookmarks', label: 'Bookmarks', icon: '🔖' },
+     { href: '/subscriptions', label: 'Subscriptions', icon: '🔔' },
+   ] : [];
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -156,7 +157,7 @@ export default function Navigation() {
             {user ? (
               <div className="relative ml-4">
                 <div className="flex items-center space-x-3">
-                  <NotificationBell />
+                  {/* <NotificationBell /> Temporarily disabled - notification service not running */}
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
@@ -218,7 +219,7 @@ export default function Navigation() {
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-4">
-            <NotificationBell />
+            {/* <NotificationBell /> Temporarily disabled - notification service not running */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-md text-gray-700 hover:text-orange-600 hover:bg-gray-100 transition-colors"

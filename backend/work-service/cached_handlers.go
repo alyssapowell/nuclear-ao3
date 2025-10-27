@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 
 	"nuclear-ao3/shared/cache"
 	"nuclear-ao3/shared/models"
@@ -44,7 +45,11 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work"})
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work"})
+		}
 		return
 	}
 
@@ -55,7 +60,20 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, cachedWork)
+	// Fetch authors (not cached as it depends on viewer's permissions)
+	authors, err := ws.fetchWorkAuthors(ctx, workID, userID)
+	if err != nil {
+		log.Printf("Failed to fetch authors for work %s: %v", workID, err)
+		// Continue without authors rather than failing
+		authors = []models.WorkAuthor{}
+	}
+
+	// Return work with authors in expected format
+	response := gin.H{
+		"work":    cachedWork,
+		"authors": authors,
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 // CachedGetWorkStats provides cached work statistics
@@ -132,71 +150,148 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (i
 	log.Printf("DEBUG: fetchWorkFromDB called for work %s", workID.String())
 	var work models.Work
 
-	// Full query to get work details
-	var categoryStr, warningStr, notesStr, summaryStr sql.NullString
+	// Handle nullable fields with sql.NullString or use database default values
+	var legacyID sql.NullInt32
+	var maxChapters sql.NullInt32
+	var publishedAt sql.NullTime
+
+	// Handle array fields that might be NULL
+	var fandoms, characters, relationships, freeformTags pq.StringArray
+
 	err := ws.db.QueryRowContext(ctx, `
-		SELECT w.id, w.title, w.summary, w.notes, w.user_id, u.username, 
-			   w.language, w.rating, w.category, w.archive_warning,
-			   w.word_count, w.chapter_count, w.expected_chapters, w.is_complete, w.status,
-			   w.published_at, w.updated_at, w.created_at,
-			   COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			   COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
-			   w.restricted, w.restricted_to_adults, w.comment_policy,
-			   w.moderate_comments, w.disable_comments, w.in_anon_collection,
-			   w.in_unrevealed_collection, w.is_anonymous
+		SELECT 
+			w.id, w.legacy_id, w.title, 
+			COALESCE(w.summary, '') as summary, 
+			COALESCE(w.notes, '') as notes, 
+			w.user_id, u.username, w.language, w.rating, 
+			COALESCE(w.word_count, 0) as word_count, 
+			COALESCE(w.chapter_count, 1) as chapter_count, 
+			w.max_chapters,
+			COALESCE(w.status, 'draft') as status, 
+			COALESCE(w.restricted_to_users, false) as restricted_to_users,
+			COALESCE(w.restricted_to_adults, false) as restricted_to_adults,
+			COALESCE(w.comment_policy, 'open') as comment_policy,
+			COALESCE(w.moderate_comments, false) as moderate_comments,
+			COALESCE(w.disable_comments, false) as disable_comments,
+			COALESCE(w.in_anon_collection, false) as in_anon_collection,
+			COALESCE(w.in_unrevealed_collection, false) as in_unrevealed_collection,
+			COALESCE(w.is_anonymous, false) as is_anonymous,
+			COALESCE(w.fandoms, '{}') as fandoms,
+			COALESCE(w.characters, '{}') as characters,
+			COALESCE(w.relationships, '{}') as relationships,
+			COALESCE(w.freeform_tags, '{}') as freeform_tags,
+			w.published_at, w.updated_at, w.created_at
 		FROM works w
 		JOIN users u ON w.user_id = u.id
-		WHERE w.id = $1 AND w.status != 'draft'
+		WHERE w.id = $1
 	`, workID).Scan(
-		&work.ID, &work.Title, &summaryStr, &notesStr, &work.UserID, &work.Username,
-		&work.Language, &work.Rating, &categoryStr, &warningStr,
-		&work.WordCount, &work.ChapterCount, &work.MaxChapters, &work.IsComplete, &work.Status,
-		&work.PublishedAt, &work.UpdatedAt, &work.CreatedAt,
-		&work.Hits, &work.Kudos, &work.Comments, &work.Bookmarks,
+		&work.ID, &legacyID, &work.Title, &work.Summary, &work.Notes,
+		&work.UserID, &work.Username, &work.Language, &work.Rating,
+		&work.WordCount, &work.ChapterCount, &maxChapters, &work.Status,
 		&work.RestrictedToUsers, &work.RestrictedToAdults, &work.CommentPolicy,
 		&work.ModerateComments, &work.DisableComments, &work.InAnonCollection,
 		&work.InUnrevealedCollection, &work.IsAnonymous,
+		&fandoms, &characters, &relationships, &freeformTags,
+		&publishedAt, &work.UpdatedAt, &work.CreatedAt,
 	)
 
 	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("DEBUG: Work %s not found in database", workID.String())
+			return nil, err // Return sql.ErrNoRows specifically
+		}
 		log.Printf("DEBUG: fetchWorkFromDB database query error: %v", err)
 		return nil, err
 	}
 
-	log.Printf("DEBUG: fetchWorkFromDB successfully fetched work %s", work.Title)
-
-	// Convert nullable fields
-	if summaryStr.Valid {
-		work.Summary = summaryStr.String
-	}
-	if notesStr.Valid {
-		work.Notes = notesStr.String
+	// Handle nullable fields
+	if legacyID.Valid {
+		legacyIDInt := int(legacyID.Int32)
+		work.LegacyID = &legacyIDInt
 	}
 
-	// Convert category and warning to arrays
-	if categoryStr.Valid && categoryStr.String != "" {
-		work.Category = []string{categoryStr.String}
-	}
-	if warningStr.Valid && warningStr.String != "" {
-		work.Warnings = []string{warningStr.String}
+	if maxChapters.Valid {
+		maxChap := int(maxChapters.Int32)
+		work.MaxChapters = &maxChap
 	}
 
-	if err != nil {
-		return nil, err
+	if publishedAt.Valid {
+		work.PublishedAt = &publishedAt.Time
 	}
 
-	// Convert category and warning to arrays
-	if categoryStr.Valid && categoryStr.String != "" {
-		work.Category = []string{categoryStr.String}
-	}
-	if warningStr.Valid && warningStr.String != "" {
-		work.Warnings = []string{warningStr.String}
-	}
+	// Convert arrays to slices
+	work.Fandoms = []string(fandoms)
+	work.Characters = []string(characters)
+	work.Relationships = []string(relationships)
+	work.FreeformTags = []string(freeformTags)
 
-	// Load tags from work_tags relationship table
-	work.Fandoms, work.Characters, work.Relationships, work.FreeformTags = ws.loadWorkTags(workID.String())
+	// Handle warnings - could be TEXT or TEXT[] depending on migration state
+	// For now, set empty array and let it be populated later if needed
+	work.Warnings = []string{}
+	work.Category = []string{}
+
+	// Set computed field - work is complete if status is not draft
+	work.IsComplete = work.Status != "draft"
+
+	log.Printf("DEBUG: fetchWorkFromDB successfully fetched work %s - Status: %s", work.Title, work.Status)
 
 	return work, nil
+}
+
+func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) ([]models.WorkAuthor, error) {
+	log.Printf("DEBUG: fetchWorkAuthors called for work %s, user %v", workID.String(), userID)
+
+	// Try the advanced creatorship system first
+	rows, err := ws.db.QueryContext(ctx, "SELECT * FROM get_work_authors($1, $2)", workID, userID)
+	if err != nil {
+		log.Printf("DEBUG: Failed to query get_work_authors: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var authors []models.WorkAuthor
+	for rows.Next() {
+		var author models.WorkAuthor
+		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
+		if err != nil {
+			log.Printf("DEBUG: Failed to scan author: %v", err)
+			return nil, err
+		}
+		authors = append(authors, author)
+	}
+
+	// If no authors found via creatorship system, fall back to work.user_id
+	if len(authors) == 0 {
+		log.Printf("DEBUG: No authors found in creatorship table, falling back to work.user_id")
+		var workUserID uuid.UUID
+		var username string
+		var isAnonymous bool
+
+		err := ws.db.QueryRowContext(ctx, `
+			SELECT w.user_id, u.username, COALESCE(w.is_anonymous, false)
+			FROM works w 
+			JOIN users u ON w.user_id = u.id 
+			WHERE w.id = $1`, workID).Scan(&workUserID, &username, &isAnonymous)
+
+		if err != nil {
+			log.Printf("DEBUG: Failed to get work user: %v", err)
+			return authors, nil // Return empty array rather than error
+		}
+
+		// Create a simple author entry
+		fallbackAuthor := models.WorkAuthor{
+			PseudID:     nil, // No pseud system fallback
+			PseudName:   username,
+			UserID:      &workUserID,
+			Username:    username,
+			IsAnonymous: isAnonymous,
+		}
+		authors = append(authors, fallbackAuthor)
+		log.Printf("DEBUG: Added fallback author: %s", username)
+	}
+
+	log.Printf("DEBUG: fetchWorkAuthors returning %d authors", len(authors))
+	return authors, nil
 }
 
 func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUID) (interface{}, error) {
@@ -266,12 +361,21 @@ func (ws *WorkService) getUserIDFromContext(c *gin.Context) *uuid.UUID {
 }
 
 func (ws *WorkService) canViewWork(work *models.Work, userID *uuid.UUID) bool {
-	// Implement privacy logic here
-	// For now, simplified version - check if work is published
-	// You'd implement proper privacy checks based on your work model
+	// Check if work is in draft status
+	if work.Status == "draft" {
+		// Only the author can view their own drafts
+		if userID == nil || *userID != work.UserID {
+			return false
+		}
+	}
 
-	// For demo, assume all works are viewable
-	// In real implementation, check work status, privacy settings, etc.
+	// Check other privacy settings
+	if work.RestrictedToUsers && userID == nil {
+		return false
+	}
+
+	// For now, allow all other access
+	// In real implementation, check additional privacy settings, collections, etc.
 	return true
 }
 

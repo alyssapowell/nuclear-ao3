@@ -134,4 +134,7 @@ const CardWithComponents = Object.assign(Card, {
   Footer: CardFooter,
 });
 
+// Named exports for compatibility
+export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };
+
 export default CardWithComponents;

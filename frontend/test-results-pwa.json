@@ -1,0 +1,846 @@
+{
+  "config": {
+    "configFile": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/playwright.pwa.config.ts",
+    "rootDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 5
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report-pwa"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results-pwa.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "PWA Chrome",
+        "name": "PWA Chrome",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/pwa-*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "PWA Firefox",
+        "name": "PWA Firefox",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/pwa-*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "PWA Safari",
+        "name": "PWA Safari",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/pwa-*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "PWA Mobile Chrome",
+        "name": "PWA Mobile Chrome",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/pwa-*.spec.ts"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "PWA Mobile Safari",
+        "name": "PWA Mobile Safari",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/pwa-*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.0",
+    "workers": 5,
+    "webServer": {
+      "command": "npx next dev -p 3002",
+      "port": 3002,
+      "reuseExistingServer": true,
+      "timeout": 120000,
+      "env": {
+        "NODE_ENV": "development"
+      }
+    }
+  },
+  "suites": [
+    {
+      "title": "pwa-smoke.spec.ts",
+      "file": "pwa-smoke.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "PWA Smoke Tests",
+          "file": "pwa-smoke.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should load PWA test page successfully",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Chrome",
+                  "projectName": "PWA Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 12087,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38",
+                        "location": {
+                          "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                          "column": 38,
+                          "line": 12
+                        },
+                        "snippet": "  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                            "column": 38,
+                            "line": 12
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:16.478Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                        "column": 38,
+                        "line": 12
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-883c372e351c651fedff",
+              "file": "pwa-smoke.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "should have PWA manifest accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Chrome",
+                  "projectName": "PWA Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 2225,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:16.522Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-988c2a3307fb665eef72",
+              "file": "pwa-smoke.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "should have service worker file accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Chrome",
+                  "projectName": "PWA Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 2020,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:16.452Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-f9029f954f59150d0fea",
+              "file": "pwa-smoke.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "should load PWA test page successfully",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Firefox",
+                  "projectName": "PWA Firefox",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 17575,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    ...\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    ...\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38",
+                        "location": {
+                          "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                          "column": 38,
+                          "line": 12
+                        },
+                        "snippet": "  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                            "column": 38,
+                            "line": 12
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    ...\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:16.479Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                        "column": 38,
+                        "line": 12
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-1dc6222989961ccfa649",
+              "file": "pwa-smoke.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "should have PWA manifest accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Firefox",
+                  "projectName": "PWA Firefox",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 4,
+                      "status": "passed",
+                      "duration": 2729,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:16.519Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-f9426b4464586d216c60",
+              "file": "pwa-smoke.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "should have service worker file accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Firefox",
+                  "projectName": "PWA Firefox",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 4,
+                      "status": "passed",
+                      "duration": 1181,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:20.415Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-07a79f188dbe6dbff6c9",
+              "file": "pwa-smoke.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "should load PWA test page successfully",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Safari",
+                  "projectName": "PWA Safari",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 9126,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38",
+                        "location": {
+                          "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                          "column": 38,
+                          "line": 12
+                        },
+                        "snippet": "  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                            "column": 38,
+                            "line": 12
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3 Fast & Modern' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:25.298Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                        "column": 38,
+                        "line": 12
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-811b669b5e326b1d6a0a",
+              "file": "pwa-smoke.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "should have PWA manifest accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Safari",
+                  "projectName": "PWA Safari",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 807,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:28.134Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-d7af3fa0b2747ba3ebc8",
+              "file": "pwa-smoke.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "should have service worker file accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Safari",
+                  "projectName": "PWA Safari",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 873,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:28.083Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-3784fcce343ed39f163d",
+              "file": "pwa-smoke.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "should load PWA test page successfully",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Chrome",
+                  "projectName": "PWA Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 3742,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38",
+                        "location": {
+                          "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                          "column": 38,
+                          "line": 12
+                        },
+                        "snippet": "  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                            "column": 38,
+                            "line": 12
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:31.193Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                        "column": 38,
+                        "line": 12
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-232004a8c228bce0a3d3",
+              "file": "pwa-smoke.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "should have PWA manifest accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Chrome",
+                  "projectName": "PWA Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 716,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:31.194Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-4d082872697945ec5bdc",
+              "file": "pwa-smoke.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "should have service worker file accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Chrome",
+                  "projectName": "PWA Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 384,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:32.389Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-c97c2df6ab717cdadd5a",
+              "file": "pwa-smoke.spec.ts",
+              "line": 30,
+              "column": 7
+            },
+            {
+              "title": "should load PWA test page successfully",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Safari",
+                  "projectName": "PWA Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 3969,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38",
+                        "location": {
+                          "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                          "column": 38,
+                          "line": 12
+                        },
+                        "snippet": "  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                            "column": 38,
+                            "line": 12
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"PWA & Service Worker Test Page\"\u001b[39m\nError: strict mode violation: locator('h1') resolved to 3 elements:\n    1) <h1 class=\"text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    2) <h1 class=\"text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors\">Nuclear AO3</h1> aka getByRole('link', { name: '🚀 Nuclear AO3' })\n    3) <h1 class=\"text-3xl font-bold mb-6\">PWA & Service Worker Test Page</h1> aka getByRole('heading', { name: 'PWA & Service Worker Test Page' })\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  10 |     \n  11 |     // Check that the page loads\n> 12 |     await expect(page.locator('h1')).toContainText('PWA & Service Worker Test Page');\n     |                                      ^\n  13 |     \n  14 |     // Check that the consent selector is present\n  15 |     await expect(page.locator('[data-testid=\"consent-level-select\"]')).toBeVisible();\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts:12:38"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:34.393Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/pwa-smoke-PWA-Smoke-Tests--3236e--PWA-test-page-successfully-PWA-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/pwa-smoke.spec.ts",
+                        "column": 38,
+                        "line": 12
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-5b1ea77f299e74911f6a",
+              "file": "pwa-smoke.spec.ts",
+              "line": 8,
+              "column": 7
+            },
+            {
+              "title": "should have PWA manifest accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Safari",
+                  "projectName": "PWA Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 11,
+                      "parallelIndex": 4,
+                      "status": "passed",
+                      "duration": 518,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:36.334Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-2d413644e1788640dd23",
+              "file": "pwa-smoke.spec.ts",
+              "line": 21,
+              "column": 7
+            },
+            {
+              "title": "should have service worker file accessible",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "PWA Mobile Safari",
+                  "projectName": "PWA Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 12,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 1144,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-10-27T16:48:36.940Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "46edfc82733177044b0f-2b5c41024e41ccab551f",
+              "file": "pwa-smoke.spec.ts",
+              "line": 30,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-10-27T16:48:13.749Z",
+    "duration": 25412.212,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 5,
+    "flaky": 0
+  }
+}

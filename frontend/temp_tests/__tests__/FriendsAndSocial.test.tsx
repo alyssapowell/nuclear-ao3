@@ -1,0 +1,441 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import FriendsAndSocial from '../FriendsAndSocial';
+import { sendFriendRequest, acceptFriendRequest, blockUser, getUserDashboard } from '@/lib/api';
+
+// Mock the API functions
+jest.mock('@/lib/api', () => ({
+  sendFriendRequest: jest.fn(),
+  acceptFriendRequest: jest.fn(),
+  blockUser: jest.fn(),
+  getUserDashboard: jest.fn(),
+}));
+
+const mockSendFriendRequest = sendFriendRequest as jest.MockedFunction<typeof sendFriendRequest>;
+const mockAcceptFriendRequest = acceptFriendRequest as jest.MockedFunction<typeof acceptFriendRequest>;
+const mockBlockUser = blockUser as jest.MockedFunction<typeof blockUser>;
+const mockGetUserDashboard = getUserDashboard as jest.MockedFunction<typeof getUserDashboard>;
+
+describe('FriendsAndSocial', () => {
+  const mockRelationships = [
+    {
+      id: 'rel-1',
+      requester_id: 'user-2',
+      requested_id: 'user-1',
+      status: 'accepted' as const,
+      type: 'friend' as const,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      requester: {
+        user_id: 'user-2',
+        username: 'friend1',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      requested: {
+        user_id: 'user-1',
+        username: 'currentuser',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+    },
+    {
+      id: 'rel-2',
+      requester_id: 'user-3',
+      requested_id: 'user-1',
+      status: 'pending' as const,
+      type: 'friend' as const,
+      created_at: '2024-01-02T00:00:00Z',
+      updated_at: '2024-01-02T00:00:00Z',
+      requester: {
+        user_id: 'user-3',
+        username: 'pendingfriend',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      requested: {
+        user_id: 'user-1',
+        username: 'currentuser',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+    },
+    {
+      id: 'rel-3',
+      requester_id: 'user-1',
+      requested_id: 'user-4',
+      status: 'accepted' as const,
+      type: 'block_user' as const,
+      created_at: '2024-01-03T00:00:00Z',
+      updated_at: '2024-01-03T00:00:00Z',
+      requester: {
+        user_id: 'user-1',
+        username: 'currentuser',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      requested: {
+        user_id: 'user-4',
+        username: 'blockeduser',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+    },
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetUserDashboard.mockResolvedValue({ relationships: mockRelationships });
+    mockSendFriendRequest.mockResolvedValue({ success: true });
+    mockAcceptFriendRequest.mockResolvedValue({ success: true });
+    mockBlockUser.mockResolvedValue({ success: true });
+  });
+
+  it('renders friends and social tabs', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Friends & Social')).toBeInTheDocument();
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+      expect(screen.getByText('📩 Requests')).toBeInTheDocument();
+      expect(screen.getByText('🚫 Blocked')).toBeInTheDocument();
+    });
+  });
+
+  it('shows loading state initially', () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+    
+    expect(screen.getByText('Loading social data...')).toBeInTheDocument();
+  });
+
+  it('displays friend count badges in tabs', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      // Should show 1 friend, 1 request, 1 blocked
+      const friendTab = screen.getByText('👥 Friends').closest('button');
+      const requestTab = screen.getByText('📩 Requests').closest('button');
+      const blockedTab = screen.getByText('🚫 Blocked').closest('button');
+      
+      expect(friendTab).toHaveTextContent('1');
+      expect(requestTab).toHaveTextContent('1');
+      expect(blockedTab).toHaveTextContent('1');
+    });
+  });
+
+  it('displays friends list correctly', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('My Friends')).toBeInTheDocument();
+      expect(screen.getByText('friend1')).toBeInTheDocument();
+      expect(screen.getByText(/Friends since/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows add friend form when button is clicked', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Friend')).toBeInTheDocument();
+    });
+
+    const addButton = screen.getByText('Add Friend');
+    fireEvent.click(addButton);
+
+    expect(screen.getByText('Send Friend Request')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter username')).toBeInTheDocument();
+    expect(screen.getByText('Send Request')).toBeInTheDocument();
+  });
+
+  it('sends friend request when form is submitted', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Friend')).toBeInTheDocument();
+    });
+
+    // Open form
+    const addButton = screen.getByText('Add Friend');
+    fireEvent.click(addButton);
+
+    // Fill and submit
+    const usernameInput = screen.getByPlaceholderText('Enter username');
+    const submitButton = screen.getByText('Send Request');
+
+    fireEvent.change(usernameInput, { target: { value: 'newFriend' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockSendFriendRequest).toHaveBeenCalledWith(
+        { user_id: 'newFriend' },
+        'test-token'
+      );
+    });
+  });
+
+  it('shows error when trying to send friend request with empty username', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Friend')).toBeInTheDocument();
+    });
+
+    // Open form
+    const addButton = screen.getByText('Add Friend');
+    fireEvent.click(addButton);
+
+    // Try to submit without username
+    const submitButton = screen.getByText('Send Request');
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Username is required')).toBeInTheDocument();
+    });
+  });
+
+  it('switches to requests tab and shows pending requests', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    const requestsTab = screen.getByText('📩 Requests');
+    fireEvent.click(requestsTab);
+
+    expect(screen.getByText('Friend Requests')).toBeInTheDocument();
+    expect(screen.getByText('pendingfriend')).toBeInTheDocument();
+    expect(screen.getByText('Accept')).toBeInTheDocument();
+    expect(screen.getByText('Block')).toBeInTheDocument();
+  });
+
+  it('accepts friend request when accept button is clicked', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to requests tab
+    const requestsTab = screen.getByText('📩 Requests');
+    fireEvent.click(requestsTab);
+
+    // Click accept button
+    const acceptButton = screen.getByText('Accept');
+    fireEvent.click(acceptButton);
+
+    await waitFor(() => {
+      expect(mockAcceptFriendRequest).toHaveBeenCalledWith('rel-2', 'test-token');
+    });
+  });
+
+  it('switches to blocked tab and shows blocked users', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    const blockedTab = screen.getByText('🚫 Blocked');
+    fireEvent.click(blockedTab);
+
+    expect(screen.getByText('Blocked Users')).toBeInTheDocument();
+    expect(screen.getByText('blockeduser')).toBeInTheDocument();
+    expect(screen.getByText('Fully Blocked')).toBeInTheDocument();
+    expect(screen.getByText('Unblock')).toBeInTheDocument();
+  });
+
+  it('shows error when unblock is clicked (not implemented)', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to blocked tab
+    const blockedTab = screen.getByText('🚫 Blocked');
+    fireEvent.click(blockedTab);
+
+    // Click unblock button
+    const unblockButton = screen.getByText('Unblock');
+    fireEvent.click(unblockButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Unblock functionality coming soon')).toBeInTheDocument();
+    });
+  });
+
+  it('blocks user when block button is clicked in friends tab', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('My Friends')).toBeInTheDocument();
+    });
+
+    // Click block button for friend
+    const blockButton = screen.getByText('Block');
+    fireEvent.click(blockButton);
+
+    await waitFor(() => {
+      expect(mockBlockUser).toHaveBeenCalledWith(
+        { user_id: 'user-2', type: 'block_user' },
+        'test-token'
+      );
+    });
+  });
+
+  it('shows empty state when no friends exist', async () => {
+    mockGetUserDashboard.mockResolvedValue({ relationships: [] });
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No friends yet.')).toBeInTheDocument();
+      expect(screen.getByText('Start building your network by sending friend requests!')).toBeInTheDocument();
+    });
+  });
+
+  it('shows empty state when no requests exist', async () => {
+    mockGetUserDashboard.mockResolvedValue({ relationships: [] });
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to requests tab
+    const requestsTab = screen.getByText('📩 Requests');
+    fireEvent.click(requestsTab);
+
+    expect(screen.getByText('No pending friend requests.')).toBeInTheDocument();
+  });
+
+  it('shows empty state when no blocked users exist', async () => {
+    mockGetUserDashboard.mockResolvedValue({ relationships: [] });
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to blocked tab
+    const blockedTab = screen.getByText('🚫 Blocked');
+    fireEvent.click(blockedTab);
+
+    expect(screen.getByText('No blocked users.')).toBeInTheDocument();
+  });
+
+  it('handles dashboard loading error', async () => {
+    mockGetUserDashboard.mockRejectedValue(new Error('Failed to load social data'));
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load social data')).toBeInTheDocument();
+    });
+  });
+
+  it('shows success message after sending friend request', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Friend')).toBeInTheDocument();
+    });
+
+    // Open form and submit
+    const addButton = screen.getByText('Add Friend');
+    fireEvent.click(addButton);
+
+    const usernameInput = screen.getByPlaceholderText('Enter username');
+    const submitButton = screen.getByText('Send Request');
+
+    fireEvent.change(usernameInput, { target: { value: 'newFriend' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Friend request sent successfully!')).toBeInTheDocument();
+    });
+  });
+
+  it('shows success message after accepting friend request', async () => {
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to requests tab and accept
+    const requestsTab = screen.getByText('📩 Requests');
+    fireEvent.click(requestsTab);
+
+    const acceptButton = screen.getByText('Accept');
+    fireEvent.click(acceptButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Friend request accepted!')).toBeInTheDocument();
+    });
+  });
+
+  it('handles API errors gracefully', async () => {
+    mockSendFriendRequest.mockRejectedValue(new Error('Friend request failed'));
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Friend')).toBeInTheDocument();
+    });
+
+    // Try to send request
+    const addButton = screen.getByText('Add Friend');
+    fireEvent.click(addButton);
+
+    const usernameInput = screen.getByPlaceholderText('Enter username');
+    const submitButton = screen.getByText('Send Request');
+
+    fireEvent.change(usernameInput, { target: { value: 'newFriend' } });
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Friend request failed')).toBeInTheDocument();
+    });
+  });
+
+  it('renders without auth token gracefully', () => {
+    render(<FriendsAndSocial />);
+    
+    // Should not make API calls without auth token
+    expect(mockGetUserDashboard).not.toHaveBeenCalled();
+  });
+
+  it('displays different block types correctly', async () => {
+    const blockRelationships = [
+      {
+        ...mockRelationships[2],
+        type: 'block_comments' as const,
+      },
+      {
+        ...mockRelationships[2],
+        id: 'rel-4',
+        type: 'block_works' as const,
+      },
+    ];
+
+    mockGetUserDashboard.mockResolvedValue({ relationships: blockRelationships });
+    
+    render(<FriendsAndSocial authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('👥 Friends')).toBeInTheDocument();
+    });
+
+    // Switch to blocked tab
+    const blockedTab = screen.getByText('🚫 Blocked');
+    fireEvent.click(blockedTab);
+
+    expect(screen.getByText('Comments Blocked')).toBeInTheDocument();
+    expect(screen.getByText('Works Blocked')).toBeInTheDocument();
+  });
+});

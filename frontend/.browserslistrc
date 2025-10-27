@@ -1,0 +1,8 @@
+# Browsers that we support
+
+defaults
+not IE 11
+not IE_Mob 11
+maintained node versions
+Safari >= 12
+iOS >= 12

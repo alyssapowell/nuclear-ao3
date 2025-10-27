@@ -185,7 +185,7 @@ func (schema *GraphQLSchema) handleMutation(ctx context.Context, req GraphQLRequ
 	// Parse the mutation to understand what operation is being requested
 	query := strings.ToLower(req.Query)
 
-	if strings.Contains(query, "auth") {
+	if strings.Contains(query, "auth") || strings.Contains(query, "login") || strings.Contains(query, "register") {
 		return schema.handleAuthMutation(ctx, req)
 	}
 
@@ -371,6 +371,7 @@ func (schema *GraphQLSchema) handleLoginMutation(ctx context.Context, req GraphQ
 			"auth": map[string]interface{}{
 				"login": map[string]interface{}{
 					"token":  responseMap["access_token"],
+					"user":   responseMap["user"],
 					"errors": []interface{}{},
 				},
 			},
@@ -461,6 +462,7 @@ func (schema *GraphQLSchema) handleRegisterMutation(ctx context.Context, req Gra
 			"auth": map[string]interface{}{
 				"register": map[string]interface{}{
 					"token":  responseMap["access_token"],
+					"user":   responseMap["user"],
 					"errors": []interface{}{},
 				},
 			},

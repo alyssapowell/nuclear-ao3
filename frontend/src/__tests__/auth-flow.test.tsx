@@ -2,15 +2,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import AuthGuard from '../components/auth/AuthGuard';
 import LoginForm from '../components/auth/LoginForm';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../utils/auth';
 
 // Mock dependencies
 jest.mock('next/navigation', () => ({
   useRouter: jest.fn(),
 }));
 
-jest.mock('../contexts/AuthContext', () => ({
+jest.mock('../utils/auth', () => ({
   useAuth: jest.fn(),
+  getAuthState: jest.fn(),
+  isAuthenticated: jest.fn(),
+  logout: jest.fn(),
 }));
 
 const mockPush = jest.fn();

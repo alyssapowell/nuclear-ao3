@@ -166,10 +166,12 @@ git push origin feature/amazing-new-feature
 
 **Before submitting:**
 - [ ] All tests pass (`make test`)
+- [ ] **Accessibility tests pass** (`npm run test:accessibility` in frontend/)
 - [ ] Performance benchmarks show no regression (`make benchmark`)
 - [ ] Code is properly formatted (`make format`)
 - [ ] Documentation is updated if needed
 - [ ] Security considerations are addressed
+- [ ] **WCAG 2.1 AA compliance verified** for any UI changes
 
 **PR Requirements:**
 - **Clear description** of what changes and why
@@ -249,11 +251,15 @@ func (s *Service) CreateWork(c *gin.Context) {
 - Minimal bundle sizes
 - Service worker for offline functionality
 
-**Accessibility:**
-- WCAG 2.1 AA compliance
-- Semantic HTML structure
-- Keyboard navigation support
-- Screen reader compatibility
+**Accessibility (MANDATORY):**
+- **WCAG 2.1 AA compliance** - All new components must pass accessibility testing
+- **Semantic HTML structure** - Use proper landmarks, headings, and form labels  
+- **Keyboard navigation support** - Every interactive element must be keyboard accessible
+- **Screen reader compatibility** - Test with NVDA, JAWS, VoiceOver
+- **ARIA patterns** - Implement proper ARIA attributes for complex components
+- **Focus management** - Ensure clear focus indicators and logical tab order
+- **Live regions** - Use for dynamic content updates and form validation
+- **Color contrast** - Maintain minimum 4.5:1 ratio for normal text, 3:1 for large text
 
 **Example React component:**
 ```tsx
@@ -339,7 +345,7 @@ func TestCreateWork_Success(t *testing.T) {
 - **Unit tests:** Component behavior testing
 - **Integration tests:** User interaction flows
 - **E2E tests:** Full application workflows
-- **Accessibility tests:** WCAG compliance
+- **Accessibility tests:** WCAG compliance testing (MANDATORY for all PRs)
 
 **Example component test:**
 ```tsx
@@ -364,11 +370,206 @@ describe('WorkCard', () => {
     const mockWork = createMockWork();
     const { container } = render(<WorkCard work={mockWork} />);
     
+    // Test WCAG 2.1 AA compliance
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+  
+  it('supports keyboard navigation', () => {
+    const mockWork = createMockWork();
+    render(<WorkCard work={mockWork} />);
+    
+    const titleLink = screen.getByRole('link', { name: 'Test Work' });
+    
+    // Test keyboard focus
+    titleLink.focus();
+    expect(titleLink).toHaveFocus();
+    
+    // Test Enter key activation
+    fireEvent.keyDown(titleLink, { key: 'Enter', code: 'Enter' });
+    // Assert navigation behavior
+  });
+  
+  it('provides proper ARIA labels and descriptions', () => {
+    const mockWork = createMockWork();
+    render(<WorkCard work={mockWork} />);
+    
+    // Test semantic structure
+    expect(screen.getByRole('article')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument();
+    
+    // Test ARIA attributes
+    const article = screen.getByRole('article');
+    expect(article).toHaveAttribute('aria-labelledby');
+  });
 });
 ```
+
+## ♿ Accessibility Guidelines
+
+### 🎯 **Accessibility is Mandatory**
+
+Nuclear AO3 maintains **WCAG 2.1 AA compliance** as a core requirement. Every contribution that affects the user interface must meet or exceed accessibility standards.
+
+### 📋 **Accessibility Checklist**
+
+**For Every Component/Page:**
+- [ ] **Semantic HTML** - Use proper elements (`<button>`, `<nav>`, `<main>`, etc.)
+- [ ] **Keyboard Navigation** - All interactive elements accessible via keyboard
+- [ ] **Focus Management** - Clear focus indicators and logical tab order
+- [ ] **Screen Reader Support** - Meaningful labels and descriptions
+- [ ] **ARIA Patterns** - Proper implementation of ARIA attributes
+- [ ] **Color Contrast** - Minimum 4.5:1 ratio for normal text
+- [ ] **Live Regions** - Dynamic content changes announced to assistive technologies
+- [ ] **Form Accessibility** - Clear labels, error handling, validation feedback
+
+### 🛠️ **Implementation Standards**
+
+**Required ARIA Patterns:**
+```typescript
+// For interactive components
+<button
+  aria-label="Close dialog"
+  aria-describedby="close-description"
+  onClick={handleClose}
+>
+  ×
+</button>
+
+// For complex widgets (autocomplete, etc.)
+<input
+  role="combobox"
+  aria-expanded={isOpen}
+  aria-owns="suggestions-list"
+  aria-activedescendant={activeOption}
+/>
+
+// For dynamic content
+<div aria-live="polite" aria-atomic="true">
+  {statusMessage}
+</div>
+```
+
+**Keyboard Support Requirements:**
+- **Tab/Shift+Tab**: Navigate between elements
+- **Enter/Space**: Activate buttons and controls
+- **Arrow keys**: Navigate within components (menus, lists)
+- **Escape**: Close modals, dropdowns, cancel actions
+- **Home/End**: Jump to first/last items in lists
+
+**Focus Management:**
+```typescript
+// Manage focus for dynamic content
+useEffect(() => {
+  if (isModalOpen) {
+    modalRef.current?.focus();
+  }
+}, [isModalOpen]);
+
+// Restore focus when closing modals
+const handleClose = () => {
+  setIsModalOpen(false);
+  triggerRef.current?.focus();
+};
+```
+
+### 🧪 **Accessibility Testing Requirements**
+
+**All PRs must include:**
+
+**1. Automated Testing:**
+```bash
+# Run accessibility test suite
+npm run test:accessibility
+
+# Test specific component
+npm test TagAutocomplete.accessibility.test.tsx
+```
+
+**2. Manual Testing:**
+- [ ] **Keyboard-only navigation** through entire feature
+- [ ] **Screen reader testing** with NVDA/VoiceOver
+- [ ] **High contrast mode** compatibility
+- [ ] **Zoom testing** up to 200% without horizontal scrolling
+
+**3. Code Review:**
+- [ ] ARIA attributes reviewed for correctness
+- [ ] Semantic HTML structure validated
+- [ ] Focus management patterns approved
+- [ ] Color contrast ratios verified
+
+### 📖 **Accessibility Resources**
+
+**Our Implementation Examples:**
+- **SearchForm**: `frontend/src/components/SearchForm.tsx`
+- **TagAutocomplete**: `frontend/src/components/TagAutocomplete.tsx`  
+- **SearchResults**: `frontend/src/components/SearchResults.tsx`
+- **SearchPagination**: `frontend/src/components/SearchPagination.tsx`
+
+**Testing Documentation:**
+- **Testing Guide**: `ACCESSIBILITY_TESTING_GUIDE.md`
+- **Frontend Guide**: `frontend/ACCESSIBILITY.md`
+
+**External Resources:**
+- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
+- [ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/patterns/)
+- [WebAIM Screen Reader Testing](https://webaim.org/articles/screenreader_testing/)
+
+### 🚫 **Common Accessibility Violations to Avoid**
+
+**Critical Issues:**
+- Missing form labels or descriptions
+- Keyboard traps or inaccessible focus
+- Color-only information conveyance
+- Missing ARIA attributes on complex widgets
+- Insufficient color contrast ratios
+- Inaccessible modal or dropdown implementations
+
+**Code Examples of What NOT to Do:**
+```typescript
+// ❌ BAD - Missing label and keyboard support
+<div onClick={handleSubmit}>Submit</div>
+
+// ✅ GOOD - Proper button with label
+<button 
+  type="submit" 
+  aria-label="Submit search form"
+  onClick={handleSubmit}
+>
+  Submit
+</button>
+
+// ❌ BAD - No ARIA for custom dropdown
+<div className="dropdown">
+  <div onClick={toggle}>Options</div>
+  {isOpen && <div>...</div>}
+</div>
+
+// ✅ GOOD - Proper ARIA combobox pattern
+<div role="combobox" aria-expanded={isOpen}>
+  <button aria-haspopup="listbox" onClick={toggle}>
+    Options
+  </button>
+  {isOpen && (
+    <ul role="listbox" aria-label="Available options">
+      ...
+    </ul>
+  )}
+</div>
+```
+
+### 🏆 **Accessibility Champions**
+
+**Recognition for contributions:**
+- Accessibility improvements are highlighted in release notes
+- Contributors who improve accessibility get special recognition
+- Accessibility-focused PRs are prioritized for review
+
+**Become an Accessibility Champion:**
+- Review PRs for accessibility compliance
+- Contribute to accessibility testing documentation
+- Help test with assistive technologies
+- Mentor other contributors on accessibility best practices
 
 ## 🔒 Security Guidelines
 

@@ -1,0 +1,577 @@
+package main
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
+	"nuclear-ao3/shared/models"
+)
+
+// OAuth Client Management
+
+func (as *AuthService) getClientByID(clientID uuid.UUID) (*models.OAuthClient, error) {
+	query := `
+		SELECT client_id, client_secret, client_name, description, website_url, 
+			   redirect_uris, scopes, grant_types, response_types, is_public, 
+			   is_trusted, is_first_party, logo_url, privacy_policy_url, 
+			   terms_of_service_url, owner_id, is_active, created_at, updated_at
+		FROM oauth_clients 
+		WHERE client_id = $1`
+
+	var client models.OAuthClient
+	err := as.db.QueryRow(query, clientID).Scan(
+		&client.ID, &client.Secret, &client.Name, &client.Description,
+		&client.WebsiteURL, pq.Array(&client.RedirectURIs), pq.Array(&client.Scopes),
+		pq.Array(&client.GrantTypes), pq.Array(&client.ResponseTypes),
+		&client.IsPublic, &client.IsTrusted, &client.IsFirstParty,
+		&client.LogoURL, &client.PrivacyPolicyURL, &client.TermsOfServiceURL,
+		&client.OwnerID, &client.IsActive, &client.CreatedAt, &client.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &client, nil
+}
+
+func (as *AuthService) authenticateClient(c *gin.Context, clientID, clientSecret string) (*models.OAuthClient, error) {
+	// Parse client ID
+	id, err := uuid.Parse(clientID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid client ID")
+	}
+
+	// Get client from database
+	client, err := as.getClientByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("client not found")
+	}
+
+	if !client.IsActive {
+		return nil, fmt.Errorf("client inactive")
+	}
+
+	// Public clients don't require client secret
+	if client.IsPublic {
+		if clientSecret != "" {
+			return nil, fmt.Errorf("public clients must not send client_secret")
+		}
+		return client, nil
+	}
+
+	// Confidential clients require client secret
+	if clientSecret == "" {
+		return nil, fmt.Errorf("client_secret required")
+	}
+
+	// Verify client secret
+	err = bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(clientSecret))
+	if err != nil {
+		return nil, fmt.Errorf("invalid client_secret")
+	}
+
+	return client, nil
+}
+
+// Authorization Code Management
+
+func (as *AuthService) createAuthorizationCode(userID, clientID uuid.UUID, redirectURI string, scopes []string, codeChallenge, challengeMethod, nonce, state string) (string, error) {
+	code := as.generateSecureCode()
+	now := time.Now()
+	expiresAt := now.Add(10 * time.Minute) // Authorization codes expire in 10 minutes
+
+	// Set default challenge method
+	if codeChallenge != "" && challengeMethod == "" {
+		challengeMethod = "S256"
+	}
+
+	query := `
+		INSERT INTO authorization_codes 
+		(code, client_id, user_id, redirect_uri, scopes, code_challenge, 
+		 challenge_method, nonce, state, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
+	_, err := as.db.Exec(query, code, clientID, userID, redirectURI, 
+		pq.Array(scopes), codeChallenge, challengeMethod, nonce, state, 
+		expiresAt, now)
+
+	if err != nil {
+		return "", err
+	}
+
+	return code, nil
+}
+
+func (as *AuthService) validateAuthorizationCode(code string, clientID uuid.UUID, redirectURI, codeVerifier string) (*models.AuthorizationCode, error) {
+	query := `
+		SELECT code, client_id, user_id, redirect_uri, scopes, code_challenge,
+			   challenge_method, nonce, state, expires_at, used_at, created_at
+		FROM authorization_codes 
+		WHERE code = $1 AND client_id = $2`
+
+	var authCode models.AuthorizationCode
+	err := as.db.QueryRow(query, code, clientID).Scan(
+		&authCode.Code, &authCode.ClientID, &authCode.UserID, 
+		&authCode.RedirectURI, pq.Array(&authCode.Scopes), 
+		&authCode.CodeChallenge, &authCode.ChallengeMethod,
+		&authCode.Nonce, &authCode.State, &authCode.ExpiresAt,
+		&authCode.UsedAt, &authCode.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid authorization code")
+	}
+
+	// Check if code is expired
+	if authCode.IsExpired() {
+		return nil, fmt.Errorf("authorization code expired")
+	}
+
+	// Check if code has been used
+	if authCode.IsUsed() {
+		return nil, fmt.Errorf("authorization code already used")
+	}
+
+	// Validate redirect URI
+	if authCode.RedirectURI != redirectURI {
+		return nil, fmt.Errorf("redirect_uri mismatch")
+	}
+
+	// Validate PKCE if present
+	if authCode.CodeChallenge != "" {
+		if codeVerifier == "" {
+			return nil, fmt.Errorf("code_verifier required")
+		}
+		if !as.verifyPKCE(codeVerifier, authCode.CodeChallenge) {
+			return nil, fmt.Errorf("invalid code_verifier")
+		}
+	}
+
+	return &authCode, nil
+}
+
+func (as *AuthService) markAuthCodeAsUsed(code string) error {
+	query := `UPDATE authorization_codes SET used_at = NOW() WHERE code = $1`
+	_, err := as.db.Exec(query, code)
+	return err
+}
+
+// Token Generation and Management
+
+func (as *AuthService) generateTokens(userID, clientID uuid.UUID, scopes []string, ipAddress, userAgent string) (string, string, error) {
+	// Generate access token
+	accessTokenID := uuid.New()
+	accessToken, err := as.generateAccessToken(accessTokenID, userID, clientID, scopes)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Store access token
+	err = as.storeAccessToken(accessTokenID, userID, clientID, scopes, accessToken, ipAddress, userAgent)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Generate refresh token
+	refreshTokenID := uuid.New()
+	refreshToken, err := as.generateRefreshToken(refreshTokenID, userID, clientID, accessTokenID, scopes)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Store refresh token
+	err = as.storeRefreshToken(refreshTokenID, userID, clientID, accessTokenID, scopes, refreshToken)
+	if err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshToken, nil
+}
+
+func (as *AuthService) generateAccessToken(tokenID, userID, clientID uuid.UUID, scopes []string) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":   as.getBaseURL(),                          // Issuer
+		"sub":   userID.String(),                          // Subject (user ID)
+		"aud":   []string{clientID.String()},              // Audience (client ID)
+		"exp":   now.Add(time.Hour).Unix(),                // Expires in 1 hour
+		"iat":   now.Unix(),                               // Issued at
+		"jti":   tokenID.String(),                         // JWT ID
+		"scope": strings.Join(scopes, " "),                // Scopes
+		"typ":   "Bearer",                                 // Token type
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	return token.SignedString(as.jwt.privateKey)
+}
+
+func (as *AuthService) generateRefreshToken(tokenID, userID, clientID, accessTokenID uuid.UUID, scopes []string) (string, error) {
+	// Generate random refresh token
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func (as *AuthService) generateClientCredentialsToken(clientID uuid.UUID, scopes []string, ipAddress, userAgent string) (string, error) {
+	tokenID := uuid.New()
+	now := time.Now()
+	
+	claims := jwt.MapClaims{
+		"iss":   as.getBaseURL(),
+		"sub":   clientID.String(), // Client is the subject for client credentials
+		"aud":   []string{clientID.String()},
+		"exp":   now.Add(time.Hour).Unix(),
+		"iat":   now.Unix(),
+		"jti":   tokenID.String(),
+		"scope": strings.Join(scopes, " "),
+		"typ":   "Bearer",
+		"gty":   "client_credentials", // Grant type
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signedToken, err := token.SignedString(as.jwt.privateKey)
+	if err != nil {
+		return "", err
+	}
+
+	// Store client credentials token
+	err = as.storeClientCredentialsToken(tokenID, clientID, scopes, signedToken, ipAddress, userAgent)
+	if err != nil {
+		return "", err
+	}
+
+	return signedToken, nil
+}
+
+func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string, scopes []string) (string, error) {
+	user, err := as.getUserByID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":       as.getBaseURL(),
+		"sub":       userID.String(),
+		"aud":       clientID.String(),
+		"exp":       now.Add(time.Hour).Unix(),
+		"iat":       now.Unix(),
+		"auth_time": user.LastLoginAt.Unix(),
+		"typ":       "ID",
+	}
+
+	// Add nonce if provided
+	if nonce != "" {
+		claims["nonce"] = nonce
+	}
+
+	// Add claims based on requested scopes
+	if as.containsScope(scopes, "profile") {
+		claims["preferred_username"] = user.Username
+		claims["name"] = user.DisplayName
+		claims["updated_at"] = user.UpdatedAt.Unix()
+	}
+
+	if as.containsScope(scopes, "email") {
+		claims["email"] = user.Email
+		claims["email_verified"] = user.IsVerified
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	return token.SignedString(as.jwt.privateKey)
+}
+
+// Token Storage
+
+func (as *AuthService) storeAccessToken(tokenID, userID, clientID uuid.UUID, scopes []string, token, ipAddress, userAgent string) error {
+	tokenHash := as.generateTokenHash(token)
+	now := time.Now()
+	expiresAt := now.Add(time.Hour)
+
+	query := `
+		INSERT INTO oauth_access_tokens 
+		(id, user_id, client_id, scopes, token_hash, expires_at, issued_at, 
+		 ip_address, user_agent, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+
+	_, err := as.db.Exec(query, tokenID, userID, clientID, pq.Array(scopes),
+		tokenHash, expiresAt, now, ipAddress, userAgent, now)
+
+	return err
+}
+
+func (as *AuthService) storeRefreshToken(tokenID, userID, clientID, accessTokenID uuid.UUID, scopes []string, token string) error {
+	tokenHash := as.generateTokenHash(token)
+	now := time.Now()
+	expiresAt := now.Add(30 * 24 * time.Hour) // 30 days
+
+	query := `
+		INSERT INTO oauth_refresh_tokens 
+		(id, user_id, client_id, access_token_id, token_hash, scopes, 
+		 expires_at, rotation_count, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8)`
+
+	_, err := as.db.Exec(query, tokenID, userID, clientID, accessTokenID,
+		tokenHash, pq.Array(scopes), expiresAt, now)
+
+	return err
+}
+
+func (as *AuthService) storeClientCredentialsToken(tokenID, clientID uuid.UUID, scopes []string, token, ipAddress, userAgent string) error {
+	tokenHash := as.generateTokenHash(token)
+	now := time.Now()
+	expiresAt := now.Add(time.Hour)
+
+	query := `
+		INSERT INTO oauth_access_tokens 
+		(id, client_id, scopes, token_hash, expires_at, issued_at, 
+		 ip_address, user_agent, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+
+	_, err := as.db.Exec(query, tokenID, clientID, pq.Array(scopes),
+		tokenHash, expiresAt, now, ipAddress, userAgent, now)
+
+	return err
+}
+
+// Token Validation
+
+func (as *AuthService) validateAccessToken(tokenString string) (*jwt.RegisteredClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Validate signing method
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return as.jwt.publicKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	// Check if token is revoked
+	tokenID, err := uuid.Parse(claims.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid token ID")
+	}
+
+	isRevoked, err := as.isTokenRevoked(tokenID)
+	if err != nil || isRevoked {
+		return nil, fmt.Errorf("token revoked")
+	}
+
+	return claims, nil
+}
+
+func (as *AuthService) validateRefreshToken(tokenString string, clientID uuid.UUID) (*models.OAuthRefreshToken, error) {
+	tokenHash := as.generateTokenHash(tokenString)
+
+	query := `
+		SELECT id, user_id, client_id, access_token_id, scopes, expires_at,
+			   last_used, is_revoked, revoked_at, rotation_count, created_at
+		FROM oauth_refresh_tokens 
+		WHERE token_hash = $1 AND client_id = $2`
+
+	var rt models.OAuthRefreshToken
+	err := as.db.QueryRow(query, tokenHash, clientID).Scan(
+		&rt.ID, &rt.UserID, &rt.ClientID, &rt.AccessTokenID,
+		pq.Array(&rt.Scopes), &rt.ExpiresAt, &rt.LastUsed,
+		&rt.IsRevoked, &rt.RevokedAt, &rt.RotationCount, &rt.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid refresh token")
+	}
+
+	if !rt.IsValid() {
+		return nil, fmt.Errorf("refresh token expired or revoked")
+	}
+
+	return &rt, nil
+}
+
+// Token Revocation
+
+func (as *AuthService) revokeToken(tokenString string, clientID uuid.UUID) error {
+	tokenHash := as.generateTokenHash(tokenString)
+	now := time.Now()
+
+	// Try to revoke as access token
+	query1 := `
+		UPDATE oauth_access_tokens 
+		SET is_revoked = true, revoked_at = $1 
+		WHERE token_hash = $2 AND client_id = $3`
+	
+	result1, _ := as.db.Exec(query1, now, tokenHash, clientID)
+	rows1, _ := result1.RowsAffected()
+
+	// Try to revoke as refresh token
+	query2 := `
+		UPDATE oauth_refresh_tokens 
+		SET is_revoked = true, revoked_at = $1 
+		WHERE token_hash = $2 AND client_id = $3`
+	
+	result2, _ := as.db.Exec(query2, now, tokenHash, clientID)
+	rows2, _ := result2.RowsAffected()
+
+	if rows1 == 0 && rows2 == 0 {
+		return fmt.Errorf("token not found")
+	}
+
+	return nil
+}
+
+func (as *AuthService) revokeRefreshToken(tokenString string) error {
+	tokenHash := as.generateTokenHash(tokenString)
+	now := time.Now()
+
+	query := `
+		UPDATE oauth_refresh_tokens 
+		SET is_revoked = true, revoked_at = $1 
+		WHERE token_hash = $2`
+
+	_, err := as.db.Exec(query, now, tokenHash)
+	return err
+}
+
+func (as *AuthService) isTokenRevoked(tokenID uuid.UUID) (bool, error) {
+	query := `SELECT is_revoked FROM oauth_access_tokens WHERE id = $1`
+	
+	var isRevoked bool
+	err := as.db.QueryRow(query, tokenID).Scan(&isRevoked)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil // Token not found, assume not revoked
+		}
+		return false, err
+	}
+
+	return isRevoked, nil
+}
+
+// User Consent Management
+
+func (as *AuthService) hasValidConsent(userID, clientID uuid.UUID, scopes []string) bool {
+	query := `
+		SELECT scopes, expires_at, is_revoked 
+		FROM user_consents 
+		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false`
+
+	var consentScopes []string
+	var expiresAt *time.Time
+	var isRevoked bool
+
+	err := as.db.QueryRow(query, userID, clientID).Scan(
+		pq.Array(&consentScopes), &expiresAt, &isRevoked)
+
+	if err != nil {
+		return false
+	}
+
+	// Check if consent is expired
+	if expiresAt != nil && time.Now().After(*expiresAt) {
+		return false
+	}
+
+	// Check if all requested scopes are covered by consent
+	for _, requestedScope := range scopes {
+		hasScope := false
+		for _, consentScope := range consentScopes {
+			if requestedScope == consentScope {
+				hasScope = true
+				break
+			}
+		}
+		if !hasScope {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (as *AuthService) storeConsent(userID, clientID uuid.UUID, scopes []string, ipAddress, userAgent string) error {
+	now := time.Now()
+
+	query := `
+		INSERT INTO user_consents 
+		(id, user_id, client_id, scopes, granted_at, ip_address, user_agent, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (user_id, client_id) 
+		DO UPDATE SET 
+			scopes = EXCLUDED.scopes,
+			granted_at = EXCLUDED.granted_at,
+			ip_address = EXCLUDED.ip_address,
+			user_agent = EXCLUDED.user_agent`
+
+	_, err := as.db.Exec(query, uuid.New(), userID, clientID, 
+		pq.Array(scopes), now, ipAddress, userAgent, now)
+
+	return err
+}
+
+// Utility functions
+
+func (as *AuthService) verifyPKCE(codeVerifier, codeChallenge string) bool {
+	if codeChallenge == "" {
+		return true // PKCE not used
+	}
+	
+	hash := sha256.Sum256([]byte(codeVerifier))
+	computed := base64.URLEncoding.EncodeToString(hash[:])
+	computed = strings.TrimRight(computed, "=") // Remove padding
+	
+	return computed == codeChallenge
+}
+
+// Additional database queries for OAuth management
+
+func (as *AuthService) getUserByID(userID uuid.UUID) (*models.User, error) {
+	query := `
+		SELECT id, username, email, password_hash, display_name, bio, location, 
+			   website, preferences, is_active, is_verified, last_login_at, 
+			   created_at, updated_at
+		FROM users 
+		WHERE id = $1`
+
+	var user models.User
+	var preferences []byte
+	err := as.db.QueryRow(query, userID).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
+		&user.DisplayName, &user.Bio, &user.Location, &user.Website,
+		&preferences, &user.IsActive, &user.IsVerified, &user.LastLoginAt,
+		&user.CreatedAt, &user.UpdatedAt)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse preferences JSON
+	if len(preferences) > 0 {
+		json.Unmarshal(preferences, &user.Preferences)
+	}
+
+	return &user, nil
+}

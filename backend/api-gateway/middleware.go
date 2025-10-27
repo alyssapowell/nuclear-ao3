@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -339,4 +341,148 @@ func containsAdminScope(scopes []string) bool {
 		}
 	}
 	return false
+}
+
+// JWTAuthMiddleware validates JWT tokens and extracts user information
+func JWTAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Skip auth for certain endpoints
+		path := c.Request.URL.Path
+		if isPublicEndpoint(path) {
+			c.Next()
+			return
+		}
+
+		// Extract Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			// Allow anonymous access for public endpoints
+			if isOptionalAuthEndpoint(path) {
+				c.Next()
+				return
+			}
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Missing authorization header",
+			})
+			c.Abort()
+			return
+		}
+
+		// Extract Bearer token
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid authorization header format",
+			})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Empty bearer token",
+			})
+			c.Abort()
+			return
+		}
+
+		// Validate token with auth service
+		userID, err := validateTokenWithAuthService(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "Invalid token",
+				"details": err.Error(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Set user_id in context for downstream services
+		c.Set("user_id", userID)
+		c.Next()
+	}
+}
+
+// isPublicEndpoint checks if an endpoint is public and doesn't require authentication
+func isPublicEndpoint(path string) bool {
+	publicPaths := []string{
+		"/health",
+		"/metrics",
+		"/status",
+		"/graphql", // GraphQL playground
+		"/api/v1/auth/login",
+		"/api/v1/auth/register",
+		"/api/v1/auth/token",
+		"/api/v1/auth/refresh",
+		"/api/v1/auth/jwks",
+		"/api/v1/auth/oauth",
+		"/api/v1/tags/search", // Public tag search
+		"/api/v1/search",      // Public search
+	}
+
+	for _, publicPath := range publicPaths {
+		if strings.HasPrefix(path, publicPath) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isOptionalAuthEndpoint checks if an endpoint allows both authenticated and anonymous access
+func isOptionalAuthEndpoint(path string) bool {
+	optionalAuthPaths := []string{
+		"/api/v1/works",  // Public works viewing
+		"/api/v1/tags",   // Public tag browsing
+		"/api/v1/search", // Public search
+	}
+
+	for _, optionalPath := range optionalAuthPaths {
+		if strings.HasPrefix(path, optionalPath) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validateTokenWithAuthService validates a JWT token by calling the auth service
+func validateTokenWithAuthService(tokenString string) (string, error) {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Create request to auth service /me endpoint which validates the token
+	authServiceURL := getEnv("AUTH_SERVICE_URL", "http://localhost:8081")
+	req, err := http.NewRequest("GET", authServiceURL+"/api/v1/auth/me", nil)
+	if err != nil {
+		return "", err
+	}
+
+	// Set Authorization header for validation
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+
+	// Make request to auth service
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate token with auth service: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("auth service returned status %d", resp.StatusCode)
+	}
+
+	// Parse response to extract user ID
+	var meResponse struct {
+		UserID string `json:"user_id"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&meResponse); err != nil {
+		return "", fmt.Errorf("failed to parse auth service response: %v", err)
+	}
+
+	return meResponse.UserID, nil
 }

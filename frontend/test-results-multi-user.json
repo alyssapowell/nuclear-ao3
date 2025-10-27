@@ -1,0 +1,177 @@
+{
+  "config": {
+    "configFile": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/playwright.multi-user.config.ts",
+    "rootDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report-multi-user"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results-multi-user.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "multi-user-work-management.spec.ts"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "multi-user-work-management.spec.ts",
+      "file": "multi-user-work-management.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Multi-User Work Management",
+          "file": "multi-user-work-management.spec.ts",
+          "line": 211,
+          "column": 6,
+          "specs": [],
+          "suites": [
+            {
+              "title": "User Creation and Authentication",
+              "file": "multi-user-work-management.spec.ts",
+              "line": 245,
+              "column": 8,
+              "specs": [
+                {
+                  "title": "should create multiple test users successfully",
+                  "ok": false,
+                  "tags": [],
+                  "tests": [
+                    {
+                      "timeout": 60000,
+                      "annotations": [],
+                      "expectedStatus": "passed",
+                      "projectId": "chromium",
+                      "projectName": "chromium",
+                      "results": [
+                        {
+                          "workerIndex": 0,
+                          "parallelIndex": 0,
+                          "status": "failed",
+                          "duration": 24037,
+                          "error": {
+                            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"Dashboard\"\u001b[39m\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n",
+                            "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"Dashboard\"\u001b[39m\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/multi-user-work-management.spec.ts:250:46",
+                            "location": {
+                              "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/multi-user-work-management.spec.ts",
+                              "column": 46,
+                              "line": 250
+                            },
+                            "snippet": "  248 |       await authorUtils.createUser('testauthor', 'author@example.com');\n  249 |       await authorPage.goto('/dashboard');\n> 250 |       await expect(authorPage.locator('h1')).toContainText('Dashboard');\n      |                                              ^\n  251 |       \n  252 |       // Create reader user\n  253 |       await readerUtils.createUser('testreader', 'reader@example.com');"
+                          },
+                          "errors": [
+                            {
+                              "location": {
+                                "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/multi-user-work-management.spec.ts",
+                                "column": 46,
+                                "line": 250
+                              },
+                              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: locator('h1')\nExpected substring: \u001b[32m\"Dashboard\"\u001b[39m\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('h1')\u001b[22m\n\n\n  248 |       await authorUtils.createUser('testauthor', 'author@example.com');\n  249 |       await authorPage.goto('/dashboard');\n> 250 |       await expect(authorPage.locator('h1')).toContainText('Dashboard');\n      |                                              ^\n  251 |       \n  252 |       // Create reader user\n  253 |       await readerUtils.createUser('testreader', 'reader@example.com');\n    at /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/multi-user-work-management.spec.ts:250:46"
+                            }
+                          ],
+                          "stdout": [],
+                          "stderr": [],
+                          "retry": 0,
+                          "startTime": "2025-10-22T22:41:55.758Z",
+                          "annotations": [],
+                          "attachments": [
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/multi-user-work-management-c073f-ple-test-users-successfully-chromium/test-failed-1.png"
+                            },
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/multi-user-work-management-c073f-ple-test-users-successfully-chromium/test-failed-3.png"
+                            },
+                            {
+                              "name": "screenshot",
+                              "contentType": "image/png",
+                              "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/multi-user-work-management-c073f-ple-test-users-successfully-chromium/test-failed-2.png"
+                            },
+                            {
+                              "name": "error-context",
+                              "contentType": "text/markdown",
+                              "path": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/test-results/multi-user-work-management-c073f-ple-test-users-successfully-chromium/error-context.md"
+                            }
+                          ],
+                          "errorLocation": {
+                            "file": "/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/frontend/e2e/multi-user-work-management.spec.ts",
+                            "column": 46,
+                            "line": 250
+                          }
+                        }
+                      ],
+                      "status": "unexpected"
+                    }
+                  ],
+                  "id": "18bd7b4f78dfa9182aef-14d0a6ab0426a1625e2e",
+                  "file": "multi-user-work-management.spec.ts",
+                  "line": 246,
+                  "column": 9
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-10-22T22:41:55.282Z",
+    "duration": 25285.171,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

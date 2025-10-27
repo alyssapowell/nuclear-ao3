@@ -1,7 +1,7 @@
 // Legacy REST API client for Nuclear AO3 (updated to use API Gateway)
 // Note: Consider migrating to GraphQL client in graphql.ts for enhanced features
 
-// API Gateway endpoint
+// API Gateway endpoint (fallback to direct search service for development)
 const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
 
 export interface SearchParams {
@@ -22,7 +22,23 @@ export interface SearchParams {
   status?: string;              // Completion status (all, complete, in-progress)
   wordCountMin?: number;        // Minimum word count
   wordCountMax?: number;        // Maximum word count
-  sort?: 'title' | 'updated_at' | 'created_at' | 'published_at' | 'word_count' | 'hits' | 'kudos' | 'comments' | 'bookmarks' | 'relevance';
+  relationshipCount?: string;   // Relationship count filter ('1-2', '3-5', '6-10', '10+')
+  tagProminence?: string;       // Tag prominence filter ('primary', 'secondary', 'any')
+  // Content filtering
+  blockedTags?: string[];       // Tags to exclude from results
+  hideIncomplete?: boolean;     // Hide incomplete works
+  hideCrossovers?: boolean;     // Hide crossover works
+  hideNoRelationships?: boolean; // Hide gen fic
+  // Date filtering
+  updatedWithin?: string;       // 'week', 'month', '3months', 'year'
+  publishedAfter?: string;      // ISO date string
+  publishedBefore?: string;     // ISO date string
+  // Engagement filtering
+  minKudos?: number;           // Minimum kudos count
+  minComments?: number;        // Minimum comments count
+  minBookmarks?: number;       // Minimum bookmarks count
+  hideOrphaned?: boolean;      // Hide orphaned works
+  sort?: 'title' | 'updated_at' | 'created_at' | 'published_at' | 'word_count' | 'hits' | 'kudos' | 'comments' | 'bookmarks' | 'relevance' | 'quality_score' | 'engagement_rate' | 'comment_quality' | 'discovery_boost';
   order?: 'asc' | 'desc';
   page?: number;
   limit?: number;
@@ -104,7 +120,7 @@ export async function searchWorks(query: string, searchParams?: SearchParams) {
       searchUrl.searchParams.append('limit', searchParams.limit.toString());
     }
     if (searchParams?.sort) {
-      searchUrl.searchParams.append('sort_by', searchParams.sort);
+      searchUrl.searchParams.append('sort', searchParams.sort);
     }
 
     // Add filters as query parameters
@@ -938,6 +954,290 @@ export async function giveKudos(workId: string, authToken?: string) {
     return await response.json();
   } catch (error) {
     console.error('Give kudos error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Get work kudos info
+export async function getWorkKudos(workId: string, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/kudos`, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Get kudos error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Gift management interfaces and functions
+export interface Gift {
+  id: string;
+  work_id: string;
+  pseud_id?: string;
+  recipient_name: string;
+  rejected: boolean;
+  created_at: string;
+  updated_at: string;
+  recipient?: {
+    pseud_id: string;
+    pseud_name: string;
+    username: string;
+  };
+}
+
+export interface CreateGiftRequest {
+  pseud_id?: string;
+  recipient_name: string;
+}
+
+// Create gift for work (author-only)
+export async function giftWork(workId: string, giftData: CreateGiftRequest, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/gift`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(giftData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Gift work error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Get work gifts
+export async function getWorkGifts(workId: string, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/gifts`, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Get work gifts error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Subscription management interfaces and functions
+export interface Subscription {
+  id: string;
+  type: 'work' | 'author' | 'series' | 'tag' | 'collection';
+  target_id: string;
+  target_name: string;
+  events: string[];
+  frequency: 'immediate' | 'daily' | 'weekly' | 'never';
+  filter_tags?: string[];
+  filter_rating?: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSubscriptionRequest {
+  type: 'work' | 'author' | 'series' | 'tag' | 'collection';
+  target_id: string;
+  target_name?: string;
+  events?: string[];
+  frequency?: 'immediate' | 'daily' | 'weekly' | 'never';
+  filter_tags?: string[];
+  filter_rating?: string[];
+}
+
+export interface UpdateSubscriptionRequest {
+  events?: string[];
+  frequency?: 'immediate' | 'daily' | 'weekly' | 'never';
+  filter_tags?: string[];
+  filter_rating?: string[];
+  is_active?: boolean;
+}
+
+// Create subscription
+export async function createSubscription(subscriptionData: CreateSubscriptionRequest, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/subscriptions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(subscriptionData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Create subscription error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Get user subscriptions
+export async function getUserSubscriptions(authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/subscriptions`, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Get subscriptions error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Update subscription
+export async function updateSubscription(subscriptionId: string, subscriptionData: UpdateSubscriptionRequest, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/subscriptions/${subscriptionId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(subscriptionData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Update subscription error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Delete subscription
+export async function deleteSubscription(subscriptionId: string, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/subscriptions/${subscriptionId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Delete subscription error:', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+}
+
+// Check subscription status
+export async function checkSubscriptionStatus(type: string, targetId: string, authToken?: string) {
+  try {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+    
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/subscription-status?type=${encodeURIComponent(type)}&target_id=${encodeURIComponent(targetId)}`, {
+      method: 'GET',
+      headers,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Check subscription status error:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -1824,6 +2124,37 @@ export async function searchUsers(query: string, searchParams?: any) {
   } catch (error) {
     console.error('User search failed:', error)
     throw error
+  }
+}
+
+// Browse collections (uses work-service collections endpoint)
+export async function browseCollections(params: {
+  q?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params.q) queryParams.append('q', params.q);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/collections?${queryParams.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Browse collections error:', error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }
 

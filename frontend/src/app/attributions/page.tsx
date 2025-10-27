@@ -21,77 +21,91 @@ export default function AttributionsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real app, you'd fetch this from an API endpoint that reads package.json
-    // For now, we'll create a static list of our main dependencies
-    const mainDependencies: LicenseData = {
-      'next': {
-        name: 'Next.js',
-        version: '15.5.4',
+    // Load generated attributions and combine with backend dependencies
+    const loadAttributions = async () => {
+      try {
+        const response = await fetch('/attributions.json');
+        const data = await response.json();
+        
+        // Convert generated data to our format
+        const frontendDeps: LicenseData = {};
+        data.dependencies.forEach((dep: any) => {
+          frontendDeps[dep.name] = {
+            name: dep.name,
+            version: dep.version,
+            licenses: dep.licenses,
+            repository: dep.repository !== 'https://www.npmjs.com/package/' + dep.name ? dep.repository : undefined,
+            publisher: dep.publisher !== 'Unknown' ? dep.publisher : undefined,
+            description: dep.description !== 'Package description would be fetched from npm API' ? dep.description : undefined
+          };
+        });
+
+        // Add backend Go dependencies
+        const backendDeps: LicenseData = {
+          'gin-gonic': {
+        name: 'Gin Web Framework',
+        version: 'v1.10.1',
         licenses: 'MIT',
-        repository: 'https://github.com/vercel/next.js',
-        publisher: 'Vercel',
-        description: 'The React Framework for the Web'
+        repository: 'https://github.com/gin-gonic/gin',
+        publisher: 'Gin Contributors',
+        description: 'HTTP web framework written in Go'
       },
-      'react': {
-        name: 'React',
-        version: '19.1.0',
-        licenses: 'MIT',
-        repository: 'https://github.com/facebook/react',
-        publisher: 'Meta Platforms, Inc.',
-        description: 'A JavaScript library for building user interfaces'
-      },
-      '@headlessui/react': {
-        name: 'Headless UI',
-        version: '^2.0.0',
-        licenses: 'MIT',
-        repository: 'https://github.com/tailwindlabs/headlessui',
-        publisher: 'Tailwind Labs',
-        description: 'Completely unstyled, fully accessible UI components'
-      },
-      'tailwindcss': {
-        name: 'Tailwind CSS',
-        version: '^3.4.14',
-        licenses: 'MIT',
-        repository: 'https://github.com/tailwindlabs/tailwindcss',
-        publisher: 'Tailwind Labs',
-        description: 'A utility-first CSS framework'
-      },
-      'typescript': {
-        name: 'TypeScript',
-        version: '^5',
+      'elasticsearch': {
+        name: 'Elasticsearch Go Client',
+        version: 'v8.9.0',
         licenses: 'Apache-2.0',
-        repository: 'https://github.com/microsoft/TypeScript',
-        publisher: 'Microsoft Corporation',
-        description: 'TypeScript is a language for application scale JavaScript development'
+        repository: 'https://github.com/elastic/go-elasticsearch',
+        publisher: 'Elastic N.V.',
+        description: 'Official Go client for Elasticsearch'
       },
-      'axios': {
-        name: 'Axios',
-        version: '^1.12.2',
+      'postgresql': {
+        name: 'PostgreSQL Driver',
+        version: 'v1.10.9',
         licenses: 'MIT',
-        repository: 'https://github.com/axios/axios',
-        publisher: 'Matt Zabriskie',
-        description: 'Promise based HTTP client for the browser and node.js'
+        repository: 'https://github.com/lib/pq',
+        publisher: 'PostgreSQL Global Development Group',
+        description: 'Pure Go Postgres driver for database connectivity'
       },
-      'swr': {
-        name: 'SWR',
-        version: '^2.3.6',
+      'redis': {
+        name: 'Redis Go Client',
+        version: 'v9.2.1',
+        licenses: 'BSD-2-Clause',
+        repository: 'https://github.com/redis/go-redis',
+        publisher: 'Redis Ltd.',
+        description: 'Go client for Redis database'
+      },
+      'jwt': {
+        name: 'JWT Go Library',
+        version: 'v5.0.0',
         licenses: 'MIT',
-        repository: 'https://github.com/vercel/swr',
-        publisher: 'Vercel',
-        description: 'Data fetching library for React'
+        repository: 'https://github.com/golang-jwt/jwt',
+        publisher: 'JWT Contributors',
+        description: 'JSON Web Token implementation for Go'
       },
-      'lucide-react': {
-        name: 'Lucide React',
-        version: '^0.544.0',
-        licenses: 'ISC',
-        repository: 'https://github.com/lucide-icons/lucide',
-        publisher: 'Lucide Contributors',
-        description: 'Beautiful & consistent icon toolkit made by the community'
+      'prometheus': {
+        name: 'Prometheus Go Client',
+        version: 'v1.17.0',
+        licenses: 'Apache-2.0',
+        repository: 'https://github.com/prometheus/client_golang',
+        publisher: 'Prometheus Authors',
+        description: 'Prometheus instrumentation library for Go applications'
       }
     };
 
-    setLicenses(mainDependencies);
-    setLoading(false);
+        // Combine frontend and backend dependencies
+        const allDependencies = { ...frontendDeps, ...backendDeps };
+        setLicenses(allDependencies);
+        
+      } catch (error) {
+        console.warn('Failed to load generated attributions, using fallback');
+        // Fallback to static list if the JSON file isn't available
+        setLicenses({});
+      }
+      
+      setLoading(false);
+    };
+
+    loadAttributions();
   }, []);
 
   const groupedLicenses = Object.values(licenses).reduce((acc, license) => {
@@ -121,10 +135,26 @@ export default function AttributionsPage() {
           Nuclear AO3 is built with and depends on numerous open source projects. 
           We're grateful to the maintainers and contributors of these projects.
         </p>
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+          <h2 className="font-semibold text-orange-900 mb-2">Nuclear AO3 License</h2>
+          <p className="text-orange-800 text-sm">
+            This project is licensed under the{' '}
+            <a 
+              href="https://github.com/liberationlicense/license" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="underline hover:no-underline font-medium"
+            >
+              Liberation License
+            </a>
+            , designed specifically for liberation technology that serves social good.
+          </p>
+        </div>
+        
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h2 className="font-semibold text-blue-900 mb-2">License Compatibility</h2>
+          <h2 className="font-semibold text-blue-900 mb-2">Dependency License Compatibility</h2>
           <p className="text-blue-800 text-sm">
-            All dependencies use OSI-approved licenses compatible with AO3's mission. 
+            All dependencies use OSI-approved licenses compatible with our open source mission. 
             No proprietary or restrictive licenses that could affect long-term maintainability.
           </p>
         </div>
@@ -186,14 +216,33 @@ export default function AttributionsPage() {
           <ul className="text-green-800 text-sm space-y-1">
             <li>• <strong>MIT & ISC:</strong> Maximum freedom, no restrictions</li>
             <li>• <strong>Apache-2.0:</strong> Permissive with patent protection</li>
-            <li>• <strong>All licenses:</strong> Compatible with AO3's open source mission</li>
-            <li>• <strong>No GPL/AGPL:</strong> No copyleft requirements that could complicate AO3 integration</li>
+            <li>• <strong>BSD-2-Clause:</strong> Simple permissive license</li>
+            <li>• <strong>All licenses:</strong> Compatible with our open source mission</li>
+            <li>• <strong>No GPL/AGPL:</strong> No copyleft requirements that could complicate integration</li>
           </ul>
         </div>
         
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-6">
+          <h3 className="font-semibold text-slate-900 mb-2">Contributing & Updates</h3>
+          <div className="text-slate-700 text-sm space-y-2">
+            <p>
+              <strong>Keep this updated:</strong> When adding new dependencies, please update this file 
+              to maintain transparency about our open source stack.
+            </p>
+            <p>
+              <strong>License conflicts:</strong> Before adding dependencies, verify license compatibility 
+              with the Liberation License and our open source mission.
+            </p>
+            <p>
+              <strong>Missing attribution?</strong> If you notice missing dependencies or incorrect information, 
+              please submit a pull request or open an issue.
+            </p>
+          </div>
+        </div>
+        
         <p className="text-sm text-slate-500 mt-4 text-center">
-          This page is automatically updated when dependencies change. 
-          Last updated: {new Date().toLocaleDateString()}
+          Last manually updated: {new Date().toLocaleDateString()} • 
+          Please keep this current when dependencies change
         </p>
       </footer>
     </div>

@@ -1,0 +1,27 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // Temporarily disable type checking during build
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  // Demo exclusion for production builds
+  async rewrites() {
+    const isDev = process.env.NODE_ENV === 'development';
+    const showDemos = process.env.ENABLE_DEMOS === 'true' || isDev;
+    
+    if (!showDemos) {
+      // Redirect all demo routes to 404 in production (unless explicitly enabled)
+      return [
+        {
+          source: '/demo/:path*',
+          destination: '/404',
+        },
+      ];
+    }
+    
+    return [];
+  },
+};
+
+export default nextConfig;

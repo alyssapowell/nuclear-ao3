@@ -1,0 +1,17 @@
+[Unit]
+Description=Docker Health Monitor for Nuclear AO3
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3
+ExecStart=/Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/docker-health-monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

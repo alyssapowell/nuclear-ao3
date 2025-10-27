@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # Test-specific PostgreSQL with test database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: ao3_postgres_test
+    environment:
+      POSTGRES_DB: ao3_nuclear_test
+      POSTGRES_USER: ao3_user
+      POSTGRES_PASSWORD: ao3_password
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ao3_user -d ao3_nuclear_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ao3_test_network
+    command: postgres -c log_statement=all -c log_destination=stderr
+
+  # Test-specific Redis with multiple databases
+  redis-test:
+    image: redis:7-alpine
+    container_name: ao3_redis_test
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    command: redis-server --appendonly yes --databases 10
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ao3_test_network
+
+  # OAuth2/OIDC Test Runner
+  oauth-test-runner:
+    build:
+      context: ./backend
+      dockerfile: auth-service/Dockerfile.test
+    container_name: ao3_oauth_test_runner
+    environment:
+      - TEST_DATABASE_URL=postgres://ao3_user:ao3_password@postgres-test:5432/ao3_nuclear_test?sslmode=disable
+      - TEST_REDIS_URL=redis-test:6379
+      - BASE_URL=https://test.nuclear-ao3.com
+      - GIN_MODE=test
+      - GO_ENV=test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - ao3_test_network
+    volumes:
+      - ./backend/auth-service:/app/auth-service
+      - ./backend/shared:/app/shared
+      - oauth_test_results:/app/test-results
+    working_dir: /app/auth-service
+    # Don't start automatically - run tests on demand
+    profiles:
+      - testing
+
+  # Test Coverage Reporter
+  test-coverage:
+    build:
+      context: ./backend
+      dockerfile: auth-service/Dockerfile.test
+    container_name: ao3_test_coverage
+    environment:
+      - TEST_DATABASE_URL=postgres://ao3_user:ao3_password@postgres-test:5432/ao3_nuclear_test?sslmode=disable
+      - TEST_REDIS_URL=redis-test:6379
+      - GIN_MODE=test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - ao3_test_network
+    volumes:
+      - ./backend/auth-service:/app/auth-service
+      - ./backend/shared:/app/shared
+      - oauth_test_results:/app/test-results
+    working_dir: /app/auth-service
+    profiles:
+      - testing
+    command: ["sh", "-c", "go test -coverprofile=coverage.out -covermode=count ./... && go tool cover -html=coverage.out -o test-results/coverage.html"]
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+  oauth_test_results:
+
+networks:
+  ao3_test_network:
+    driver: bridge

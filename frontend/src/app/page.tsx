@@ -101,9 +101,9 @@ export default function HomePage() {
               </p>
             </div>
             <div className="bg-green-50 p-6 rounded-lg">
-              <h3 className="font-semibold text-green-900 mb-2">🤖 Smart Recommendations</h3>
+              <h3 className="font-semibold text-green-900 mb-2">🔍 Smart Tag Suggestions</h3>
               <p className="text-green-800 text-sm">
-                AI-powered suggestions based on your search patterns and preferences.
+                Pattern-based suggestions to help improve your tagging consistency and completeness.
               </p>
             </div>
           </div>

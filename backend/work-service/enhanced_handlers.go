@@ -54,37 +54,69 @@ func NewSearchServiceClient(baseURL string) *SearchServiceClient {
 
 // Enhanced CreateWork with tag integration
 func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
-	log.Printf("DEBUG: Using ENHANCED CreateWork handler with automatic indexing")
+	log.Printf("DEBUG ENHANCED: ====== STARTING CreateWorkEnhanced ======")
+	log.Printf("DEBUG ENHANCED: Request method: %s, URL: %s", c.Request.Method, c.Request.URL.Path)
+
+	// Step 1: Parse JSON request
+	log.Printf("DEBUG ENHANCED: Step 1 - Parsing JSON request")
 	var req models.CreateWorkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("DEBUG ENHANCED: ERROR - JSON binding failed: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
 		return
 	}
+	log.Printf("DEBUG ENHANCED: Step 1 SUCCESS - JSON parsed. Title: %s", req.Title)
 
-	// Get user ID from JWT token
+	// Step 2: Get user ID from context
+	log.Printf("DEBUG ENHANCED: Step 2 - Extracting user_id from context")
 	userID, exists := c.Get("user_id")
 	if !exists {
+		log.Printf("DEBUG ENHANCED: ERROR - No user_id found in context")
+		// Let's also check what IS in the context
+		log.Printf("DEBUG ENHANCED: Available context keys:")
+		for key, value := range c.Keys {
+			log.Printf("DEBUG ENHANCED: Context key: %s = %v", key, value)
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
+	log.Printf("DEBUG ENHANCED: Step 2 SUCCESS - Got user_id from context: %v (type: %T)", userID, userID)
 
-	// Parse user ID to UUID
-	userUUID, parseErr := uuid.Parse(userID.(string))
-	if parseErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	// Step 3: Parse user ID to UUID
+	log.Printf("DEBUG ENHANCED: Step 3 - Converting user_id to UUID")
+	userIDStr, ok := userID.(string)
+	if !ok {
+		log.Printf("DEBUG ENHANCED: ERROR - user_id is not a string: %T", userID)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID type"})
 		return
 	}
+	log.Printf("DEBUG ENHANCED: Step 3a SUCCESS - user_id is string: %s", userIDStr)
 
+	userUUID, parseErr := uuid.Parse(userIDStr)
+	if parseErr != nil {
+		log.Printf("DEBUG ENHANCED: ERROR - Failed to parse user_id as UUID: %v", parseErr)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+	log.Printf("DEBUG ENHANCED: Step 3 SUCCESS - Parsed user UUID: %s", userUUID)
+
+	// Step 4: Start database transaction
+	log.Printf("DEBUG ENHANCED: Step 4 - Starting database transaction")
 	tx, err := ws.db.Begin()
 	if err != nil {
+		log.Printf("DEBUG ENHANCED: ERROR - Failed to start transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
 	defer tx.Rollback()
+	log.Printf("DEBUG ENHANCED: Step 4 SUCCESS - Transaction started")
 
-	// Create work
+	// Step 5: Create work object
+	log.Printf("DEBUG ENHANCED: Step 5 - Creating work object")
 	workID := uuid.New()
 	now := time.Now()
+	log.Printf("DEBUG ENHANCED: Generated work ID: %s", workID)
+	log.Printf("DEBUG ENHANCED: Using user UUID: %s", userUUID)
 
 	work := &models.Work{
 		ID:                     workID,
@@ -115,8 +147,10 @@ func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
 		CreatedAt:              now,
 		UpdatedAt:              now,
 	}
+	log.Printf("DEBUG ENHANCED: Step 5 SUCCESS - Work object created with UserID: %s", work.UserID)
 
-	// Insert work (series_id removed - handled via series_works table)
+	// Step 6: Insert work into database
+	log.Printf("DEBUG ENHANCED: Step 6 - Inserting work into database")
 	query := `
 		INSERT INTO works (id, user_id, title, summary, notes, language, rating, 
 			category, warnings, fandoms, characters, relationships, freeform_tags, 
@@ -125,6 +159,11 @@ func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
 			is_anonymous, in_anon_collection, in_unrevealed_collection,
 			created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`
+
+	log.Printf("DEBUG ENHANCED: About to execute SQL with these key values:")
+	log.Printf("DEBUG ENHANCED: $1 (id): %s", work.ID)
+	log.Printf("DEBUG ENHANCED: $2 (user_id): %s", work.UserID)
+	log.Printf("DEBUG ENHANCED: $3 (title): %s", work.Title)
 
 	_, err = tx.Exec(query,
 		work.ID, work.UserID, work.Title, work.Summary, work.Notes,
@@ -136,9 +175,11 @@ func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
 		work.InAnonCollection, work.InUnrevealedCollection, work.CreatedAt, work.UpdatedAt)
 
 	if err != nil {
+		log.Printf("DEBUG ENHANCED: ERROR - SQL execution failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work", "details": err.Error()})
 		return
 	}
+	log.Printf("DEBUG ENHANCED: Step 6 SUCCESS - Work inserted into database")
 
 	// Create creatorship
 	var defaultPseudID uuid.UUID
@@ -173,17 +214,21 @@ func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
 		return
 	}
 
+	// Step 7: Commit transaction
+	log.Printf("DEBUG ENHANCED: Step 7 - Committing transaction")
 	if err = tx.Commit(); err != nil {
+		log.Printf("DEBUG ENHANCED: ERROR - Failed to commit transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
 	}
+	log.Printf("DEBUG ENHANCED: Step 7 SUCCESS - Transaction committed")
 
-	// Process tags asynchronously
+	// Step 8: Async processing
+	log.Printf("DEBUG ENHANCED: Step 8 - Starting async processing")
 	go ws.processWorkTags(workID, req)
-
-	// Index in search service asynchronously
 	go ws.indexWorkInSearch(workID, work)
 
+	log.Printf("DEBUG ENHANCED: ====== SUCCESS - Work created with ID: %s ======", workID)
 	c.JSON(http.StatusCreated, gin.H{"work": work})
 }
 
@@ -242,8 +287,14 @@ func (ws *WorkService) getOrCreateTag(ctx context.Context, tagName string) (uuid
 		return searchResult.Tags[0].ID, nil
 	}
 
-	// Create new tag
+	// Create new tag - but prevent fandom creation from user forms
 	tagType := ws.inferTagType(tagName)
+
+	// Restrict fandom creation to admin-only operations
+	if tagType == "fandom" {
+		return uuid.Nil, fmt.Errorf("fandom tags can only be created by administrators")
+	}
+
 	createReq := models.CreateTagRequest{
 		Name:         tagName,
 		Type:         tagType,

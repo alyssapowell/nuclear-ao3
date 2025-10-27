@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Tag Suggestions</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        input { width: 100%; padding: 10px; font-size: 16px; margin: 10px 0; }
+        .suggestions { border: 1px solid #ccc; margin-top: 5px; }
+        .suggestion { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .suggestion:hover { background-color: #f5f5f5; }
+        .result { margin: 10px 0; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Nuclear AO3 - Tag Suggestions Test</h1>
+        
+        <div>
+            <label>Test Character Tags (direct API):</label>
+            <input type="text" id="character-input" placeholder="Type 'harry' to test...">
+            <div id="character-suggestions" class="suggestions"></div>
+        </div>
+        
+        <div>
+            <label>Test Fandom Tags (direct API):</label>
+            <input type="text" id="fandom-input" placeholder="Type 'harry' to test...">
+            <div id="fandom-suggestions" class="suggestions"></div>
+        </div>
+        
+        <div class="result">
+            <h3>Results:</h3>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test direct API calls to tag service
+        async function searchTags(query, type) {
+            try {
+                const response = await fetch(`http://localhost:8083/api/v1/tags/search?q=${query}&type=${type}&limit=5`);
+                const data = await response.json();
+                return data.tags || [];
+            } catch (error) {
+                console.error('API Error:', error);
+                return [];
+            }
+        }
+
+        function showSuggestions(inputId, suggestionsId, tags) {
+            const container = document.getElementById(suggestionsId);
+            container.innerHTML = '';
+            
+            if (tags.length === 0) {
+                container.innerHTML = '<div class="suggestion">No suggestions found</div>';
+                return;
+            }
+            
+            tags.forEach(tag => {
+                const div = document.createElement('div');
+                div.className = 'suggestion';
+                div.innerHTML = `<strong>${tag.name}</strong> (${tag.use_count} works) - ${tag.type}`;
+                div.onclick = () => {
+                    document.getElementById(inputId).value = tag.name;
+                    container.innerHTML = '';
+                    addResult(`Selected: ${tag.name} (${tag.type})`);
+                };
+                container.appendChild(div);
+            });
+        }
+
+        function addResult(message) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.innerHTML = `${new Date().toLocaleTimeString()}: ${message}`;
+            results.appendChild(div);
+        }
+
+        // Character input handler
+        document.getElementById('character-input').addEventListener('input', async (e) => {
+            const query = e.target.value;
+            if (query.length >= 2) {
+                addResult(`Searching characters for: "${query}"`);
+                const tags = await searchTags(query, 'character');
+                showSuggestions('character-input', 'character-suggestions', tags);
+                addResult(`Found ${tags.length} character suggestions`);
+            } else {
+                document.getElementById('character-suggestions').innerHTML = '';
+            }
+        });
+
+        // Fandom input handler  
+        document.getElementById('fandom-input').addEventListener('input', async (e) => {
+            const query = e.target.value;
+            if (query.length >= 2) {
+                addResult(`Searching fandoms for: "${query}"`);
+                const tags = await searchTags(query, 'fandom');
+                showSuggestions('fandom-input', 'fandom-suggestions', tags);
+                addResult(`Found ${tags.length} fandom suggestions`);
+            } else {
+                document.getElementById('fandom-suggestions').innerHTML = '';
+            }
+        });
+
+        // Initial test
+        addResult('Page loaded - ready to test tag suggestions!');
+        addResult('Try typing "harry" in either field to see suggestions.');
+    </script>
+</body>
+</html>

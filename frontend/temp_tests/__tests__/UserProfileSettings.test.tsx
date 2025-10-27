@@ -1,0 +1,322 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import UserProfileSettings from '../UserProfileSettings';
+import { getMyProfile, updateProfile, getPseudonyms, createPseudonym } from '@/lib/api';
+
+// Mock the API functions
+jest.mock('@/lib/api', () => ({
+  getMyProfile: jest.fn(),
+  updateProfile: jest.fn(),
+  getPseudonyms: jest.fn(),
+  createPseudonym: jest.fn(),
+}));
+
+const mockGetMyProfile = getMyProfile as jest.MockedFunction<typeof getMyProfile>;
+const mockUpdateProfile = updateProfile as jest.MockedFunction<typeof updateProfile>;
+const mockGetPseudonyms = getPseudonyms as jest.MockedFunction<typeof getPseudonyms>;
+const mockCreatePseudonym = createPseudonym as jest.MockedFunction<typeof createPseudonym>;
+
+describe('UserProfileSettings', () => {
+  const mockUser = {
+    user_id: 'user-1',
+    username: 'testuser',
+    display_name: 'Test User',
+    bio: 'Test bio',
+    location: 'Test City',
+    website: 'https://test.com',
+    email_notifications: true,
+    show_adult_content: false,
+    allow_friend_requests: true,
+    show_stats: true,
+    show_works: true,
+    show_bookmarks: true,
+    default_work_privacy: 'public' as const,
+    created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
+  };
+
+  const mockPseudonyms = [
+    {
+      id: 'pseudo-1',
+      user_id: 'user-1',
+      name: 'TestPseudo',
+      description: 'Test pseudonym',
+      is_default: true,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    },
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetMyProfile.mockResolvedValue({ user: mockUser });
+    mockGetPseudonyms.mockResolvedValue({ pseudonyms: mockPseudonyms });
+    mockUpdateProfile.mockResolvedValue({ success: true });
+    mockCreatePseudonym.mockResolvedValue({ 
+      pseudonym: {
+        id: 'pseudo-2',
+        user_id: 'user-1',
+        name: 'NewPseudo',
+        description: 'New pseudonym',
+        is_default: false,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      }
+    });
+  });
+
+  it('renders profile settings tabs', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+      expect(screen.getByText('Profile')).toBeInTheDocument();
+      expect(screen.getByText('Privacy')).toBeInTheDocument();
+      expect(screen.getByText('Pseudonyms')).toBeInTheDocument();
+    });
+  });
+
+  it('loads and displays user profile data', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('testuser')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Test bio')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Test City')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('https://test.com')).toBeInTheDocument();
+    });
+  });
+
+  it('shows loading state initially', () => {
+    render(<UserProfileSettings authToken="test-token" />);
+    
+    expect(screen.getByText('Loading profile settings...')).toBeInTheDocument();
+  });
+
+  it('updates profile when form is submitted', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+    });
+
+    const displayNameInput = screen.getByDisplayValue('Test User');
+    const saveButton = screen.getByText('Save Changes');
+
+    fireEvent.change(displayNameInput, { target: { value: 'Updated Name' } });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockUpdateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          display_name: 'Updated Name',
+        }),
+        'test-token'
+      );
+    });
+  });
+
+  it('switches to privacy tab and shows privacy settings', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    const privacyTab = screen.getByText('🔒 Privacy');
+    fireEvent.click(privacyTab);
+
+    expect(screen.getByText('Privacy Settings')).toBeInTheDocument();
+    expect(screen.getByText('Show Adult Content')).toBeInTheDocument();
+    expect(screen.getByText('Allow Friend Requests')).toBeInTheDocument();
+    expect(screen.getByText('Show Statistics')).toBeInTheDocument();
+  });
+
+  it('toggles privacy settings', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    // Switch to privacy tab
+    const privacyTab = screen.getByRole('button', { name: /Privacy/i });
+    fireEvent.click(privacyTab);
+
+    // Find and toggle adult content switch - it's the first checkbox (unchecked)
+    const adultContentSwitch = screen.getAllByRole('checkbox')[0];
+    fireEvent.click(adultContentSwitch);
+
+    // Save changes
+    const saveButton = screen.getByText('Save Privacy Settings');
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockUpdateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          show_adult_content: true, // Should be toggled to true
+        }),
+        'test-token'
+      );
+    });
+  });
+
+  it('switches to pseudonyms tab and shows pseudonyms', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    fireEvent.click(pseudonymsTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('Pseudonyms')).toBeInTheDocument();
+      expect(screen.getByText('TestPseudo')).toBeInTheDocument();
+      expect(screen.getByText('Default')).toBeInTheDocument();
+    });
+  });
+
+  it('shows add pseudonym form when button is clicked', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    // Switch to pseudonyms tab
+    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    fireEvent.click(pseudonymsTab);
+
+    // Click add pseudonym button
+    const addButton = screen.getByText('Add Pseudonym');
+    fireEvent.click(addButton);
+
+    expect(screen.getByText('Create New Pseudonym')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter pseudonym name')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Optional description for this pseudonym')).toBeInTheDocument();
+  });
+
+  it('creates a new pseudonym', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    // Switch to pseudonyms tab
+    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    fireEvent.click(pseudonymsTab);
+
+    // Click add pseudonym button
+    const addButton = screen.getByText('Add Pseudonym');
+    fireEvent.click(addButton);
+
+    // Fill in form
+    const nameInput = screen.getByPlaceholderText('Enter pseudonym name');
+    const descriptionInput = screen.getByPlaceholderText('Optional description for this pseudonym');
+    
+    fireEvent.change(nameInput, { target: { value: 'NewPseudo' } });
+    fireEvent.change(descriptionInput, { target: { value: 'New pseudonym description' } });
+
+    // Submit form
+    const createButton = screen.getByText('Create Pseudonym');
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(mockCreatePseudonym).toHaveBeenCalledWith(
+        {
+          name: 'NewPseudo',
+          description: 'New pseudonym description',
+        },
+        'test-token'
+      );
+    });
+  });
+
+  it('shows error when pseudonym name is empty', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+    });
+
+    // Switch to pseudonyms tab
+    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    fireEvent.click(pseudonymsTab);
+
+    // Click add pseudonym button
+    const addButton = screen.getByText('Add Pseudonym');
+    fireEvent.click(addButton);
+
+    // Try to submit without name
+    const createButton = screen.getByText('Create Pseudonym');
+    fireEvent.click(createButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Pseudonym name is required')).toBeInTheDocument();
+    });
+  });
+
+  it('handles profile loading error', async () => {
+    mockGetMyProfile.mockRejectedValue(new Error('Failed to load profile'));
+    
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load profile')).toBeInTheDocument();
+    });
+  });
+
+  it('shows success message after saving', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+    });
+
+    const saveButton = screen.getByText('Save Changes');
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Profile updated successfully!')).toBeInTheDocument();
+    });
+  });
+
+  it('handles update profile error', async () => {
+    mockUpdateProfile.mockRejectedValue(new Error('Update failed'));
+    
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
+    });
+
+    const saveButton = screen.getByText('Save Changes');
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Update failed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows disabled username field', async () => {
+    render(<UserProfileSettings authToken="test-token" />);
+
+    await waitFor(() => {
+      const usernameInput = screen.getByDisplayValue('testuser');
+      expect(usernameInput).toBeDisabled();
+      expect(screen.getByText('Username cannot be changed')).toBeInTheDocument();
+    });
+  });
+
+  it('renders without auth token gracefully', () => {
+    render(<UserProfileSettings />);
+    
+    // Should not make API calls without auth token
+    expect(mockGetMyProfile).not.toHaveBeenCalled();
+    expect(mockGetPseudonyms).not.toHaveBeenCalled();
+  });
+});

@@ -86,7 +86,7 @@ export default function SearchPage() {
               <ul className="space-y-1">
                 <li>• Filter by word count, rating, status</li>
                 <li>• Search within specific fandoms</li>
-                <li>• Get AI-powered tag suggestions</li>
+                <li>• Get smart tag consistency suggestions</li>
               </ul>
             </div>
           </div>
@@ -116,14 +116,24 @@ export default function SearchPage() {
                 </h2>
                 <div className="flex gap-2">
                   <select className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
-                    <option value="relevance">Best Match</option>
-                    <option value="updated">Recently Updated</option>
-                    <option value="published">Recently Published</option>
-                    <option value="kudos">Most Kudos</option>
-                    <option value="hits">Most Hits</option>
-                    <option value="bookmarks">Most Bookmarks</option>
-                    <option value="comments">Most Comments</option>
-                    <option value="word_count">Word Count</option>
+                    <optgroup label="Smart Sorting (Anti-Gaming)">
+                      <option value="quality_score">🏆 Quality Score</option>
+                      <option value="engagement_rate">📊 Engagement Rate</option>
+                      <option value="comment_quality">💬 Discussion Quality</option>
+                      <option value="discovery_boost">🔍 Discovery Boost</option>
+                    </optgroup>
+                    <optgroup label="Traditional Sorting">
+                      <option value="relevance">Best Match</option>
+                      <option value="updated_at">Recently Updated</option>
+                      <option value="published_at">Recently Published</option>
+                      <option value="word_count">Word Count</option>
+                    </optgroup>
+                    <optgroup label="Raw Numbers (Gaming-Prone)">
+                      <option value="kudos">Most Kudos</option>
+                      <option value="hits">Most Hits</option>
+                      <option value="bookmarks">Most Bookmarks</option>
+                      <option value="comments">Most Comments</option>
+                    </optgroup>
                   </select>
                 </div>
               </div>

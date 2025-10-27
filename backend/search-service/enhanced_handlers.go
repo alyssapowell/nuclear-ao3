@@ -2029,11 +2029,28 @@ func (ss *SearchService) SmartFilteredSearch(c *gin.Context) {
 		req.FacetConfig.RareTagThreshold = 5
 	}
 
-	// Build enhanced query with smart tag analysis
-	query := ss.buildSmartFilterQuery(req)
+	// Convert to basic WorkSearchRequest and use proven working search
+	workReq := WorkSearchRequest{
+		Query:         req.Query,
+		Fandoms:       req.Fandoms,
+		Characters:    req.Characters,
+		Relationships: req.Relationships,
+		Tags:          req.FreeformTags,
+		SortBy:        "quality_score",
+		SortOrder:     "desc",
+		Page:          1,
+		Limit:         req.FacetConfig.MaxFacetValues,
+	}
 
-	// Execute search with enhanced facets
-	response, err := ss.executeSmartFilteredSearch(query, req)
+	if workReq.Limit == 0 || workReq.Limit > 50 {
+		workReq.Limit = 20
+	}
+
+	// Build query using working basic search infrastructure
+	query := ss.buildWorkSearchQuery(workReq)
+
+	// Execute search using working basic infrastructure
+	response, err := ss.executeWorkSearch(query, workReq)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Smart filtered search failed",
@@ -2122,22 +2139,22 @@ func (ss *SearchService) SuggestTagEnhancements(c *gin.Context) {
 
 // buildSmartFilterQuery constructs an Elasticsearch query with enhanced tag filtering
 func (ss *SearchService) buildSmartFilterQuery(req AdvancedFilterRequest) map[string]interface{} {
-	query := map[string]interface{}{
-		"bool": map[string]interface{}{
-			"must":   []map[string]interface{}{},
-			"filter": []map[string]interface{}{},
-			"should": []map[string]interface{}{},
-		},
+	boolQuery := map[string]interface{}{
+		"must":   []map[string]interface{}{},
+		"filter": []map[string]interface{}{},
+		"should": []map[string]interface{}{},
 	}
 
-	boolQuery := query["bool"].(map[string]interface{})
+	query := map[string]interface{}{
+		"bool": boolQuery,
+	}
 
 	// Add base text query if provided
 	if req.Query != "" {
 		boolQuery["must"] = append(boolQuery["must"].([]map[string]interface{}), map[string]interface{}{
 			"multi_match": map[string]interface{}{
 				"query":  req.Query,
-				"fields": []string{"title^3", "summary^2", "searchable_text", "author_names^2"},
+				"fields": []string{"title^3", "summary^2", "content_text"},
 				"type":   "best_fields",
 			},
 		})
@@ -2174,12 +2191,18 @@ func (ss *SearchService) buildSmartFilterQuery(req AdvancedFilterRequest) map[st
 		}
 	}
 
-	// Add facet aggregations
-	query["aggs"] = ss.buildSmartFacetAggregations(req.FacetConfig)
+	// Set defaults for pagination
+	size := req.FacetConfig.MaxFacetValues
+	if size == 0 || size > 50 {
+		size = 20 // Default page size
+	}
 
 	return map[string]interface{}{
 		"query": query,
-		"size":  req.FacetConfig.MaxFacetValues,
+		"size":  size,
+		"from":  0,                                           // Can be enhanced with pagination later
+		"sort":  ss.buildSortClause("quality_score", "desc"), // Default to quality sorting
+		"aggs":  ss.buildWorksFacets(),                       // Use working basic facets
 	}
 }
 
@@ -2327,13 +2350,13 @@ func (ss *SearchService) buildSmartFacetAggregations(config FacetConfiguration) 
 
 	// Standard facets with smart filtering
 	facetFields := map[string]string{
-		"fandoms":       "fandoms.keyword",
-		"characters":    "characters.keyword",
-		"relationships": "relationships.keyword",
-		"tags":          "additional_tags.keyword",
-		"ratings":       "rating.keyword",
-		"warnings":      "warnings.keyword",
-		"categories":    "categories.keyword",
+		"fandoms":       "fandoms",
+		"characters":    "characters",
+		"relationships": "relationships",
+		"freeform_tags": "freeform_tags",
+		"ratings":       "rating",
+		"warnings":      "warnings",
+		"categories":    "categories",
 	}
 
 	for facetName, fieldName := range facetFields {
@@ -2357,18 +2380,18 @@ func (ss *SearchService) buildSmartFacetAggregations(config FacetConfiguration) 
 		aggs[facetName] = facetAgg
 	}
 
-	// Add tag quality distribution facet
-	aggs["tag_quality_distribution"] = map[string]interface{}{
-		"range": map[string]interface{}{
-			"field": "tagging_quality_score",
-			"ranges": []map[string]interface{}{
-				{"from": 0, "to": 25, "key": "poor"},
-				{"from": 25, "to": 50, "key": "fair"},
-				{"from": 50, "to": 75, "key": "good"},
-				{"from": 75, "to": 100, "key": "excellent"},
-			},
-		},
-	}
+	// Add tag quality distribution facet (disabled - field doesn't exist yet)
+	// aggs["tag_quality_distribution"] = map[string]interface{}{
+	// 	"range": map[string]interface{}{
+	// 		"field": "tagging_quality_score",
+	// 		"ranges": []map[string]interface{}{
+	// 			{"from": 0, "to": 25, "key": "poor"},
+	// 			{"from": 25, "to": 50, "key": "fair"},
+	// 			{"from": 50, "to": 75, "key": "good"},
+	// 			{"from": 75, "to": 100, "key": "excellent"},
+	// 		},
+	// 	},
+	// }
 
 	// Add word count distribution
 	aggs["word_count_distribution"] = map[string]interface{}{
@@ -2384,10 +2407,10 @@ func (ss *SearchService) buildSmartFacetAggregations(config FacetConfiguration) 
 		},
 	}
 
-	// Add completion status facet
+	// Add completion status facet using existing field
 	aggs["completion_status"] = map[string]interface{}{
 		"terms": map[string]interface{}{
-			"field": "completion_status.keyword",
+			"field": "is_complete",
 			"size":  10,
 		},
 	}
@@ -2397,6 +2420,7 @@ func (ss *SearchService) buildSmartFacetAggregations(config FacetConfiguration) 
 
 // executeSmartFilteredSearch executes the search with enhanced processing
 func (ss *SearchService) executeSmartFilteredSearch(query map[string]interface{}, req AdvancedFilterRequest) (*SmartFacetResponse, error) {
+	// Convert query to JSON
 	queryJSON, err := json.Marshal(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query: %w", err)

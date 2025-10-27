@@ -20,6 +20,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"nuclear-ao3/shared/cache"
+	"nuclear-ao3/shared/notifications"
 )
 
 func main() {
@@ -230,6 +231,13 @@ func setupRouter(workService *WorkService) *gin.Engine {
 			protected.GET("/my/collections", workService.GetMyCollections) // GET /api/v1/my/collections
 			protected.GET("/my/comments", workService.GetMyComments)       // GET /api/v1/my/comments
 			protected.GET("/my/stats", workService.GetMyStats)             // GET /api/v1/my/stats
+
+			// Subscriptions
+			protected.POST("/subscriptions", workService.CreateSubscription)           // POST /api/v1/subscriptions
+			protected.GET("/subscriptions", workService.GetUserSubscriptions)          // GET /api/v1/subscriptions
+			protected.PUT("/subscriptions/:id", workService.UpdateSubscription)        // PUT /api/v1/subscriptions/123
+			protected.DELETE("/subscriptions/:id", workService.DeleteSubscription)     // DELETE /api/v1/subscriptions/123
+			protected.GET("/subscription-status", workService.CheckSubscriptionStatus) // GET /api/v1/subscription-status?type=work&target_id=123
 		}
 
 		// Admin endpoints
@@ -253,9 +261,10 @@ func setupRouter(workService *WorkService) *gin.Engine {
 
 // WorkService holds all dependencies for work management
 type WorkService struct {
-	db    *sql.DB
-	redis *redis.Client
-	cache *cache.Cache
+	db                  *sql.DB
+	redis               *redis.Client
+	cache               *cache.Cache
+	notificationService *notifications.NotificationService
 }
 
 func NewWorkService() *WorkService {
@@ -309,9 +318,10 @@ func NewWorkService() *WorkService {
 	log.Println("Work service initialized successfully")
 
 	return &WorkService{
-		db:    db,
-		redis: rdb,
-		cache: workCache,
+		db:                  db,
+		redis:               rdb,
+		cache:               workCache,
+		notificationService: nil, // TODO: Initialize notification service
 	}
 }
 
@@ -393,6 +403,15 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+
+		// First check if user_id is already provided via API Gateway (X-User-ID header)
+		if userIDHeader := c.GetHeader("X-User-ID"); userIDHeader != "" {
+			log.Printf("DEBUG WORK: Received X-User-ID header: %s", userIDHeader)
+			c.Set("user_id", userIDHeader)
+			c.Next()
+			return
+		}
+		log.Printf("DEBUG WORK: No X-User-ID header found, falling back to JWT validation")
 
 		// Extract and validate JWT token to get real user ID
 		authHeader := c.GetHeader("Authorization")

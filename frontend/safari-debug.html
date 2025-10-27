@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safari Compatibility Debug</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; }
+        .fail { background: #f8d7da; }
+        .warning { background: #fff3cd; }
+    </style>
+</head>
+<body>
+    <h1>Safari Compatibility Debug Tool</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(test, status, message) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `<strong>${test}:</strong> ${message}`;
+            results.appendChild(div);
+        }
+
+        // Browser Detection
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        addResult('Browser Detection', isSafari ? 'warning' : 'pass', 
+                 `User Agent: ${navigator.userAgent}`);
+
+        // WebSocket Support
+        try {
+            const wsSupported = 'WebSocket' in window;
+            addResult('WebSocket Support', wsSupported ? 'pass' : 'fail', 
+                     wsSupported ? 'WebSocket is supported' : 'WebSocket is NOT supported');
+        } catch (e) {
+            addResult('WebSocket Support', 'fail', `Error: ${e.message}`);
+        }
+
+        // LocalStorage Support
+        try {
+            localStorage.setItem('test', 'test');
+            localStorage.removeItem('test');
+            addResult('LocalStorage Support', 'pass', 'LocalStorage is working');
+        } catch (e) {
+            addResult('LocalStorage Support', 'fail', `Error: ${e.message}`);
+        }
+
+        // ES6 Features
+        try {
+            const arrow = () => true;
+            const promise = new Promise(resolve => resolve(true));
+            addResult('ES6 Support', 'pass', 'Arrow functions and Promises supported');
+        } catch (e) {
+            addResult('ES6 Support', 'fail', `Error: ${e.message}`);
+        }
+
+        // URL API
+        try {
+            const url = new URL('http://example.com');
+            addResult('URL API', 'pass', 'URL API is supported');
+        } catch (e) {
+            addResult('URL API', 'fail', `Error: ${e.message}`);
+        }
+
+        // Fetch API
+        try {
+            if ('fetch' in window) {
+                addResult('Fetch API', 'pass', 'Fetch API is supported');
+            } else {
+                addResult('Fetch API', 'fail', 'Fetch API is NOT supported');
+            }
+        } catch (e) {
+            addResult('Fetch API', 'fail', `Error: ${e.message}`);
+        }
+
+        // Try to connect to the Next.js app
+        addResult('Next.js App Test', 'warning', 'Testing connection to localhost:3001...');
+        
+        fetch('http://localhost:3001/')
+            .then(response => {
+                if (response.ok) {
+                    addResult('Next.js Connection', 'pass', `Status: ${response.status} ${response.statusText}`);
+                } else {
+                    addResult('Next.js Connection', 'fail', `Status: ${response.status} ${response.statusText}`);
+                }
+            })
+            .catch(error => {
+                addResult('Next.js Connection', 'fail', `Error: ${error.message}`);
+            });
+
+        // Try WebSocket connection to notification service
+        if ('WebSocket' in window) {
+            try {
+                const ws = new WebSocket('ws://localhost:8004/ws?token=test-token');
+                
+                ws.onopen = function() {
+                    addResult('Notification WebSocket', 'pass', 'WebSocket connection successful');
+                    ws.close();
+                };
+                
+                ws.onerror = function(error) {
+                    addResult('Notification WebSocket', 'warning', 'WebSocket connection failed (expected if service not running)');
+                };
+                
+                ws.onclose = function(event) {
+                    if (event.code !== 1000) {
+                        addResult('Notification WebSocket', 'warning', `WebSocket closed with code: ${event.code}`);
+                    }
+                };
+                
+                // Timeout the connection attempt
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        ws.close();
+                        addResult('Notification WebSocket', 'warning', 'WebSocket connection timeout (service may not be running)');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                addResult('Notification WebSocket', 'fail', `WebSocket error: ${error.message}`);
+            }
+        }
+
+        // Console logging test
+        console.log('Safari Debug: Console logging is working');
+        addResult('Console Logging', 'pass', 'Check browser console for additional logs');
+    </script>
+</body>
+</html>

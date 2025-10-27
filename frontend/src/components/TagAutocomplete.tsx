@@ -23,6 +23,8 @@ interface Tag {
   name: string
   type: string
   use_count?: number
+  id?: string
+  is_new?: boolean
 }
 
 const TagAutocomplete = React.memo(function TagAutocomplete({ 
@@ -99,6 +101,8 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
       const searchDelay = setTimeout(async () => {
         try {
           const results = await searchTags(currentTag, tagType)
+          
+          // Just show existing suggestions - new tags are auto-created on Enter/comma/tab
           setSuggestions(results)
           setShowSuggestions(true)
           setActiveSuggestion(-1)
@@ -116,7 +120,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
       setShowSuggestions(false)
       setAnnounceUpdate('')
     }
-  }, [value, tagType, disabled])
+  }, [value, tagType, disabled, getCurrentTag])
 
   // Maintain focus if the user was actively typing
   useEffect(() => {
@@ -152,10 +156,11 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!showSuggestions || disabled) return
+    const currentTag = getCurrentTag().trim()
 
     switch (e.key) {
       case 'ArrowDown':
+        if (!showSuggestions || disabled) return
         e.preventDefault()
         const nextIndex = activeSuggestion < suggestions.length - 1 ? activeSuggestion + 1 : activeSuggestion
         setActiveSuggestion(nextIndex)
@@ -164,6 +169,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
         }
         break
       case 'ArrowUp':
+        if (!showSuggestions || disabled) return
         e.preventDefault()
         const prevIndex = activeSuggestion > 0 ? activeSuggestion - 1 : -1
         setActiveSuggestion(prevIndex)
@@ -173,8 +179,20 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
         break
       case 'Enter':
         e.preventDefault()
-        if (activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+        e.stopPropagation() // Prevent event bubbling to form
+        if (showSuggestions && activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+          // Select from suggestions
           selectSuggestion(suggestions[activeSuggestion].name)
+        } else if (currentTag && currentTag.length > 0 && tagType !== 'fandom') {
+          // Auto-create new tag if user typed something (except fandoms)
+          selectSuggestion(currentTag)
+        }
+        break
+      case ',':
+        // Auto-create tag on comma (except fandoms)
+        if (currentTag && currentTag.length > 0 && tagType !== 'fandom') {
+          e.preventDefault()
+          selectSuggestion(currentTag)
         }
         break
       case 'Escape':
@@ -184,12 +202,17 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
         setAnnounceUpdate('Suggestions closed')
         break
       case 'Tab':
-        // Allow normal tab behavior to close suggestions
-        setShowSuggestions(false)
-        setActiveSuggestion(-1)
+        // Allow normal tab behavior to close suggestions, or auto-create if typing (except fandoms)
+        if (currentTag && currentTag.length > 0 && tagType !== 'fandom') {
+          e.preventDefault()
+          selectSuggestion(currentTag)
+        } else {
+          setShowSuggestions(false)
+          setActiveSuggestion(-1)
+        }
         break
     }
-  }, [showSuggestions, disabled, activeSuggestion, suggestions, selectSuggestion])
+  }, [showSuggestions, disabled, activeSuggestion, suggestions, selectSuggestion, getCurrentTag])
 
   // Hide suggestions when clicking outside
   useEffect(() => {
@@ -292,7 +315,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
             >
               <header className="flex items-center justify-between">
                 <span className="text-gray-900">{tag.name}</span>
-                {tag.use_count && (
+                {tag.use_count && tag.use_count > 0 && (
                   <span className="text-xs text-gray-500" aria-label={`${tag.use_count} works`}>
                     {tag.use_count} works
                   </span>
@@ -305,6 +328,16 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
               )}
             </article>
           ))}
+          
+          {/* Help text for new tag creation */}
+          {suggestions.length === 0 && (
+            <div className="px-3 py-2 text-xs text-gray-500">
+              {tagType === 'fandom' 
+                ? 'No fandoms found. Please choose from existing fandoms or contact an admin to add new ones.'
+                : 'No existing tags found. Press Enter, comma, or Tab to create a new tag.'
+              }
+            </div>
+          )}
         </aside>
       )}
     </section>

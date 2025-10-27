@@ -88,7 +88,7 @@ export class TestUserManager {
 
   static async setAuthInBrowser(page: any, authToken: string) {
     await page.goto('/');
-    await page.evaluate((token) => {
+    await page.evaluate((token: string) => {
       localStorage.setItem('auth_token', token);
       localStorage.setItem('token', token);
     }, authToken);

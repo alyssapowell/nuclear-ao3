@@ -1,0 +1,26 @@
+{
+  "name": "nuclear-ao3",
+  "version": "1.0.0",
+  "description": "**A complete rebuild of Archive of Our Own with modern architecture that actually works.**",
+  "main": "api-integration-test.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@elastic/elasticsearch": "^9.1.1",
+    "axios": "^1.12.2",
+    "node-cron": "^4.2.1",
+    "pg": "^8.16.3",
+    "redis": "^5.8.3",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3"
+  }
+}

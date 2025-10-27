@@ -2,6 +2,7 @@ import { Page, expect } from '@playwright/test';
 
 // Test configuration
 const API_URL = process.env.API_URL || 'http://localhost:8080/api/v1';
+const FIRST_PARTY_CLIENT_ID = '11111111-1111-1111-1111-111111111111';
 
 // Test user data
 export const TEST_USER = {
@@ -10,11 +11,13 @@ export const TEST_USER = {
   password: 'TestPassword123!'
 };
 
-export async function loginUser(page: Page): Promise<string> {
+export async function loginUser(page: Page, userSuffix?: string): Promise<string> {
   // Use real authentication API for E2E tests
+  const timestamp = Date.now();
+  const suffix = userSuffix || timestamp.toString();
   const uniqueTestUser = {
-    email: `e2e_test_${Date.now()}@example.com`,
-    username: `e2e_test_${Date.now()}`,
+    email: `e2e_test_${suffix}@example.com`,
+    username: `e2e_test_${suffix}`,
     password: 'E2ETestPassword123!'
   };
 
@@ -24,6 +27,9 @@ export async function loginUser(page: Page): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Client-ID': FIRST_PARTY_CLIENT_ID,
+        'X-Client-First-Party': 'true',
+        'X-OAuth-Scopes': 'openid,profile,email,read,write,works:manage,comments:write,bookmarks:manage,collections:manage',
       },
       body: JSON.stringify(uniqueTestUser)
     });
@@ -35,11 +41,14 @@ export async function loginUser(page: Page): Promise<string> {
     console.log('Registration API call failed:', error);
   }
 
-  // Login via API to get a real token
+  // Login via OAuth API using first-party client to get proper rate limiting
   const loginResponse = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Client-ID': FIRST_PARTY_CLIENT_ID,
+      'X-Client-First-Party': 'true',
+      'X-OAuth-Scopes': 'openid,profile,email,read,write,works:manage,comments:write,bookmarks:manage,collections:manage',
     },
     body: JSON.stringify({
       email: uniqueTestUser.email,

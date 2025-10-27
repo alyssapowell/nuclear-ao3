@@ -3,15 +3,17 @@ import userEvent from '@testing-library/user-event';
 import NotificationBell from '../components/notifications/NotificationBell';
 import NotificationList from '../components/notifications/NotificationList';
 import { useNotifications } from '../hooks/useNotifications';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../utils/auth';
 
 // Mock dependencies
 jest.mock('../hooks/useNotifications', () => ({
   useNotifications: jest.fn(),
 }));
 
-jest.mock('../contexts/AuthContext', () => ({
+jest.mock('../utils/auth', () => ({
   useAuth: jest.fn(),
+  getAuthState: jest.fn(),
+  isAuthenticated: jest.fn(),
 }));
 
 jest.mock('next/navigation', () => ({
