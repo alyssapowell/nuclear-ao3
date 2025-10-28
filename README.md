@@ -41,17 +41,18 @@ git clone <repository-url>
 cd nuclear-ao3
 
 # 2. Start the complete stack (takes 2-3 minutes first time)
-make quickstart
+make dev-setup
 
 # 3. Check everything is healthy
-make health
+make service-status
 ```
 
 ### 🌐 Your Local Nuclear AO3 is Ready!
 
 ```bash
-# See all available service URLs
-make urls
+# See all available commands and check status
+make help
+make service-status
 ```
 
 **Frontend Application:**
@@ -59,15 +60,17 @@ make urls
 
 **Service Endpoints:**
 
-- **API Gateway**: http://localhost:3001 - Unified API endpoint
+- **API Gateway**: http://localhost:8080 - Unified API endpoint
 - **Auth Service**: http://localhost:8081 - OAuth2/OIDC authentication
 - **Work Service**: http://localhost:8082 - Fanfiction management  
 - **Tag Service**: http://localhost:8083 - Tag system
 - **Search Service**: http://localhost:8084 - Elasticsearch search
+- **Notification Service**: http://localhost:8085 - User notifications and messaging
+- **Export Service**: http://localhost:8086 - Data export functionality
 - **Database**: localhost:5432 - PostgreSQL 
 - **Cache**: localhost:6379 - Redis
 - **Search Engine**: http://localhost:9200 - Elasticsearch
-- **Monitoring**: http://localhost:3002 - Grafana (admin/admin)
+- **Monitoring**: http://localhost:3001 - Grafana (admin/admin)
 
 ### 🎯 Take It for a Test Drive
 
@@ -114,7 +117,7 @@ curl "http://localhost:8084/api/v1/search/works?q=fanfic" | jq
 **1. Developer Testing OAuth2 Integration:**
 ```bash
 # Start services
-make quickstart
+make dev-setup
 
 # Register your app
 curl -X POST http://localhost:8081/auth/register-client \
@@ -129,38 +132,38 @@ curl -X POST http://localhost:8081/auth/token \
 **2. Frontend Developer Building UI:**
 ```bash
 # Start just the APIs you need
-make up
+make services
 
 # Create test works through the API
-curl -X POST http://localhost:3001/api/v1/works \
+curl -X POST http://localhost:8080/api/v1/works \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"title": "Test Story", "content": "Chapter 1...", "fandoms": ["My Fandom"]}'
 
 # Search for content
-curl "http://localhost:3001/api/v1/search/works?q=story&sort=date"
+curl "http://localhost:8080/api/v1/search/works?q=story&sort=date"
 ```
 
 **3. Performance Testing:**
 ```bash
 # Start monitoring
-make quickstart
+make dev-setup
 
 # Run benchmarks
-make benchmark
+make performance-test
 
-# View metrics at http://localhost:3002
+# View metrics at http://localhost:3001
 ```
 
 **4. Database/Content Management:**
 ```bash
 # Access database directly
-make shell-db
+docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear
 
-# Run migrations
-make migrate
+# Run migrations and add test data
+make db-reset
 
-# Add test data
-make seed
+# Add test data only
+make db-populate
 ```
 
 ## 🏗️ Architecture
@@ -168,13 +171,13 @@ make seed
 ```
 Your Frontend (React/Vue/Angular/Mobile/Custom)
     ↓ HTTP/REST
-API Gateway (Nginx) :3001
+API Gateway (GraphQL) :8080
     ↓
-┌─────────────┬─────────────┬─────────────┬─────────────┐
-│ Auth        │ Work        │ Tag         │ Search      │
-│ Service     │ Service     │ Service     │ Service     │
-│ :8081       │ :8082       │ :8083       │ :8084       │
-└─────────────┴─────────────┴─────────────┴─────────────┘
+┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
+│ Auth        │ Work        │ Tag         │ Search      │ Notification│ Export      │
+│ Service     │ Service     │ Service     │ Service     │ Service     │ Service     │
+│ :8081       │ :8082       │ :8083       │ :8084       │ :8085       │ :8086       │
+└─────────────┴─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
     ↓
 ┌─────────────┬─────────────┬─────────────┐
 │ PostgreSQL  │ Redis       │ Elasticsearch│
@@ -205,51 +208,52 @@ nuclear-ao3/
 ### Essential Commands
 | Command | Description |
 |---------|-------------|
-| `make quickstart` | 🚀 **Complete setup** - Build + start + migrate + seed |
-| `make up` | Start all services |
-| `make down` | Stop all services |
-| `make health` | ✅ Check all services are healthy |
-| `make urls` | 🌐 Show all service URLs |
+| `make dev-setup` | 🚀 **Complete setup** - Build + start + migrate + seed |
+| `make services` | Start all services |
+| `make clean` | Stop all services |
+| `make service-status` | ✅ Check all services are healthy |
+| `make help` | 🌐 Show all available commands |
 | `make logs` | View logs from all services |
-| `make clean` | 🧹 Reset everything (removes data!) |
+| `make clean-all` | 🧹 Reset everything (removes data!) |
 
 ### Development Workflow
 | Command | Description |
 |---------|-------------|
-| `make logs-auth` | View auth service logs |
-| `make logs-work` | View work service logs |
-| `make logs-search` | View search service logs |
-| `make shell-auth` | Open shell in auth service container |
-| `make shell-db` | Open PostgreSQL shell |
-| `make shell-redis` | Open Redis shell |
+| `make logs-db` | View database logs |
+| `make services-dev` | Start services with logs |
+| `make frontend-dev` | Start frontend development server |
+| `docker exec -it nuclear-ao3-auth bash` | Open shell in auth service |
+| `docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear` | Open PostgreSQL shell |
+| `docker exec -it nuclear-ao3-redis redis-cli` | Open Redis shell |
 
 ### Testing & Quality
 | Command | Description |
 |---------|-------------|
 | `make test` | Run all tests |
-| `make test-oauth` | 🔐 Run OAuth2/OIDC tests |
-| `make lint` | Run code linting |
-| `make benchmark` | 📊 Performance benchmarks |
+| `make test-api` | 🔐 Test API endpoints |
+| `make ci-test` | Run complete CI test suite |
+| `make performance-test` | 📊 Performance benchmarks |
 
 ### Database Management
 | Command | Description |
 |---------|-------------|
-| `make migrate` | Run database migrations |
-| `make seed` | Add test data |
-| `make reset-db` | ⚠️ Reset database (destroys data!) |
+| `make db-reset` | Complete database reset and repopulation |
+| `make db-populate` | Add test data to existing database |
+| `make db-flush` | ⚠️ Completely flush databases (destroys data!) |
+| `make backup-db` | Backup PostgreSQL database |
 
 ### Service Management
 ```bash
 # Start individual services
-make up-auth      # Just auth service + dependencies
-make up-work      # Just work service + dependencies  
-make up-search    # Just search service + dependencies
+make db-start     # Just database services
+make services     # All backend services
+make frontend-dev # Just frontend development
 
 # Restart a specific service
 docker-compose restart auth-service
 
 # View real-time logs
-make logs -f
+make logs
 
 # Scale a service
 docker-compose up -d --scale work-service=3
@@ -381,7 +385,7 @@ The search service provides powerful querying capabilities:
 
 ## 📊 Monitoring
 
-Access monitoring at http://localhost:3002 (Grafana):
+Access monitoring at http://localhost:3001 (Grafana):
 - API response times and error rates
 - Database performance metrics
 - Search query performance
@@ -394,13 +398,13 @@ Access monitoring at http://localhost:3002 (Grafana):
 ### Quick API Testing
 ```bash
 # Health check all services
-make health
+make service-status
 
-# Test OAuth2/OIDC flows
-make test-oauth-fast
+# Test API endpoints
+make test-api
 
 # Performance benchmarks  
-make benchmark
+make performance-test
 ```
 
 ### Comprehensive Testing
@@ -408,14 +412,12 @@ make benchmark
 # Run all tests across all services
 make test
 
-# Test individual services
-make test-auth      # Authentication & OAuth2/OIDC
-make test-work      # Work management
-make test-tag       # Tag system
-make test-search    # Search functionality
+# Test individual services through API
+make test-api       # Test all API endpoints
+make test           # Run Go unit tests
 
 # Performance & load testing
-make benchmark-load
+make performance-test
 ```
 
 ### Manual API Testing
@@ -458,9 +460,9 @@ curl "http://localhost:8084/api/v1/search/suggestions?q=fan" | jq
 **Test Through API Gateway:**
 ```bash
 # All requests can go through the unified gateway
-curl http://localhost:3001/api/v1/auth/health
-curl http://localhost:3001/api/v1/works
-curl http://localhost:3001/api/v1/search/works?q=test
+curl http://localhost:8080/api/v1/auth/health
+curl http://localhost:8080/api/v1/works
+curl http://localhost:8080/api/v1/search/works?q=test
 ```
 
 ## 🐳 Development with Docker
@@ -469,18 +471,18 @@ The entire stack runs in Docker containers:
 
 ```bash
 # Build and start everything
-make up
+make services
 
 # View logs from all services
 make logs
 
 # Access individual service shells
-make shell-auth
-make shell-db
-make shell-redis
+docker exec -it nuclear-ao3-auth bash
+docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear
+docker exec -it nuclear-ao3-redis redis-cli
 
 # Clean reset
-make clean
+make clean-all
 ```
 
 ## 🚀 Performance Comparison
@@ -585,18 +587,19 @@ docker --version && docker-compose --version
 docker --version
 
 # Start fresh
-make down && make clean && make quickstart
+make clean-all && make dev-setup
 
 # Check individual service logs
-make logs-auth
-make logs-work
-make logs-search
+make logs-db
+docker-compose logs auth-service
+docker-compose logs work-service
+docker-compose logs search-service
 ```
 
 **"Connection refused" errors:**
 ```bash
 # Wait for services to be ready (can take 30-60 seconds)
-make health
+make service-status
 
 # If still failing, check logs
 make logs
@@ -611,9 +614,7 @@ make shell-db
 # Should connect without errors
 
 # Reset database if corrupted
-make reset-db
-make migrate
-make seed
+make db-reset
 ```
 
 **Search not working:**
@@ -625,7 +626,7 @@ curl http://localhost:9200/_cluster/health | jq
 curl http://localhost:8084/health | jq
 
 # Check logs
-make logs-search
+docker-compose logs search-service
 ```
 
 **Authentication problems:**
@@ -634,7 +635,7 @@ make logs-search
 curl http://localhost:8081/.well-known/openid-configuration
 
 # Check auth service logs  
-make logs-auth
+docker-compose logs auth-service
 
 # Verify JWT key generation
 curl http://localhost:8081/auth/jwks | jq
@@ -646,26 +647,25 @@ curl http://localhost:8081/auth/jwks | jq
 docker stats
 
 # Run performance tests
-make benchmark
+make performance-test
 
 # Check individual service health
-make health
+make service-status
 ```
 
 **Complete reset (nuclear option):**
 ```bash
 # This will destroy all data and start fresh
-make down
-docker system prune -a --volumes -f
-make quickstart
+make clean-all
+make dev-setup
 ```
 
 ### Getting Help
 
-1. **Check service logs first:** `make logs-[service]`
-2. **Verify health status:** `make health`  
-3. **Try a clean restart:** `make down && make up`
-4. **Reset if needed:** `make clean && make quickstart`
+1. **Check service logs first:** `make logs` or `docker-compose logs [service]`
+2. **Verify health status:** `make service-status`  
+3. **Try a clean restart:** `make clean && make services`
+4. **Reset if needed:** `make clean-all && make dev-setup`
 5. **Check GitHub issues** for known problems
 6. **Open an issue** with logs and error messages
 

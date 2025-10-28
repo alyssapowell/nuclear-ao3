@@ -21,7 +21,7 @@ Nuclear AO3 is built by the community, for the community. We welcome contributio
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nuclear-ao3.git
+git clone https://github.com/YOUR-ORG/nuclear-ao3.git
 cd nuclear-ao3
 
 # Start development environment (requires Docker)

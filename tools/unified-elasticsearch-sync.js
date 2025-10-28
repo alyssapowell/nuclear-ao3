@@ -13,7 +13,7 @@ const PG_CLIENT = new Client({
   host: 'localhost',
   port: 5432,
   user: 'ao3_user',
-  password: 'ao3_password',
+  password: process.env.POSTGRES_PASSWORD || 'ao3_password',
   database: 'ao3_nuclear'
 });
 

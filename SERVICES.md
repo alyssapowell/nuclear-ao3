@@ -47,6 +47,28 @@ This document describes the microservices architecture of Nuclear AO3.
   - Search history and saved searches
 - **Dependencies**: PostgreSQL, Redis, Elasticsearch
 
+### Notification Service (Port 8085)
+- **Purpose**: User notifications and messaging system
+- **Key Features**:
+  - Real-time notifications via WebSocket
+  - Email notifications and digests
+  - Push notifications
+  - User notification preferences
+  - Notification history and management
+  - Smart batching and rate limiting
+- **Dependencies**: PostgreSQL, Redis
+
+### Export Service (Port 8086)
+- **Purpose**: Data export functionality
+- **Key Features**:
+  - Work export in multiple formats (EPUB, PDF, HTML)
+  - Collection and series exports
+  - User data exports for GDPR compliance
+  - Bulk export operations
+  - Export scheduling and management
+  - Format optimization and compression
+- **Dependencies**: PostgreSQL, Redis
+
 ## API Endpoints
 
 Each service exposes REST APIs under `/api/v1/`. See individual service handlers for detailed endpoint documentation.

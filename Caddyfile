@@ -1,0 +1,153 @@
+# Nuclear AO3 Caddy Configuration
+# Automatic HTTPS, load balancing, and reverse proxy
+
+# Main site - frontend and API routing
+{$DOMAIN:localhost} {
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server info
+        -Server
+    }
+
+    # Health check endpoint
+    handle /health {
+        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+    }
+
+    # GraphQL API endpoint
+    handle /graphql {
+        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+    }
+
+    # REST API endpoints - route through API Gateway
+    handle /api/* {
+        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+    }
+
+    # Static assets and frontend
+    handle /* {
+        reverse_proxy {$FRONTEND_HOST:frontend}:{$FRONTEND_PORT:3000}
+    }
+
+    # Request logging
+    log {
+        output file /var/log/caddy/nuclear-ao3.log {
+            roll_size 100MB
+            roll_keep 5
+        }
+        format json
+    }
+}
+
+# Monitoring dashboard (Grafana)
+{$MONITORING_DOMAIN:monitoring.localhost} {
+    reverse_proxy {$GRAFANA_HOST:grafana}:{$GRAFANA_PORT:3000}
+    
+    # Basic auth for monitoring (optional)
+    # basicauth {
+    #     admin $2a$14$...hash...
+    # }
+    
+    log {
+        output file /var/log/caddy/monitoring.log
+        format json
+    }
+}
+
+# Development endpoints (only in dev mode)
+{$DEV_DOMAIN:dev.localhost} {
+    @dev_mode expression env('ENVIRONMENT') == 'development'
+    
+    # Direct service access for debugging
+    handle /auth/* @dev_mode {
+        uri strip_prefix /auth
+        reverse_proxy {$AUTH_SERVICE_HOST:auth-service}:{$AUTH_SERVICE_PORT:8081}
+    }
+    
+    handle /work/* @dev_mode {
+        uri strip_prefix /work
+        reverse_proxy {$WORK_SERVICE_HOST:work-service}:{$WORK_SERVICE_PORT:8082}
+    }
+    
+    handle /tag/* @dev_mode {
+        uri strip_prefix /tag
+        reverse_proxy {$TAG_SERVICE_HOST:tag-service}:{$TAG_SERVICE_PORT:8083}
+    }
+    
+    handle /search/* @dev_mode {
+        uri strip_prefix /search
+        reverse_proxy {$SEARCH_SERVICE_HOST:search-service}:{$SEARCH_SERVICE_PORT:8084}
+    }
+    
+    handle /notification/* @dev_mode {
+        uri strip_prefix /notification
+        reverse_proxy {$NOTIFICATION_SERVICE_HOST:notification-service}:{$NOTIFICATION_SERVICE_PORT:8085}
+    }
+    
+    handle /export/* @dev_mode {
+        uri strip_prefix /export
+        reverse_proxy {$EXPORT_SERVICE_HOST:export-service}:{$EXPORT_SERVICE_PORT:8086}
+    }
+    
+    # Database admin (only in dev)
+    handle /db/* @dev_mode {
+        uri strip_prefix /db
+        reverse_proxy {$DB_ADMIN_HOST:pgadmin}:{$DB_ADMIN_PORT:80}
+    }
+    
+    # Elasticsearch admin (only in dev)
+    handle /es/* @dev_mode {
+        uri strip_prefix /es
+        reverse_proxy {$ELASTICSEARCH_HOST:elasticsearch}:{$ELASTICSEARCH_PORT:9200}
+    }
+    
+    respond @dev_mode "Development endpoints available" 200
+    respond "Development mode not enabled" 404
+}
+
+# Production-specific configuration
+@production expression env('ENVIRONMENT') == 'production'
+
+# Rate limiting for production
+@production {
+    rate_limit {
+        zone api {
+            key {remote_host}
+            window 1m
+            rate 100
+        }
+        zone auth {
+            key {remote_host}
+            window 1m  
+            rate 20
+        }
+    }
+}
+
+# Apply rate limiting to API endpoints in production
+handle /api/* @production {
+    rate_limit api
+    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+}
+
+handle /graphql @production {
+    rate_limit api
+    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+}
+
+# Auth-specific rate limiting
+handle /api/v1/auth/* @production {
+    rate_limit auth
+    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+}

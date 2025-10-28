@@ -145,6 +145,14 @@ frontend/public/styles.css
 # Docker volumes
 postgres-data/
 
+# Deployment
+COST_OPTIMIZATION.md
+OTW_ENGAGEMENT_STRATEGY.md
+PROGRESS_SNAPSHOT.md
+/project-tracking
+ao3-jira-export.csv
+
+
 # Local development
 **/server.log
 **/dev.log

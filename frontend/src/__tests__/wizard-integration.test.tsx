@@ -58,10 +58,10 @@ describe('Wizard Integration Tests', () => {
       render(<PrivacyWizard />);
 
       // Should start at first step
-      expect(screen.getByText(/privacy settings/i)).toBeInTheDocument();
+      expect(screen.getByText(/Privacy Setup/i)).toBeInTheDocument();
       
       // Should have navigation buttons
-      expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument();
     });
 
     test('validates required privacy selections', async () => {
@@ -70,11 +70,11 @@ describe('Wizard Integration Tests', () => {
       render(<PrivacyWizard />);
 
       // Try to proceed without making selections
-      const nextButton = screen.getByRole('button', { name: /next/i });
-      await user.click(nextButton);
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      await user.click(continueButton);
 
       // Should show validation message or stay on current step
-      expect(screen.getByText(/privacy settings/i)).toBeInTheDocument();
+      expect(screen.getByText(/Privacy Setup/i)).toBeInTheDocument();
     });
 
     test('allows navigation between wizard steps', async () => {
@@ -83,8 +83,8 @@ describe('Wizard Integration Tests', () => {
       render(<PrivacyWizard />);
 
       // Should be able to navigate
-      const nextButton = screen.getByRole('button', { name: /next/i });
-      expect(nextButton).toBeInTheDocument();
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      expect(continueButton).toBeInTheDocument();
     });
 
     test('saves privacy settings on completion', async () => {

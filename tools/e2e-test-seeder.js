@@ -8,11 +8,11 @@
 const { Client } = require('pg');
 
 const pgConfig = {
-  host: 'localhost',
-  port: 5432,
-  database: 'ao3_nuclear',
-  user: 'ao3_user',
-  password: 'ao3_password'
+  host: process.env.POSTGRES_HOST || 'localhost',
+  port: parseInt(process.env.POSTGRES_PORT) || 5432,
+  database: process.env.POSTGRES_DB || 'ao3_nuclear',
+  user: process.env.POSTGRES_USER || 'ao3_user',
+  password: process.env.POSTGRES_PASSWORD || 'ao3_password'
 };
 
 // Test user that matches our integration tests

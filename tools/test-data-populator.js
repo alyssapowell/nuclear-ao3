@@ -4,11 +4,11 @@ const { Client } = require('pg');
 
 const config = {
   database: {
-    user: 'ao3_user',
-    host: 'localhost',
-    database: 'ao3_nuclear',
-    password: 'ao3_password',
-    port: 5432,
+    user: process.env.POSTGRES_USER || 'ao3_user',
+    host: process.env.POSTGRES_HOST || 'localhost',
+    database: process.env.POSTGRES_DB || 'ao3_nuclear',
+    password: process.env.POSTGRES_PASSWORD || 'ao3_password',
+    port: parseInt(process.env.POSTGRES_PORT) || 5432,
   }
 };
 

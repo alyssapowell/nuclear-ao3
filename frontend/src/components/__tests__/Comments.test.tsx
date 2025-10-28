@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Comments from '../Comments';
 import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos } from '@/lib/api';
@@ -309,20 +309,28 @@ describe('Comments', () => {
   });
 
   it('removes kudos from a comment when clicked if already given', async () => {
+    // Mock successful API response for getting comments
+    mockGetWorkComments.mockResolvedValue({ comments: mockComments });
+    
+    // Mock successful remove kudos response
+    mockRemoveCommentKudos.mockResolvedValue({ success: true, message: 'Kudos removed' });
+
     render(<Comments workId="work-1" authToken="test-token" />);
 
     await waitFor(() => {
-      expect(screen.getByText('Thank you for reading!')).toBeInTheDocument();
+      expect(screen.getByText('This is a great story!')).toBeInTheDocument();
     });
 
-    // Find and click the kudos button for the second comment (already has kudos)
+    // Find and click the kudos button for the second comment (which has_kudos: true)
     const kudosButtons = screen.getAllByRole('button');
     const secondCommentKudosButton = kudosButtons.find(button => 
       button.textContent?.includes('2')
     );
     
     if (secondCommentKudosButton) {
-      fireEvent.click(secondCommentKudosButton);
+      await act(async () => {
+        fireEvent.click(secondCommentKudosButton);
+      });
     }
 
     await waitFor(() => {
@@ -611,7 +619,7 @@ describe('Comments', () => {
       render(<Comments workId="work-1" />);
       
       await waitFor(() => {
-        expect(screen.getByText(/edited/)).toBeInTheDocument();
+        expect(screen.getAllByText(/edited/)).toHaveLength(2);
       });
     });
   });
