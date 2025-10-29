@@ -1,9 +1,9 @@
 name: 🔄 Blue-Green Nuclear AO3 Deploy
 
 on:
-  # Auto deploy main to staging
+  # Auto deploy master to staging
   push:
-    branches: [main]
+    branches: [master]
     
   # Manual deployment to any environment
   workflow_dispatch:
@@ -19,7 +19,7 @@ on:
       git_ref:
         description: 'Git ref to deploy (branch, tag, or commit SHA)'
         required: true
-        default: main
+        default: master
       strategy:
         description: 'Deployment strategy'
         type: choice
