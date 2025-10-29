@@ -12,7 +12,7 @@ interface ServiceStatus {
 }
 
 // We'll get all service status from the API Gateway's health endpoint
-const GATEWAY_HEALTH_URL = 'http://localhost:8080/health';
+const GATEWAY_HEALTH_URL = '/health';
 
 export default function ServiceStatus() {
   const [serviceStatuses, setServiceStatuses] = useState<ServiceStatus[]>([]);
@@ -64,7 +64,7 @@ export default function ServiceStatus() {
             
             services.push({
               name: serviceName.replace('-service', '').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              url: `http://localhost:8080/health`, // All go through gateway
+              url: `/health`, // All go through gateway
               status: isHealthy ? 'online' : 'offline',
               responseTime: serviceResponseTime || responseTime,
               lastChecked,
