@@ -1,6 +1,6 @@
 # Nuclear AO3: The Modern Fanfiction Platform
 
-**A complete rebuild of Archive of Our Own with modern architecture that actually works.**
+**A modern fanfiction platform built with contemporary web technologies and microservices architecture.**
 
 ## ♿ **Accessibility-First Design**
 
