@@ -927,7 +927,7 @@ func (ts *TagService) SearchFandoms(c *gin.Context) {
 		"total":      total,
 		"limit":      limit,
 		"offset":     offset,
-		"debug_rows": rowCount,
+		"debug_rows": len(tags),
 	})
 }
 
