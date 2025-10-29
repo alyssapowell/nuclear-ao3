@@ -90,7 +90,7 @@ export function SubscriptionButton({ type, targetId, targetName, className }: Su
   const checkStatus = async () => {
     try {
       setIsCheckingStatus(true)
-      const result = await checkSubscriptionStatus(type, targetId, token)
+      const result = await checkSubscriptionStatus(type, targetId, token || undefined)
       setIsSubscribed(result.subscribed)
       setSubscriptionId(result.subscription_id)
     } catch (error) {
@@ -115,7 +115,7 @@ export function SubscriptionButton({ type, targetId, targetName, className }: Su
         frequency
       }
 
-      const result = await createSubscription(subscriptionData, token)
+      const result = await createSubscription(subscriptionData, token || undefined)
       setIsSubscribed(true)
       setSubscriptionId(result.subscription.id)
       setIsOpen(false)
@@ -133,7 +133,7 @@ export function SubscriptionButton({ type, targetId, targetName, className }: Su
     setError(null)
 
     try {
-      await deleteSubscription(subscriptionId, token)
+      await deleteSubscription(subscriptionId, token || undefined)
       setIsSubscribed(false)
       setSubscriptionId(null)
     } catch (error) {
@@ -198,7 +198,7 @@ export function SubscriptionButton({ type, targetId, targetName, className }: Su
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Notification Frequency</Label>
-            <Select value={frequency} onValueChange={(value: 'immediate' | 'daily' | 'weekly') => setFrequency(value)}>
+            <Select value={frequency} onValueChange={(value) => setFrequency(value as 'immediate' | 'daily' | 'weekly')}>
               <SelectTrigger>
                 <SelectValue placeholder="Select frequency" />
               </SelectTrigger>

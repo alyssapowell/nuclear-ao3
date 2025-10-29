@@ -49,7 +49,7 @@ export function GiftButton({ workId, isAuthor, onGiftCreated }: GiftButtonProps)
         recipient_name: recipientName.trim()
       }
 
-      const result = await giftWork(workId, giftData, token)
+      const result = await giftWork(workId, giftData, token || undefined)
       
       onGiftCreated?.(result.gift)
       setIsOpen(false)

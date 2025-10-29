@@ -12,7 +12,7 @@ import { SubscriptionButton } from '@/components/SubscriptionButton';
 import RespectfulExportButton from '@/components/RespectfulExportButton';
 import ChapterNavigation from '@/components/ChapterNavigation';
 import ReaderControls from '@/components/ReaderControls';
-import { getWork, getWorkChapters } from '@/lib/api';
+import { getWork, getWorkChapters, Gift } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useReaderPreferences } from '@/hooks/useReaderPreferences';
 import { useReadingProgress } from '@/hooks/useReadingProgress';
@@ -80,7 +80,7 @@ export default function WorkPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showReaderControls, setShowReaderControls] = useState(false);
-  const [gifts, setGifts] = useState([]);
+  const [gifts, setGifts] = useState<Gift[]>([]);
 
   const { preferences } = useReaderPreferences();
   const { progress, saveProgress } = useReadingProgress(workId, chapters.length);
@@ -219,7 +219,7 @@ export default function WorkPage() {
             
             <GiftList 
               workId={work.id}
-              authToken={token}
+              authToken={token || undefined}
             />
           </div>
           
@@ -303,12 +303,12 @@ export default function WorkPage() {
               <KudosButton 
                 workId={work.id}
                 initialKudos={work.kudos}
-                authToken={token}
+                authToken={token || undefined}
               />
               
               <BookmarkButton 
                 workId={work.id}
-                authToken={token}
+                authToken={token || undefined}
                 onBookmarkChange={(isBookmarked) => {
                   // Optionally update UI or show notification
                   console.log('Bookmark status changed:', isBookmarked);
@@ -332,13 +332,13 @@ export default function WorkPage() {
               <RespectfulExportButton
                 workId={work.id}
                 workTitle={work.title}
-                authToken={token}
+                authToken={token || undefined}
                 authorOfflinePreference={
                   work.offline_reading_override === 'use_default' || !work.offline_reading_override
                     ? work.author_default_offline_reading || 'pwa_only'
                     : work.offline_reading_override
                 }
-                isAuthor={isAuthor}
+                isAuthor={isAuthor || false}
               />
             </div>
           </div>

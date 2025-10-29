@@ -20,6 +20,8 @@
     "build": "npm run css:build-prod && npx next build",
     "start": "npx next start",
     "lint": "eslint",
+    "type-check": "npx tsc --noEmit",
+    "validate": "npm run type-check && npm run lint",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

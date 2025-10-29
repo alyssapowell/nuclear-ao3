@@ -137,10 +137,7 @@ export class OfflineReadingManager {
       return false;
     }
 
-    if (consentLevel === 'none') {
-      console.warn('[OfflineManager] Cannot cache work - author does not allow offline reading');
-      return false;
-    }
+
 
     try {
       navigator.serviceWorker.controller?.postMessage({
