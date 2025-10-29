@@ -85,7 +85,12 @@ dist
 
 # Gatsby files
 .cache/
-public
+# public (commented out to allow frontend/public/attributions.json)
+# Allow specific frontend public files
+frontend/public/*
+!frontend/public/attributions.json
+!frontend/public/manifest.json
+!frontend/public/sw*.js
 
 # Storybook build outputs
 .out

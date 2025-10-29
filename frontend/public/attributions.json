@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2025-10-29T22:13:00.341Z",
+  "dependencies": [
+    {
+      "name": "@apollo/client",
+      "version": "^3.11.8",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@apollo/client",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@axe-core/playwright",
+      "version": "^4.10.2",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@axe-core/playwright",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@headlessui/react",
+      "version": "^2.2.9",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@headlessui/react",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@heroicons/react",
+      "version": "^2.2.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@heroicons/react",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@tailwindcss/typography",
+      "version": "^0.5.19",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@tailwindcss/typography",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@tiptap/extension-link",
+      "version": "^3.7.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@tiptap/extension-link",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@tiptap/extension-placeholder",
+      "version": "^3.7.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@tiptap/extension-placeholder",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@tiptap/react",
+      "version": "^3.7.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@tiptap/react",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "@tiptap/starter-kit",
+      "version": "^3.7.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/@tiptap/starter-kit",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "axios",
+      "version": "^1.12.2",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/axios",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "class-variance-authority",
+      "version": "^0.7.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/class-variance-authority",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "clsx",
+      "version": "^2.1.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/clsx",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "date-fns",
+      "version": "^4.1.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/date-fns",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "graphql",
+      "version": "^16.11.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/graphql",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "lodash.debounce",
+      "version": "^4.0.8",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/lodash.debounce",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "lucide-react",
+      "version": "^0.544.0",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/lucide-react",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "next",
+      "version": "^15.5.4",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/next",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "postcss-load-config",
+      "version": "^6.0.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/postcss-load-config",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "react",
+      "version": "^18.3.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/react",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "react-dom",
+      "version": "^18.3.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/react-dom",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "swr",
+      "version": "^2.3.6",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/swr",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "tailwind-merge",
+      "version": "^3.3.1",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/tailwind-merge",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    }
+  ]
+}
