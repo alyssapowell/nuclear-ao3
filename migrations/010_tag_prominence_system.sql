@@ -1,17 +1,42 @@
--- Tag Prominence System Migration
+-- Tag Prominence System Migration (Fixed)
 -- Designed for safe batch migration of existing works
 
 -- Add prominence tracking to work_tags junction table
-ALTER TABLE work_tags ADD COLUMN prominence VARCHAR(20) DEFAULT 'unassigned';
-ALTER TABLE work_tags ADD COLUMN prominence_score DECIMAL(5,3) DEFAULT 0.0;
-ALTER TABLE work_tags ADD COLUMN auto_assigned BOOLEAN DEFAULT FALSE;
-ALTER TABLE work_tags ADD COLUMN migration_batch INTEGER DEFAULT NULL;
-ALTER TABLE work_tags ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE work_tags ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+-- Use conditional column additions to avoid conflicts
+DO $$ 
+BEGIN
+    -- Add columns only if they don't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='work_tags' AND column_name='prominence') THEN
+        ALTER TABLE work_tags ADD COLUMN prominence VARCHAR(20) DEFAULT 'unassigned';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='work_tags' AND column_name='prominence_score') THEN
+        ALTER TABLE work_tags ADD COLUMN prominence_score DECIMAL(5,3) DEFAULT 0.0;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='work_tags' AND column_name='auto_assigned') THEN
+        ALTER TABLE work_tags ADD COLUMN auto_assigned BOOLEAN DEFAULT FALSE;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='work_tags' AND column_name='migration_batch') THEN
+        ALTER TABLE work_tags ADD COLUMN migration_batch INTEGER DEFAULT NULL;
+    END IF;
+    
+    -- Skip created_at since it already exists in base table
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='work_tags' AND column_name='updated_at') THEN
+        ALTER TABLE work_tags ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    END IF;
+END $$;
 
--- Create prominence enum constraint
-ALTER TABLE work_tags ADD CONSTRAINT check_prominence 
-    CHECK (prominence IN ('primary', 'secondary', 'micro', 'unassigned'));
+-- Create prominence enum constraint (with conditional check)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='check_prominence' AND table_name='work_tags') THEN
+        ALTER TABLE work_tags ADD CONSTRAINT check_prominence 
+            CHECK (prominence IN ('primary', 'secondary', 'micro', 'unassigned'));
+    END IF;
+END $$;
 
 -- Index for efficient filtering
 CREATE INDEX idx_work_tags_prominence ON work_tags(prominence, prominence_score);
