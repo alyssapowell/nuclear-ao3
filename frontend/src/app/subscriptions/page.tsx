@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getUserSubscriptions, deleteSubscription, updateSubscription } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
 import { 
   Select,
   SelectContent,
@@ -249,11 +249,11 @@ export default function SubscriptionsPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <Badge variant={subscription.frequency === 'immediate' ? 'default' : 'secondary'}>
+                    <Badge variant={subscription.frequency === 'immediate' ? 'primary' : 'secondary'}>
                       {subscription.frequency}
                     </Badge>
                     {!subscription.is_active && (
-                      <Badge variant="outline">Paused</Badge>
+                      <Badge variant="neutral">Paused</Badge>
                     )}
                   </div>
                 </div>
@@ -264,7 +264,7 @@ export default function SubscriptionsPage() {
                     <Label className="text-sm font-medium">Events:</Label>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {subscription.events.map((event) => (
-                        <Badge key={event} variant="outline" className="text-xs">
+                        <Badge key={event} variant="neutral" className="text-xs">
                           {event.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                         </Badge>
                       ))}
@@ -311,7 +311,7 @@ export default function SubscriptionsPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Notification Frequency</Label>
-                <Select value={editFrequency} onValueChange={(value: 'immediate' | 'daily' | 'weekly') => setEditFrequency(value)}>
+                <Select value={editFrequency} onValueChange={(value) => setEditFrequency(value as 'immediate' | 'daily' | 'weekly')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
