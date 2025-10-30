@@ -165,34 +165,37 @@ export default function CollectionsPage() {
         </div>
         
         <div className="ml-4 flex gap-2">
-          {collection.is_open ? (
-            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-              Open
-            </span>
-          ) : (
-            <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
-              Closed
-            </span>
-          )}
-          
-          {collection.is_moderated && (
-            <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
-              Moderated
-            </span>
-          )}
-          
-          {collection.is_anonymous && (
-            <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">
-              Anonymous
-            </span>
-          )}
-          
-          {collection.is_unrevealed && (
-            <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full flex items-center">
-              <Lock className="w-3 h-3 mr-1" />
-              Unrevealed
-            </span>
-          )}
+          {[
+            // Status badge
+            collection.is_open ? (
+              <span key="status" className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                Open
+              </span>
+            ) : (
+              <span key="status" className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                Closed
+              </span>
+            ),
+            // Moderated badge
+            collection.is_moderated && (
+              <span key="moderated" className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                Moderated
+              </span>
+            ),
+            // Anonymous badge
+            collection.is_anonymous && (
+              <span key="anonymous" className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">
+                Anonymous
+              </span>
+            ),
+            // Unrevealed badge
+            collection.is_unrevealed && (
+              <span key="unrevealed" className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full flex items-center">
+                <Lock className="w-3 h-3 mr-1" />
+                Unrevealed
+              </span>
+            )
+          ].filter(Boolean)}
         </div>
       </div>
 

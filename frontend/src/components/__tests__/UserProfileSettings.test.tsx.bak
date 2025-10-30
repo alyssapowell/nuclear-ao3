@@ -97,10 +97,7 @@ describe('UserProfileSettings', () => {
     });
   });
 
-  it('shows loading state initially', async () => {
-    // Delay the mock to see loading state
-    mockGetMyProfile.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ user: mockUser }), 100)));
-    
+  it('shows loading state initially', () => {
     await renderUserProfileWithAct({ authToken: "test-token" });
     
     expect(screen.getByText('Loading profile settings...')).toBeInTheDocument();
@@ -324,7 +321,7 @@ describe('UserProfileSettings', () => {
     });
   });
 
-  it('renders without auth token gracefully', async () => {
+  it('renders without auth token gracefully', () => {
     render(<UserProfileSettings />);
     
     // Should not make API calls without auth token

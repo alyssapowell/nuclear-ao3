@@ -164,8 +164,8 @@ describe('Search Integration Tests', () => {
       render(<SearchPage />);
 
       // 1. Verify initial page load
-      expect(screen.getByText('🚀 Nuclear AO3 Enhanced Search')).toBeInTheDocument();
-      expect(screen.getByText('Start Your Enhanced Search')).toBeInTheDocument();
+      expect(screen.getAllByText('Enhanced Search')[0]).toBeInTheDocument();
+      expect(screen.getByText('Search the archive with powerful filtering and get intelligent recommendations.')).toBeInTheDocument();
 
       // 2. Enter search query
       const searchInput = screen.getByPlaceholderText(/search for works/i);

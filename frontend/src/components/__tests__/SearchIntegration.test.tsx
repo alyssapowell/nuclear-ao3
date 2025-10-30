@@ -164,11 +164,11 @@ describe('Search Integration Tests', () => {
       render(<SearchPage />);
 
       // 1. Verify initial page load
-      expect(screen.getByText('🚀 Nuclear AO3 Enhanced Search')).toBeInTheDocument();
-      expect(screen.getByText('Start Your Enhanced Search')).toBeInTheDocument();
+      expect(screen.getByText('Enhanced Search')).toBeInTheDocument();
+      expect(screen.getByText('Search the archive with powerful filtering and get intelligent recommendations.')).toBeInTheDocument();
 
       // 2. Enter search query
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
+      const searchInput = screen.getByPlaceholderText(/search by title/i);
       await user.type(searchInput, 'Agatha Harkness/Reader');
 
       // 3. Submit search
@@ -203,7 +203,7 @@ describe('Search Integration Tests', () => {
       render(<SearchPage />);
 
       // 1. Open advanced filters
-      const advancedToggle = screen.getByText(/advanced filters/i);
+      const advancedToggle = screen.getByText(/show advanced search/i);
       await user.click(advancedToggle);
 
       // 2. Set rating filter
@@ -289,7 +289,7 @@ describe('Search Integration Tests', () => {
       render(<SearchPage />);
 
       // 1. Open advanced filters to access tag inputs
-      const advancedToggle = screen.getByText(/advanced filters/i);
+      const advancedToggle = screen.getByText(/show advanced search/i);
       await user.click(advancedToggle);
 
       // 2. Type in character input to trigger autocomplete
@@ -543,7 +543,7 @@ describe('Search Integration Tests', () => {
       render(<SearchPage />);
 
       // Open advanced filters
-      const advancedToggle = screen.getByText(/advanced filters/i);
+      const advancedToggle = screen.getByText(/show advanced search/i);
       await user.click(advancedToggle);
 
       // Type rapidly in character input

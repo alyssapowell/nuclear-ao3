@@ -111,7 +111,7 @@ describe('FriendsAndSocial', () => {
     });
   });
 
-  it('shows loading state initially', async () => {
+  it('shows loading state initially', () => {
     await renderFriendsAndSocialWithAct({ authToken: "test-token" });
     
     expect(screen.getByText('Loading social data...')).toBeInTheDocument();
@@ -412,7 +412,7 @@ describe('FriendsAndSocial', () => {
     });
   });
 
-  it('renders without auth token gracefully', async () => {
+  it('renders without auth token gracefully', () => {
     await renderFriendsAndSocialWithAct({});
     
     // Should not make API calls without auth token

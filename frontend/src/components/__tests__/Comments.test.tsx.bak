@@ -92,9 +92,6 @@ describe('Comments', () => {
   });
 
   it('shows loading state initially', async () => {
-    // Delay the mock to see loading state
-    mockGetWorkComments.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve({ comments: mockComments }), 100)));
-    
     await renderCommentsWithAct({ workId: "work-1" });
     
     expect(screen.getByText('Loading comments...')).toBeInTheDocument();
@@ -397,7 +394,7 @@ describe('Comments', () => {
   });
 
   describe('Comment editing', () => {
-    it('should show edit button for user comments when authenticated', async () => {
+    it('should show edit button for user comments when authenticated', () => {
       const commentsWithAuthType = mockComments.map(comment => ({
         ...comment,
         author_type: 'user' as const
@@ -412,7 +409,7 @@ describe('Comments', () => {
       });
     });
 
-    it('should not show edit button for guest comments', async () => {
+    it('should not show edit button for guest comments', () => {
       const guestComments = mockComments.map(comment => ({
         ...comment,
         author_type: 'guest' as const
@@ -518,7 +515,7 @@ describe('Comments', () => {
   });
 
   describe('Comment deletion', () => {
-    it('should show delete button for user comments when authenticated', async () => {
+    it('should show delete button for user comments when authenticated', () => {
       const commentsWithAuthType = mockComments.map(comment => ({
         ...comment,
         author_type: 'user' as const
@@ -611,7 +608,7 @@ describe('Comments', () => {
   });
 
   describe('Comment permissions', () => {
-    it('should not show edit/delete buttons when not authenticated', async () => {
+    it('should not show edit/delete buttons when not authenticated', () => {
       await renderCommentsWithAct({ workId: "work-1" });
       
       waitFor(() => {
