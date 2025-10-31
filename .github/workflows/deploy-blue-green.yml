@@ -1,10 +1,6 @@
 name: 🔄 Blue-Green Nuclear AO3 Deploy
 
 on:
-  # Auto deploy main to staging
-  push:
-    branches: [main]
-    
   # Manual deployment to any environment
   workflow_dispatch:
     inputs:
