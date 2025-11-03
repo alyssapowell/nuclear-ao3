@@ -1,0 +1,60 @@
+name: 🚀 Manual Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options: 
+          - staging
+          - production
+        default: staging
+      git_ref:
+        description: 'Git ref to deploy (branch, tag, or commit SHA)'
+        required: true
+        default: main
+      strategy:
+        description: 'Deployment strategy'
+        type: choice
+        options:
+          - blue-green
+          - rolling
+          - immediate
+        default: blue-green
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nuclear-ao3
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: 
+      name: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref }}
+
+      - name: Deployment Summary
+        run: |
+          echo "🎯 DEPLOYMENT TRIGGERED"
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Git ref: ${{ github.event.inputs.git_ref }}"
+          echo "Strategy: ${{ github.event.inputs.strategy }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo ""
+          echo "⚠️ DEPLOYMENT REQUIRES SECRETS CONFIGURATION:"
+          echo "- HETZNER_SSH_KEY (SSH private key)"
+          echo "- HETZNER_HOST (server hostname/IP)"
+          echo "- HETZNER_USER (SSH username)"
+          echo "- DOMAIN (application domain)"
+          echo "- JWT_SECRET (JWT signing secret)"
+          echo ""
+          echo "Once secrets are configured, the full deployment will run."
+          echo "For now, this validates the workflow triggers correctly."
