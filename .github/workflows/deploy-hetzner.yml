@@ -124,9 +124,19 @@ jobs:
               sudo chmod +x /usr/local/bin/docker-compose
             fi
             
-            # Stop existing services
+            # Stop existing services (including any manual deployments)
             echo "🛑 Stopping existing services..."
+            
+            # Stop current docker-compose services
             docker-compose down || true
+            
+            # Stop any manually deployed containers that might conflict
+            echo "🧹 Cleaning up any manual deployment containers..."
+            docker stop nuclear-ao3-frontend-manual nuclear-ao3-search-manual nuclear-ao3-work-manual nuclear-ao3-api-gateway || true
+            docker rm nuclear-ao3-frontend-manual nuclear-ao3-search-manual nuclear-ao3-work-manual nuclear-ao3-api-gateway || true
+            
+            # Clean up any orphaned containers
+            docker container prune -f || true
             
             # Remove old images for clean deployment
             echo "🧹 Cleaning up old images..."
