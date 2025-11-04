@@ -1,0 +1,20 @@
+name: Deploy to Hetzner
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options: 
+          - staging
+          - production
+        default: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test workflow
+        run: echo "Workflow is working! Environment: ${{ github.event.inputs.environment }}"
