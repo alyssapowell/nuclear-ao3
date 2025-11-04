@@ -153,6 +153,8 @@ jobs:
             
             # Build and start services
             echo "🏗️ Building and starting Nuclear AO3..."
+            echo "🔥 Force rebuilding frontend to apply new environment variables..."
+            docker-compose build --no-cache frontend
             docker-compose build --parallel
             docker-compose up -d
             
