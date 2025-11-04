@@ -286,26 +286,26 @@ services:
       timeout: 10s
       retries: 3
 
-  # Frontend - Temporarily disabled for deployment
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   container_name: nuclear-ao3-frontend
-  #   environment:
-  #     - NEXT_PUBLIC_API_URL=http://localhost:8088
-  #     - NEXT_PUBLIC_WS_URL=ws://localhost:8088
-  #     - NODE_ENV=production
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - api-gateway
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nuclear-ao3-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8088
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8088
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Monitoring - Prometheus
   prometheus:
@@ -415,7 +415,7 @@ services:
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
     depends_on:
-      # - frontend  # Temporarily disabled
+      - frontend
       - api-gateway
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
