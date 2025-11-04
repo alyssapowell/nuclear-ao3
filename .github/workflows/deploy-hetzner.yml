@@ -141,27 +141,40 @@ jobs:
             echo "⏳ Waiting for services to be ready..."
             sleep 30
             
-            # Health check
+            # Show what's running
+            echo "📊 Current service status:"
+            docker-compose ps
+            
+            # Show docker logs for debugging
+            echo "🔍 Service logs (last 10 lines each):"
+            docker-compose logs --tail 10
+            
+            # Health check with more verbose output
             echo "🔍 Checking service health..."
-            max_attempts=12
+            echo "Testing API Gateway on port 8088..."
+            
+            max_attempts=6
             attempt=0
             
             while [ \$attempt -lt \$max_attempts ]; do
-              if curl -f http://localhost:8088/health >/dev/null 2>&1; then
+              echo "⏳ Health check attempt \$((attempt + 1))/\$max_attempts..."
+              if curl -v http://localhost:8088/health 2>&1; then
                 echo "✅ API Gateway is healthy!"
                 break
               else
-                echo "⏳ Health check attempt \$((attempt + 1))/\$max_attempts..."
-                sleep 10
+                echo "❌ Health check failed, checking what's listening..."
+                netstat -tlnp | grep :8088 || echo "Nothing listening on 8088"
+                docker-compose logs api-gateway --tail 5
+                sleep 15
                 attempt=\$((attempt + 1))
               fi
             done
             
             if [ \$attempt -eq \$max_attempts ]; then
-              echo "❌ Health checks failed"
-              echo "🔍 Checking service logs..."
-              docker-compose logs --tail 20
-              exit 1
+              echo "❌ Health checks failed after \$max_attempts attempts"
+              echo "🔍 Final service status and logs:"
+              docker-compose ps
+              docker-compose logs --tail 30
             fi
             
             # Show final status
