@@ -127,6 +127,15 @@ jobs:
             # Stop existing services (including any manual deployments)
             echo "🛑 Stopping existing services..."
             
+            # Stop system-level services that might conflict
+            echo "🔄 Stopping system Caddy service..."
+            sudo systemctl stop caddy || true
+            sudo systemctl disable caddy || true
+            
+            # Stop any processes using port 3000
+            echo "🧹 Killing processes on port 3000..."
+            sudo fuser -k 3000/tcp || true
+            
             # Stop current docker-compose services
             docker-compose down || true
             
