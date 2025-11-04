@@ -20,8 +20,15 @@
         -Server
     }
 
+
+
     # Health check endpoint
     handle /health {
+        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+    }
+
+    # Auth endpoints with rate limiting in production
+    handle /api/v1/auth/* {
         reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
     }
 
@@ -116,38 +123,3 @@
     respond "Development mode not enabled" 404
 }
 
-# Production-specific configuration
-@production expression env('ENVIRONMENT') == 'production'
-
-# Rate limiting for production
-@production {
-    rate_limit {
-        zone api {
-            key {remote_host}
-            window 1m
-            rate 100
-        }
-        zone auth {
-            key {remote_host}
-            window 1m  
-            rate 20
-        }
-    }
-}
-
-# Apply rate limiting to API endpoints in production
-handle /api/* @production {
-    rate_limit api
-    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
-}
-
-handle /graphql @production {
-    rate_limit api
-    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
-}
-
-# Auth-specific rate limiting
-handle /api/v1/auth/* @production {
-    rate_limit auth
-    reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
-}
