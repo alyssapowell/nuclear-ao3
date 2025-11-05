@@ -155,7 +155,8 @@ jobs:
             echo "🏗️ Building and starting Nuclear AO3..."
             echo "🔥 Force rebuilding frontend to apply new environment variables..."
             docker-compose build --no-cache frontend
-            docker-compose build --parallel
+            echo "🏗️ Building remaining services..."
+            docker-compose build --parallel auth-service work-service tag-service search-service notification-service export-service api-gateway
             docker-compose up -d
             
             # Wait for services to be healthy
