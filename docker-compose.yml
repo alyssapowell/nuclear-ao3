@@ -378,12 +378,12 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - config_data:/shared
+      - caddy_data:/data
+      - caddy_config:/config
     restart: unless-stopped
     command: >
       sh -c "
-        mkdir -p /shared/caddy/data /shared/caddy/config /shared/caddy/logs &&
-        ln -sf /shared/caddy/data /data &&
-        ln -sf /shared/caddy/config /config &&
+        mkdir -p /shared/caddy/logs &&
         ln -sf /shared/caddy/logs /var/log/caddy &&
         caddy run --config /etc/caddy/Caddyfile
       "
@@ -437,7 +437,13 @@ volumes:
     driver: local
     
   # Small shared volume (configs + logs) 
-  config_data:       # 10GB - Caddy configs, SSL certs, logs
+  config_data:       # 10GB - Shared configs and logs
+    driver: local
+    
+  # SSL certificate persistence
+  caddy_data:        # 1GB - SSL certificates and Caddy data
+    driver: local
+  caddy_config:      # 1GB - Caddy configuration cache
     driver: local
 
 networks:
