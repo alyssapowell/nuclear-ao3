@@ -57,7 +57,7 @@ export default function PWATestPage() {
     updateConsentDisplay();
     
     // Notify service worker of consent change
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({
         type: 'CONSENT_LEVEL_CHANGED',
         level: newLevel
@@ -73,7 +73,7 @@ export default function PWATestPage() {
 
   const checkServiceWorkerStatus = async () => {
     try {
-      if ('serviceWorker' in navigator) {
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
         setSWStatus(`Active: ${registration.active?.scriptURL || 'Unknown'}`);
         addTestResult('Service Worker is active and ready');
@@ -95,8 +95,10 @@ export default function PWATestPage() {
   };
 
   const checkOnlineStatus = () => {
-    setIsOnline(navigator.onLine);
-    addTestResult(`Initial network status: ${navigator.onLine ? 'Online' : 'Offline'}`);
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine);
+      addTestResult(`Initial network status: ${navigator.onLine ? 'Online' : 'Offline'}`);
+    }
   };
 
   const testCacheWork = async (consentLevel: 'files_and_pwa' | 'pwa_only') => {

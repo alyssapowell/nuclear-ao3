@@ -43,8 +43,8 @@ export class OfflineReadingManager {
   }
 
   private async initializeServiceWorker(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
-      console.warn('[OfflineManager] Service Worker not supported');
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      console.warn('[OfflineManager] Service Worker not supported or running in SSR');
       return;
     }
 
@@ -339,7 +339,7 @@ export class OfflineReadingManager {
 
   // Get connection status
   isOnline(): boolean {
-    return navigator.onLine;
+    return typeof window !== 'undefined' ? navigator.onLine : true;
   }
 
   // Listen for online/offline events
