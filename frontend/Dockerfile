@@ -4,16 +4,6 @@ FROM node:20-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Accept build arguments for Next.js environment variables
-ARG NEXT_PUBLIC_API_GATEWAY_URL
-ARG NEXT_PUBLIC_WS_URL
-ARG NODE_ENV
-
-# Set environment variables for the build
-ENV NEXT_PUBLIC_API_GATEWAY_URL=$NEXT_PUBLIC_API_GATEWAY_URL
-ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
-ENV NODE_ENV=$NODE_ENV
-
 # Copy package files
 COPY package*.json ./
 
@@ -23,7 +13,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application with environment variables
+# Build the application
 RUN npm run build
 
 # Production stage
