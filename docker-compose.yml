@@ -291,15 +291,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - NEXT_PUBLIC_API_GATEWAY_URL=${NEXT_PUBLIC_API_GATEWAY_URL:-https://${DOMAIN:-localhost}}
-        - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://${DOMAIN:-localhost}/graphql/ws}
-        - NODE_ENV=${NODE_ENV:-production}
     container_name: nuclear-ao3-frontend
     environment:
-      - NEXT_PUBLIC_API_GATEWAY_URL=${NEXT_PUBLIC_API_GATEWAY_URL:-https://${DOMAIN:-localhost}}
-      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://${DOMAIN:-localhost}/graphql/ws}
-      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_GATEWAY_URL=https://${DOMAIN:-localhost}
+      - NEXT_PUBLIC_WS_URL=wss://${DOMAIN:-localhost}/graphql/ws
+      - NODE_ENV=production
     ports:
       - "3000:3000"
     depends_on:
