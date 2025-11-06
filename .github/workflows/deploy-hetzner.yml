@@ -154,15 +154,7 @@ jobs:
             # Build and start services
             echo "🏗️ Building and starting Nuclear AO3..."
             echo "🔥 Force rebuilding frontend to apply new environment variables..."
-            
-            # Build frontend with explicit build args to ensure environment variables are baked in
-            docker build --no-cache \
-              --build-arg NEXT_PUBLIC_API_GATEWAY_URL=https://${DOMAIN} \
-              --build-arg NEXT_PUBLIC_WS_URL=wss://${DOMAIN}/graphql/ws \
-              --build-arg NODE_ENV=production \
-              -t nuclear-ao3-frontend \
-              ./frontend
-            
+            docker-compose build --no-cache frontend
             echo "🏗️ Building remaining services..."
             docker-compose build --parallel auth-service work-service tag-service search-service notification-service export-service api-gateway
             docker-compose up -d
