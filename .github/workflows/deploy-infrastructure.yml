@@ -1,0 +1,112 @@
+name: Deploy Infrastructure (Databases & Monitoring)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Deploy Infrastructure to Hetzner
+        run: |
+          echo "🏗️ Deploying Nuclear AO3 Infrastructure to ${{ inputs.environment }}..."
+          
+          # SSH connection test
+          ssh -o StrictHostKeyChecking=no ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "
+            set -e
+            
+            echo '🔧 Setting up environment...'
+            export DOMAIN=${{ secrets.DOMAIN }}
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export DEPLOY_ENV=${{ inputs.environment }}
+            
+            cd /opt/nuclear-ao3
+            
+            # Pull latest code
+            git fetch origin
+            git reset --hard \${{ github.sha }}
+            
+            # Create environment file
+            cat > .env << EOF
+            DOMAIN=\${DOMAIN}
+            JWT_SECRET=\${JWT_SECRET}
+            ENVIRONMENT=\${DEPLOY_ENV}
+            NEXT_PUBLIC_API_GATEWAY_URL=
+            EOF
+            
+            # Stop only infrastructure services
+            echo '🛑 Stopping infrastructure services...'
+            docker-compose stop postgres redis elasticsearch prometheus grafana loki || true
+            
+            # Build and start infrastructure services
+            echo '🏗️ Building and starting infrastructure services...'
+            docker-compose build --parallel postgres redis elasticsearch prometheus grafana loki
+            docker-compose up -d postgres redis elasticsearch prometheus grafana loki
+            
+            # Wait for databases to be ready
+            echo '⏳ Waiting for databases to be ready...'
+            sleep 30
+            
+            # Health check for databases
+            max_attempts=10
+            attempt=0
+            
+            while [ \$attempt -lt \$max_attempts ]; do
+              echo '⏳ Database health check attempt \$((attempt + 1))/\$max_attempts...'
+              if docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && \
+                 docker-compose exec -T redis redis-cli ping >/dev/null 2>&1 && \
+                 curl -f http://localhost:9200/_cluster/health >/dev/null 2>&1; then
+                echo '✅ All databases are healthy!'
+                break
+              else
+                echo '❌ Database health check failed, retrying...'
+                sleep 15
+                attempt=\$((attempt + 1))
+              fi
+            done
+            
+            if [ \$attempt -eq \$max_attempts ]; then
+              echo '❌ Database health checks failed after \$max_attempts attempts'
+              docker-compose ps
+              docker-compose logs --tail 30
+              exit 1
+            fi
+            
+            echo '📊 Final infrastructure status:'
+            docker-compose ps postgres redis elasticsearch prometheus grafana loki
+            
+            echo '✅ Nuclear AO3 infrastructure deployment complete!'
+          "
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 SUCCESS: Nuclear AO3 infrastructure deployed!"
+            echo "🌐 Environment: ${{ inputs.environment }}"
+            echo "📦 Git ref: ${{ github.ref }}"
+            echo "🏃‍♂️ Triggered by: ${{ github.actor }}"
+          else
+            echo "💥 FAILED: Nuclear AO3 infrastructure deployment failed"
+            echo "🔄 Please check the logs and try again"
+            exit 1
+          fi

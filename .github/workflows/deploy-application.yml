@@ -1,0 +1,114 @@
+name: Deploy Application Services
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+jobs:
+  deploy-application:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Deploy Application to Hetzner
+        run: |
+          echo "🚀 Deploying Nuclear AO3 Application to ${{ inputs.environment }}..."
+          
+          # SSH connection test
+          ssh -o StrictHostKeyChecking=no ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "
+            set -e
+            
+            echo '🔧 Setting up environment...'
+            export DOMAIN=${{ secrets.DOMAIN }}
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export DEPLOY_ENV=${{ inputs.environment }}
+            
+            cd /opt/nuclear-ao3
+            
+            # Pull latest code
+            git fetch origin
+            git reset --hard \${{ github.sha }}
+            
+            # Create environment file
+            cat > .env << EOF
+            DOMAIN=\${DOMAIN}
+            JWT_SECRET=\${JWT_SECRET}
+            ENVIRONMENT=\${DEPLOY_ENV}
+            NEXT_PUBLIC_API_GATEWAY_URL=
+            EOF
+            
+            # Stop only application services (preserve databases)
+            echo '🛑 Stopping application services...'
+            docker-compose stop frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy || true
+            
+            # Build and start application services
+            echo '🏗️ Building and starting application services...'
+            docker-compose build --parallel frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
+            docker-compose up -d frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
+            
+            # Wait for services to be ready
+            echo '⏳ Waiting for application services to be ready...'
+            sleep 30
+            
+            # Health check for application services
+            max_attempts=6
+            attempt=0
+            
+            while [ \$attempt -lt \$max_attempts ]; do
+              echo '⏳ Health check attempt \$((attempt + 1))/\$max_attempts...'
+              if curl -v http://localhost:8088/health 2>&1; then
+                echo '✅ API Gateway is healthy!'
+                break
+              else
+                echo '❌ Health check failed, checking what'\''s listening...'
+                netstat -tlnp | grep :8088 || echo 'Nothing listening on 8088'
+                docker-compose logs api-gateway --tail 5
+                sleep 15
+                attempt=\$((attempt + 1))
+              fi
+            done
+            
+            if [ \$attempt -eq \$max_attempts ]; then
+              echo '❌ Health checks failed after \$max_attempts attempts'
+              echo '🔍 Final service status and logs:'
+              docker-compose ps
+              docker-compose logs --tail 30
+              exit 1
+            fi
+            
+            # Show final status
+            echo '📊 Final application deployment status:'
+            docker-compose ps frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
+            
+            echo '✅ Nuclear AO3 application deployment complete!'
+          "
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 SUCCESS: Nuclear AO3 application deployed!"
+            echo "🌐 Environment: ${{ inputs.environment }}"
+            echo "📦 Git ref: ${{ github.ref }}"
+            echo "🏃‍♂️ Triggered by: ${{ github.actor }}"
+          else
+            echo "💥 FAILED: Nuclear AO3 application deployment failed"
+            echo "🔄 Please check the logs and try again"
+            exit 1
+          fi

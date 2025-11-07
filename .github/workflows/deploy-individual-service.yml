@@ -1,0 +1,237 @@
+name: Deploy Individual Service
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy'
+        required: true
+        type: choice
+        options:
+        - frontend
+        - api-gateway
+        - auth-service
+        - work-service
+        - tag-service
+        - search-service
+        - notification-service
+        - export-service
+        - caddy
+        - postgres
+        - redis
+        - elasticsearch
+        - prometheus
+        - grafana
+        - loki
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_rebuild:
+        description: 'Force rebuild container (ignore cache)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy-service:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Deploy Individual Service to Hetzner
+        run: |
+          echo "🎯 Deploying ${{ inputs.service }} to ${{ inputs.environment }}..."
+          
+          # SSH connection test
+          ssh -o StrictHostKeyChecking=no ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "
+            set -e
+            
+            echo '🔧 Setting up environment...'
+            export DOMAIN=${{ secrets.DOMAIN }}
+            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
+            export DEPLOY_ENV=${{ inputs.environment }}
+            export SERVICE='${{ inputs.service }}'
+            export FORCE_REBUILD='${{ inputs.force_rebuild }}'
+            
+            cd /opt/nuclear-ao3
+            
+            # Pull latest code
+            git fetch origin
+            git reset --hard \${{ github.sha }}
+            
+            # Create environment file
+            cat > .env << EOF
+            DOMAIN=\${DOMAIN}
+            JWT_SECRET=\${JWT_SECRET}
+            ENVIRONMENT=\${DEPLOY_ENV}
+            NEXT_PUBLIC_API_GATEWAY_URL=
+            EOF
+            
+            # Set rebuild flags
+            if [ \"\${FORCE_REBUILD}\" = \"true\" ]; then
+              BUILD_FLAGS='--no-cache --force-rm'
+            else
+              BUILD_FLAGS=''
+            fi
+            
+            echo \"🛑 Stopping \${SERVICE}...\"
+            docker-compose stop \${SERVICE} || true
+            
+            # Remove old container and image if force rebuild
+            if [ \"\${FORCE_REBUILD}\" = \"true\" ]; then
+              echo \"🧹 Force rebuild: removing old container and image...\"
+              docker-compose rm -f \${SERVICE} || true
+              # Remove the specific image for this service
+              docker rmi \$(docker-compose config --services | grep \${SERVICE} | head -1 | xargs -I {} docker-compose images -q {}) || true
+            fi
+            
+            echo \"🏗️ Building \${SERVICE}...\"
+            docker-compose build \${BUILD_FLAGS} \${SERVICE}
+            
+            echo \"🚀 Starting \${SERVICE}...\"
+            docker-compose up -d \${SERVICE}
+            
+            # Wait for service to start
+            echo '⏳ Waiting for service to start...'
+            sleep 15
+            
+            # Service-specific health checks
+            case \${SERVICE} in
+              'postgres')
+                echo '🔍 Testing PostgreSQL connection...'
+                max_attempts=5
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+                    echo '✅ PostgreSQL is healthy!'
+                    break
+                  else
+                    echo \"❌ PostgreSQL health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 10
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              'redis')
+                echo '🔍 Testing Redis connection...'
+                max_attempts=5
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+                    echo '✅ Redis is healthy!'
+                    break
+                  else
+                    echo \"❌ Redis health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 10
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              'elasticsearch')
+                echo '🔍 Testing Elasticsearch connection...'
+                max_attempts=5
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if curl -f http://localhost:9200/_cluster/health >/dev/null 2>&1; then
+                    echo '✅ Elasticsearch is healthy!'
+                    break
+                  else
+                    echo \"❌ Elasticsearch health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 10
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              'api-gateway')
+                echo '🔍 Testing API Gateway health...'
+                max_attempts=6
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if curl -f http://localhost:8088/health >/dev/null 2>&1; then
+                    echo '✅ API Gateway is healthy!'
+                    break
+                  else
+                    echo \"❌ API Gateway health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 15
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              'frontend')
+                echo '🔍 Testing Frontend availability...'
+                max_attempts=6
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if curl -f http://localhost:3000 >/dev/null 2>&1; then
+                    echo '✅ Frontend is responding!'
+                    break
+                  else
+                    echo \"❌ Frontend health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 15
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              'caddy')
+                echo '🔍 Testing Caddy proxy...'
+                max_attempts=6
+                attempt=0
+                while [ \$attempt -lt \$max_attempts ]; do
+                  if curl -f https://\${DOMAIN}/health >/dev/null 2>&1; then
+                    echo '✅ Caddy is healthy!'
+                    break
+                  else
+                    echo \"❌ Caddy health check failed, attempt \$((attempt + 1))/\$max_attempts\"
+                    sleep 15
+                    attempt=\$((attempt + 1))
+                  fi
+                done
+                ;;
+              *)
+                echo \"🔍 Basic container health check for \${SERVICE}...\"
+                if [ \"\$(docker-compose ps -q \${SERVICE} | xargs docker inspect --format='{{.State.Health.Status}}' 2>/dev/null || echo 'running')\" = \"healthy\" ] || [ \"\$(docker-compose ps -q \${SERVICE} | xargs docker inspect --format='{{.State.Status}}' 2>/dev/null)\" = \"running\" ]; then
+                  echo \"✅ \${SERVICE} is running!\"
+                else
+                  echo \"❌ \${SERVICE} is not healthy\"
+                fi
+                ;;
+            esac
+            
+            echo \"📊 \${SERVICE} deployment status:\"
+            docker-compose ps \${SERVICE}
+            
+            # Show recent logs for the service
+            echo \"📋 Recent logs for \${SERVICE}:\"
+            docker-compose logs --tail 20 \${SERVICE}
+            
+            echo \"✅ \${SERVICE} deployment complete!\"
+          "
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 SUCCESS: ${{ inputs.service }} deployed!"
+            echo "🎯 Service: ${{ inputs.service }}"
+            echo "🌐 Environment: ${{ inputs.environment }}"
+            echo "🔄 Force rebuild: ${{ inputs.force_rebuild }}"
+            echo "📦 Git ref: ${{ github.ref }}"
+            echo "🏃‍♂️ Triggered by: ${{ github.actor }}"
+          else
+            echo "💥 FAILED: ${{ inputs.service }} deployment failed"
+            echo "🔄 Please check the logs and try again"
+            exit 1
+          fi

@@ -3,8 +3,29 @@ import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/clien
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
-// API Gateway endpoint
-const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'http://localhost:8080';
+// API Gateway endpoint configuration
+const getApiGatewayUrl = () => {
+  // Use explicit environment variable if set
+  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL) {
+    return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
+  }
+  
+  // For production, use relative URLs (served through Caddy proxy)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // If we're on the production domain, use relative URLs through Caddy
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return ''; // Relative URLs - Caddy will proxy /graphql to api-gateway:8080
+    }
+  }
+  
+  // For development/localhost, use direct API Gateway port
+  return 'http://localhost:8088';
+};
+
+const API_GATEWAY_URL = getApiGatewayUrl();
 
 // HTTP link to GraphQL endpoint
 const httpLink = createHttpLink({
