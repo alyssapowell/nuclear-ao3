@@ -8,14 +8,13 @@ const getApiGatewayUrl = () => {
     return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
   }
   
-  // For production, use current domain with protocol (served through Caddy proxy)
+  // For production, use relative paths (served through Caddy proxy)
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
     
-    // If we're on the production domain, use full URL through Caddy
+    // If we're on the production domain, use relative paths through Caddy
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return `${protocol}//${hostname}`; // Full URL - Caddy will proxy /api/* to api-gateway:8080
+      return ''; // Relative paths - Caddy will proxy /api/* to api-gateway:8080
     }
   }
   
