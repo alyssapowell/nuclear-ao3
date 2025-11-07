@@ -151,10 +151,27 @@ jobs:
             echo "🧹 Cleaning up old images..."
             docker system prune -f || true
             
+            # Create production environment file for Next.js
+            echo "🔧 Creating production environment configuration..."
+            cat > frontend/.env.production << EOF
+            NEXT_PUBLIC_API_GATEWAY_URL=https://${DOMAIN}
+            NEXT_PUBLIC_WS_URL=wss://${DOMAIN}/graphql/ws
+            NODE_ENV=production
+            EOF
+            
+            echo "📄 Generated frontend/.env.production:"
+            cat frontend/.env.production
+            
             # Build and start services
             echo "🏗️ Building and starting Nuclear AO3..."
-            docker-compose build --parallel
+            echo "🔄 Force rebuilding frontend to pick up new environment file..."
+            docker-compose build --no-cache frontend
+            docker-compose build --parallel auth-service work-service tag-service search-service notification-service export-service api-gateway
             docker-compose up -d
+            
+            # Clean up temporary environment file
+            echo "🧹 Cleaning up temporary environment file..."
+            rm -f frontend/.env.production
             
             # Wait for services to be healthy
             echo "⏳ Waiting for services to be ready..."
