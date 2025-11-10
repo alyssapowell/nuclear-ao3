@@ -2,9 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-// Temporarily removed Apollo Client to debug GraphQL issues
-// import { useMutation } from '@apollo/client';
-// import { REGISTER } from '@/lib/graphql';
+import { useMutation } from '@apollo/client';
+import { REGISTER } from '@/lib/graphql';
 
 interface RegisterForm {
   username: string;
@@ -25,42 +24,7 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Direct GraphQL registration without Apollo Client for debugging
-  const registerMutation = async (variables: any) => {
-    const response = await fetch('/graphql', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `
-          mutation Register($input: RegisterInput!) {
-            auth {
-              register(input: $input) {
-                token
-                user {
-                  id
-                  username
-                  email
-                }
-                errors {
-                  field
-                  message
-                }
-              }
-            }
-          }
-        `,
-        variables
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
-  };
+  const [registerMutation] = useMutation(REGISTER);
 
   // Check if user is already authenticated
   useEffect(() => {

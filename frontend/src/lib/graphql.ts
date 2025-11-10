@@ -3,48 +3,30 @@ import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/clien
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
-// API Gateway endpoint configuration
-const getApiGatewayUrl = () => {
-  // Use explicit environment variable if set
-  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL !== undefined) {
-    return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
-  }
-  
-  // For production builds, always use relative paths
-  // The NEXT_PUBLIC_API_GATEWAY_URL is set to empty string in production deployment
-  if (process.env.NODE_ENV === 'production') {
-    return ''; // Relative paths - Caddy will proxy /graphql to api-gateway:8080
-  }
-  
-  // For development, use direct API Gateway port
-  return 'http://localhost:8088';
-};
-
-const API_GATEWAY_URL = getApiGatewayUrl();
-
-// HTTP link to GraphQL endpoint
-const getGraphQLUri = () => {
-  const baseUrl = API_GATEWAY_URL;
-  if (baseUrl === '') {
-    // For relative URLs, ensure we start with /
+// GraphQL endpoint configuration - fixed for production
+const getGraphQLEndpoint = () => {
+  // Always use relative URL in production to avoid SSR hydration mismatches
+  if (typeof window !== 'undefined') {
+    // Client side - use relative URL
+    return '/graphql';
+  } else {
+    // Server side - use relative URL as well for consistency
     return '/graphql';
   }
-  // For absolute URLs, concatenate normally
-  return `${baseUrl}/graphql`;
 };
 
 // Make GraphQL configuration available globally for debugging
 if (typeof window !== 'undefined') {
   (window as any).__NUCLEAR_AO3_DEBUG__ = {
-    API_GATEWAY_URL,
-    graphqlUri: getGraphQLUri(),
+    graphqlEndpoint: getGraphQLEndpoint(),
     nodeEnv: process.env.NODE_ENV,
-    publicApiUrl: process.env.NEXT_PUBLIC_API_GATEWAY_URL
+    publicApiUrl: process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'not set'
   };
 }
 
+// HTTP link to GraphQL endpoint  
 const httpLink = createHttpLink({
-  uri: '/graphql', // Direct hardcoded relative URL for production
+  uri: getGraphQLEndpoint(),
 });
 
 // Auth link to include JWT token

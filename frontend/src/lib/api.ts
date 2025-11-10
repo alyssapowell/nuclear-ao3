@@ -1,21 +1,10 @@
 // Legacy REST API client for Nuclear AO3 (updated to use API Gateway)
 // Note: Consider migrating to GraphQL client in graphql.ts for enhanced features
 
-// API Gateway endpoint configuration
+// API Gateway endpoint configuration - fixed for production  
 const getApiGatewayUrl = () => {
-  // Use explicit environment variable if set
-  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL !== undefined) {
-    return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
-  }
-  
-  // For production builds, always use relative paths
-  // The NEXT_PUBLIC_API_GATEWAY_URL is set to empty string in production deployment
-  if (process.env.NODE_ENV === 'production') {
-    return ''; // Relative paths - Caddy will proxy /api/* to api-gateway:8080
-  }
-  
-  // For development, use direct API Gateway port
-  return 'http://localhost:8088';
+  // Always use empty string (relative URLs) to avoid SSR hydration mismatches
+  return '';
 };
 
 const API_GATEWAY_URL = getApiGatewayUrl();
