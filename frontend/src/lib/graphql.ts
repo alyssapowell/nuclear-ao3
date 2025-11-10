@@ -22,12 +22,6 @@ const getApiGatewayUrl = () => {
 
 const API_GATEWAY_URL = getApiGatewayUrl();
 
-// Debug logging
-if (typeof window !== 'undefined') {
-  console.log('GraphQL API_GATEWAY_URL:', JSON.stringify(API_GATEWAY_URL));
-  console.log('GraphQL URI will be:', JSON.stringify(`${API_GATEWAY_URL}/graphql`));
-}
-
 // HTTP link to GraphQL endpoint
 const getGraphQLUri = () => {
   const baseUrl = API_GATEWAY_URL;
@@ -39,8 +33,18 @@ const getGraphQLUri = () => {
   return `${baseUrl}/graphql`;
 };
 
+// Make GraphQL configuration available globally for debugging
+if (typeof window !== 'undefined') {
+  (window as any).__NUCLEAR_AO3_DEBUG__ = {
+    API_GATEWAY_URL,
+    graphqlUri: getGraphQLUri(),
+    nodeEnv: process.env.NODE_ENV,
+    publicApiUrl: process.env.NEXT_PUBLIC_API_GATEWAY_URL
+  };
+}
+
 const httpLink = createHttpLink({
-  uri: getGraphQLUri(),
+  uri: '/graphql', // Direct hardcoded relative URL for production
 });
 
 // Auth link to include JWT token
