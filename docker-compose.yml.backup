@@ -1,0 +1,448 @@
+version: '3.8'
+
+services:
+  # Database
+  postgres:
+    image: postgres:15
+    container_name: nuclear-ao3-postgres
+    environment:
+      POSTGRES_DB: ao3_nuclear
+      POSTGRES_USER: ao3_user
+      POSTGRES_PASSWORD: ao3_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    command: >
+      postgres 
+        -c max_connections=200
+        -c shared_buffers=256MB
+        -c effective_cache_size=1GB
+        -c maintenance_work_mem=64MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+        -c work_mem=4MB
+        -c min_wal_size=1GB
+        -c max_wal_size=4GB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ao3_user -d ao3_nuclear"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: nuclear-ao3-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - monitoring_data:/shared
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    command: >
+      sh -c "
+        mkdir -p /shared/redis &&
+        ln -sf /shared/redis /data &&
+        redis-server /usr/local/etc/redis/redis.conf
+      "
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch for search
+  elasticsearch:
+    image: elasticsearch:8.9.0
+    container_name: nuclear-ao3-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - bootstrap.memory_lock=true
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Auth Service
+  auth-service:
+    build: 
+      context: ./backend
+      dockerfile: auth-service/Dockerfile
+    container_name: nuclear-ao3-auth
+    environment:
+      - PORT=8081
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - REDIS_URL=redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
+      - JWT_ISSUER=nuclear-ao3
+      - GIN_MODE=release
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Work Service  
+  work-service:
+    build:
+      context: ./backend
+      dockerfile: work-service/Dockerfile
+    container_name: nuclear-ao3-works
+    environment:
+      - PORT=8082
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - REDIS_URL=redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - GIN_MODE=release
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Tag Service
+  tag-service:
+    build:
+      context: ./backend
+      dockerfile: tag-service/Dockerfile
+    container_name: nuclear-ao3-tags
+    environment:
+      - PORT=8083
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - REDIS_URL=redis:6379
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - GIN_MODE=release
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Search Service
+  search-service:
+    build:
+      context: ./backend
+      dockerfile: search-service/Dockerfile
+    container_name: nuclear-ao3-search
+    environment:
+      - PORT=8084
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis:6379
+      - GIN_MODE=release
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./backend
+      dockerfile: notification-service/Dockerfile
+    container_name: nuclear-ao3-notifications
+    environment:
+      - PORT=8085
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - REDIS_URL=redis:6379
+      - GIN_MODE=release
+    ports:
+      - "8087:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Export Service
+  export-service:
+    build:
+      context: ./backend
+      dockerfile: export-service/Dockerfile
+    container_name: nuclear-ao3-export
+    environment:
+      - PORT=8086
+      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - DB_HOST=postgres
+      - DB_USER=ao3_user
+      - DB_PASSWORD=ao3_password
+      - DB_NAME=ao3_nuclear
+      - DB_PORT=5432
+      - DB_SSLMODE=disable
+      - REDIS_URL=redis:6379
+      - GIN_MODE=release
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GraphQL API Gateway
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: api-gateway/Dockerfile
+    container_name: nuclear-ao3-gateway
+    environment:
+      - PORT=8080
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - WORK_SERVICE_URL=http://work-service:8082
+      - TAG_SERVICE_URL=http://tag-service:8083
+      - SEARCH_SERVICE_URL=http://search-service:8084
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8085
+      - EXPORT_SERVICE_URL=http://export-service:8086
+      - REDIS_URL=redis:6379
+      - NODE_ENV=production
+    ports:
+      - "8088:8080"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      work-service:
+        condition: service_healthy
+      tag-service:
+        condition: service_healthy
+      search-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      export-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nuclear-ao3-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8088
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8088
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nuclear-ao3-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - monitoring_data:/shared
+    restart: unless-stopped
+    command: >
+      sh -c "
+        mkdir -p /shared/prometheus &&
+        ln -sf /shared/prometheus /prometheus &&
+        /bin/prometheus 
+          --config.file=/etc/prometheus/prometheus.yml
+          --storage.tsdb.path=/prometheus
+          --web.console.libraries=/usr/share/prometheus/console_libraries
+          --web.console.templates=/usr/share/prometheus/consoles
+          --storage.tsdb.retention.time=30d
+          --web.enable-lifecycle
+      "
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nuclear-ao3-grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - monitoring_data:/shared
+      - ./monitoring:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    command: >
+      sh -c "
+        mkdir -p /shared/grafana &&
+        ln -sf /shared/grafana /var/lib/grafana &&
+        /run.sh
+      "
+
+  # Log aggregation - Loki
+  loki:
+    image: grafana/loki:latest
+    container_name: nuclear-ao3-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - monitoring_data:/shared
+    restart: unless-stopped
+    command: >
+      sh -c "
+        mkdir -p /shared/loki &&
+        ln -sf /shared/loki /loki &&
+        /usr/bin/loki -config.file=/etc/loki/local-config.yaml
+      "
+
+  # Load balancer - Caddy
+  caddy:
+    image: caddy:2-alpine
+    container_name: nuclear-ao3-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - config_data:/shared
+    restart: unless-stopped
+    command: >
+      sh -c "
+        mkdir -p /shared/caddy/data /shared/caddy/config /shared/caddy/logs &&
+        ln -sf /shared/caddy/data /data &&
+        ln -sf /shared/caddy/config /config &&
+        ln -sf /shared/caddy/logs /var/log/caddy &&
+        caddy run --config /etc/caddy/Caddyfile
+      "
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - MONITORING_DOMAIN=${MONITORING_DOMAIN:-monitoring.localhost}
+      - DEV_DOMAIN=${DEV_DOMAIN:-dev.localhost}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      # Service hosts (for container networking)
+      - API_GATEWAY_HOST=api-gateway
+      - API_GATEWAY_PORT=8080
+      - FRONTEND_HOST=frontend
+      - FRONTEND_PORT=3000
+      - GRAFANA_HOST=grafana
+      - GRAFANA_PORT=3000
+      # Development service hosts
+      - AUTH_SERVICE_HOST=auth-service
+      - AUTH_SERVICE_PORT=8081
+      - WORK_SERVICE_HOST=work-service
+      - WORK_SERVICE_PORT=8082
+      - TAG_SERVICE_HOST=tag-service
+      - TAG_SERVICE_PORT=8083
+      - SEARCH_SERVICE_HOST=search-service
+      - SEARCH_SERVICE_PORT=8084
+      - NOTIFICATION_SERVICE_HOST=notification-service
+      - NOTIFICATION_SERVICE_PORT=8085
+      - EXPORT_SERVICE_HOST=export-service
+      - EXPORT_SERVICE_PORT=8086
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+    depends_on:
+      - frontend
+      - api-gateway
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  # Large data volumes (separate for performance & backup isolation)
+  postgres_data:      # 20-50GB - Database 
+    driver: local
+  es_data:           # 10-20GB - Search indexes
+    driver: local
+  backup_data:       # 50-100GB - Backups
+    driver: local
+  
+  # Medium shared volume (monitoring + cache)
+  monitoring_data:   # 20GB - Prometheus, Grafana, Loki, Redis
+    driver: local
+    
+  # Small shared volume (configs + logs) 
+  config_data:       # 10GB - Caddy configs, SSL certs, logs
+    driver: local
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
