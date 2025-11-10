@@ -4,21 +4,17 @@
 // API Gateway endpoint configuration
 const getApiGatewayUrl = () => {
   // Use explicit environment variable if set
-  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL) {
+  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL !== undefined) {
     return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
   }
   
-  // For production, use relative paths (served through Caddy proxy)
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    
-    // If we're on the production domain, use relative paths through Caddy
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return ''; // Relative paths - Caddy will proxy /api/* to api-gateway:8080
-    }
+  // For production builds, always use relative paths
+  // The NEXT_PUBLIC_API_GATEWAY_URL is set to empty string in production deployment
+  if (process.env.NODE_ENV === 'production') {
+    return ''; // Relative paths - Caddy will proxy /api/* to api-gateway:8080
   }
   
-  // For development/localhost, use direct API Gateway port
+  // For development, use direct API Gateway port
   return 'http://localhost:8088';
 };
 

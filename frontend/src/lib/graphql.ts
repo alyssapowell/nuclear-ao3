@@ -6,29 +6,41 @@ import { onError } from '@apollo/client/link/error';
 // API Gateway endpoint configuration
 const getApiGatewayUrl = () => {
   // Use explicit environment variable if set
-  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL) {
+  if (process.env.NEXT_PUBLIC_API_GATEWAY_URL !== undefined) {
     return process.env.NEXT_PUBLIC_API_GATEWAY_URL;
   }
   
-  // For production, use relative paths (served through Caddy proxy)
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    
-    // If we're on the production domain, use relative paths through Caddy
-    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-      return ''; // Relative paths - Caddy will proxy /graphql to api-gateway:8080
-    }
+  // For production builds, always use relative paths
+  // The NEXT_PUBLIC_API_GATEWAY_URL is set to empty string in production deployment
+  if (process.env.NODE_ENV === 'production') {
+    return ''; // Relative paths - Caddy will proxy /graphql to api-gateway:8080
   }
   
-  // For development/localhost, use direct API Gateway port
+  // For development, use direct API Gateway port
   return 'http://localhost:8088';
 };
 
 const API_GATEWAY_URL = getApiGatewayUrl();
 
+// Debug logging
+if (typeof window !== 'undefined') {
+  console.log('GraphQL API_GATEWAY_URL:', JSON.stringify(API_GATEWAY_URL));
+  console.log('GraphQL URI will be:', JSON.stringify(`${API_GATEWAY_URL}/graphql`));
+}
+
 // HTTP link to GraphQL endpoint
+const getGraphQLUri = () => {
+  const baseUrl = API_GATEWAY_URL;
+  if (baseUrl === '') {
+    // For relative URLs, ensure we start with /
+    return '/graphql';
+  }
+  // For absolute URLs, concatenate normally
+  return `${baseUrl}/graphql`;
+};
+
 const httpLink = createHttpLink({
-  uri: `${API_GATEWAY_URL}/graphql`,
+  uri: getGraphQLUri(),
 });
 
 // Auth link to include JWT token
