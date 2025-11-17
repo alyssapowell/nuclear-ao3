@@ -57,9 +57,10 @@ describe('TagAutocomplete', () => {
     it('renders with correct accessibility attributes', () => {
       renderTagAutocomplete();
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByPlaceholderText('Add characters...');
       expect(input).toHaveAttribute('aria-autocomplete', 'list');
       expect(input).toHaveAttribute('aria-expanded', 'false');
+      expect(input).toHaveAttribute('role', 'combobox');
     });
   });
 
@@ -190,7 +191,7 @@ describe('TagAutocomplete', () => {
     it('has proper ARIA attributes', () => {
       renderTagAutocomplete();
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByPlaceholderText('Add characters...');
       expect(input).toHaveAttribute('aria-autocomplete', 'list');
       expect(input).toHaveAttribute('aria-expanded', 'false');
       expect(input).toHaveAttribute('role', 'combobox');
@@ -200,7 +201,7 @@ describe('TagAutocomplete', () => {
       const user = userEvent.setup();
       renderTagAutocomplete();
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByPlaceholderText('Add characters...');
       await user.type(input, 'Harry');
 
       await waitFor(() => {
@@ -213,14 +214,14 @@ describe('TagAutocomplete', () => {
     it('handles disabled state correctly', () => {
       renderTagAutocomplete({ disabled: true });
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByPlaceholderText('Add characters...');
       expect(input).toBeDisabled();
     });
 
     it('handles required attribute correctly', () => {
       renderTagAutocomplete({ required: true });
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByPlaceholderText('Add characters...');
       expect(input).toBeRequired();
     });
   });
