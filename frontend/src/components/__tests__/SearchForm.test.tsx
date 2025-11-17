@@ -18,62 +18,76 @@ const mockSearchWorksMocks = [
       variables: {
         query: 'Harry Potter',
         filters: {
-          title: 'Harry Potter',
           author: undefined,
           relationships: [],
           characters: [],
-          freeform_tags: [],
+          freeformTags: [],
           fandoms: [],
           rating: undefined,
-          word_count_min: undefined,
-          word_count_max: undefined,
+          wordCountMin: undefined,
+          wordCountMax: undefined,
           language: undefined,
-          status: undefined,
+          completionStatus: undefined,
+          blockedTags: [],
+          hideIncomplete: false,
+          hideCrossovers: false,
+          minKudos: undefined,
+          minComments: undefined,
+          minBookmarks: undefined,
         },
-        options: {
-          exclude_poorly_tagged: false,
-          enable_smart_suggestions: true,
-          limit: 20,
-          offset: 0,
+        analysis: {
+          enableSmartSuggestions: true,
+          excludePoorlyTagged: false,
         },
       },
     },
     result: {
       data: {
-        enhancedSearchWorks: [
-          {
-            id: '1',
-            title: 'Harry Potter and the Test Story',
-            author: 'Test Author',
-            summary: 'A test story',
-            word_count: 1000,
-            chapter_count: 1,
-            max_chapters: 1,
-            rating: 'Teen And Up Audiences',
-            status: 'complete',
-            language: 'English',
-            published_date: '2023-01-01',
-            updated_date: '2023-01-01',
-            relationships: [],
-            characters: [],
-            freeform_tags: [],
-            fandoms: [],
-            kudos_count: 10,
-            bookmark_count: 5,
-            hit_count: 100,
-            comment_count: 3,
+        search: {
+          enhancedWorks: {
+            total: 1,
+            works: [
+              {
+                id: '1',
+                title: 'Harry Potter and the Test Story',
+                authors: [{ id: '1', username: 'Test Author' }],
+                summary: 'A test story',
+                wordCount: 1000,
+                chapterCount: 1,
+                maxChapters: 1,
+                isComplete: true,
+                rating: 'Teen And Up Audiences',
+                language: 'English',
+                publishedAt: '2023-01-01',
+                updatedAt: '2023-01-01',
+                relationships: [],
+                characters: [],
+                freeformTags: [],
+                fandoms: [],
+                kudosCount: 10,
+                bookmarkCount: 5,
+                hitCount: 100,
+                commentCount: 3,
+                tagQuality: {
+                  score: 0.9,
+                  missingSuggestions: [],
+                },
+              },
+            ],
+            analytics: null,
+            smartSuggestions: {
+              characterSuggestions: [
+                {
+                  tag: 'Harry Potter',
+                  confidence: 0.85,
+                  reasons: ['Detected from title'],
+                },
+              ],
+              relationshipExpansions: [],
+              crossTaggingOpportunities: [],
+            },
           },
-        ],
-        smart_recommendations: [
-          {
-            type: 'missing_character',
-            title: 'Missing Character Tags',
-            description: 'Consider adding character tags',
-            suggestions: ['Harry Potter', 'Hermione Granger'],
-            confidence_score: 0.85,
-            category: 'character',
-          },
-        ],
+        },
       },
     },
   },
@@ -84,15 +98,11 @@ const defaultProps = {
   onRecommendations: mockOnRecommendations,
 };
 
+// Default empty mock for rendering without search
 const defaultMocks = [
   {
     request: {
       query: ENHANCED_SEARCH_WORKS,
-      variables: {
-        query: '',
-        filters: {},
-        analysis: {}
-      },
     },
     result: {
       data: {
