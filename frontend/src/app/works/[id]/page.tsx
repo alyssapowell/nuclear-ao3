@@ -347,7 +347,7 @@ export default function WorkPage() {
         {/* Summary */}
         {work.summary && (
           <div className="border-t border-slate-200 pt-4">
-            <h3 className="text-sm font-medium text-slate-700 mb-2">Summary</h3>
+            <h2 className="text-sm font-medium text-slate-700 mb-2">Summary</h2>
             <div className="prose prose-sm text-slate-600">
               {work.summary.split('\n').map((line, index) => (
                 <p key={index}>{line}</p>
@@ -416,10 +416,11 @@ export default function WorkPage() {
       {/* Reader Controls */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Reading Experience</h3>
+          <h2 className="text-lg font-semibold text-slate-900">Reading Experience</h2>
           <button
             onClick={() => setShowReaderControls(!showReaderControls)}
             className="px-3 py-1 text-sm bg-orange-100 text-orange-800 rounded hover:bg-orange-200 transition-colors"
+            aria-label={showReaderControls ? 'Hide reading controls' : 'Show reading controls'}
           >
             {showReaderControls ? 'Hide Controls' : 'Customize Reading'}
           </button>
@@ -451,9 +452,9 @@ export default function WorkPage() {
       {currentChapterData && (
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
           {currentChapterData.title && (
-            <h2 className="text-xl font-semibold text-slate-900 mb-4">
-              Chapter {currentChapterData.number}: {currentChapterData.title}
-            </h2>
+          <h3 className="text-xl font-semibold text-slate-900 mb-4">
+            {currentChapterData?.title || `Chapter ${currentChapter}`}
+          </h3>
           )}
           
           {currentChapterData.summary && (
