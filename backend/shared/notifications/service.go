@@ -63,6 +63,12 @@ func NewNotificationService(
 func (ns *NotificationService) ProcessEvent(ctx context.Context, event *EventData) error {
 	log.Printf("Processing event: %s for %s", event.Type, event.SourceID)
 
+	// Handle special system events that don't need subscriptions
+	if err := ns.handleSystemEvents(ctx, event); err != nil {
+		log.Printf("Error handling system event: %v", err)
+		// Don't return error, continue processing subscriptions
+	}
+
 	// Find all subscriptions that match this event
 	subscriptions, err := ns.findMatchingSubscriptions(ctx, event)
 	if err != nil {
@@ -79,6 +85,33 @@ func (ns *NotificationService) ProcessEvent(ctx context.Context, event *EventDat
 		}
 	}
 
+	return nil
+}
+
+// handleSystemEvents handles events that don't require subscriptions (like welcome emails)
+func (ns *NotificationService) handleSystemEvents(ctx context.Context, event *EventData) error {
+	switch event.Type {
+	case "user_registered":
+		return ns.sendWelcomeEmail(ctx, event)
+	}
+	return nil
+}
+
+// sendWelcomeEmail sends a welcome email to a newly registered user
+func (ns *NotificationService) sendWelcomeEmail(ctx context.Context, event *EventData) error {
+	username, _ := event.ExtraData["username"].(string)
+	email, _ := event.ExtraData["email"].(string)
+
+	if email == "" || username == "" {
+		return fmt.Errorf("missing email or username in event data")
+	}
+
+	// Import email package dynamically
+	// This will be handled by the notification-service main.go
+	log.Printf("Welcome email requested for %s <%s>", username, email)
+
+	// The actual email sending will be done by the notification service
+	// We'll add this functionality in the notification service main.go
 	return nil
 }
 

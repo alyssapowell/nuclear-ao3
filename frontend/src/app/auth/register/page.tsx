@@ -89,9 +89,12 @@ function RegisterContent() {
         // Trigger auth state change event for navigation
         window.dispatchEvent(new Event('authChange'));
 
-        // Redirect to the intended page or home
+        // Small delay to ensure localStorage is set before navigation
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Redirect to the intended page or home with full reload to update all components
         const redirect = searchParams.get('redirect') || '/';
-        router.replace(redirect);
+        window.location.href = redirect;
       } else {
         setError('Registration failed. Please try again.');
       }

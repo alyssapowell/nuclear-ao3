@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"nuclear-ao3/shared/models"
@@ -61,6 +65,41 @@ func (as *AuthService) Register(c *gin.Context) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+
+	// Send welcome email notification event (async, don't block registration)
+	go func() {
+		notificationURL := os.Getenv("NOTIFICATION_SERVICE_URL")
+		if notificationURL == "" {
+			notificationURL = "http://notification-service:8085"
+		}
+
+		eventData := map[string]interface{}{
+			"type":      "user_registered",
+			"user_id":   userID.String(),
+			"username":  req.Username,
+			"email":     req.Email,
+			"timestamp": now.Format(time.RFC3339),
+		}
+
+		payload, _ := json.Marshal(eventData)
+		resp, err := http.Post(
+			notificationURL+"/api/events",
+			"application/json",
+			bytes.NewBuffer(payload),
+		)
+
+		if err != nil {
+			log.Printf("Failed to send registration event to notification service: %v", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("Notification service returned error status: %d", resp.StatusCode)
+		} else {
+			log.Printf("Registration event sent for user: %s", req.Username)
+		}
+	}()
 
 	c.JSON(http.StatusCreated, models.AuthResponse{
 		User:         user,

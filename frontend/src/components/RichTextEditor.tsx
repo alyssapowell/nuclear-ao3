@@ -82,7 +82,10 @@ export default function RichTextEditor({
       <div className="flex items-center gap-1 p-2 border-b border-slate-200 bg-slate-50">
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleBold().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('bold') 
@@ -96,7 +99,10 @@ export default function RichTextEditor({
         
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleItalic().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('italic') 
@@ -110,7 +116,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleStrike().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleStrike().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('strike') 
@@ -126,7 +135,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleHeading({ level: 2 }).run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('heading', { level: 2 }) 
@@ -140,7 +152,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleHeading({ level: 3 }).run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('heading', { level: 3 }) 
@@ -156,7 +171,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleBulletList().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('bulletList') 
@@ -170,7 +188,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleOrderedList().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('orderedList') 
@@ -186,7 +207,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => setIsLinkModalOpen(true)}
+          onClick={(e) => {
+            e.preventDefault();
+            setIsLinkModalOpen(true);
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('link') 
@@ -201,7 +225,10 @@ export default function RichTextEditor({
         {editor.isActive('link') && (
           <button
             type="button"
-            onClick={removeLink}
+            onClick={(e) => {
+              e.preventDefault();
+              removeLink();
+            }}
             disabled={disabled}
             className="px-2 py-1 text-sm rounded hover:bg-red-200 disabled:opacity-50"
             title="Remove Link"
@@ -214,7 +241,10 @@ export default function RichTextEditor({
 
         <button
           type="button"
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          onClick={(e) => {
+            e.preventDefault();
+            editor.chain().focus().toggleBlockquote().run();
+          }}
           disabled={disabled}
           className={`px-2 py-1 text-sm rounded ${
             editor.isActive('blockquote') 

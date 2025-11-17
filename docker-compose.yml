@@ -93,6 +93,13 @@ services:
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
       - JWT_ISSUER=nuclear-ao3
       - GIN_MODE=release
+      # Service URLs
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8085
+      # SMTP Configuration (not needed in auth-service, notification-service handles emails)
+      - SMTP_HOST=smtp
+      - SMTP_PORT=1025
+      - SMTP_FROM=${SMTP_FROM:-noreply@nuclear-ao3.local}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
     ports:
       - "8081:8081"
     depends_on:
@@ -100,6 +107,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      notification-service:
+        condition: service_started
+      smtp:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
@@ -203,6 +214,11 @@ services:
       - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
       - REDIS_URL=redis:6379
       - GIN_MODE=release
+      # SMTP Configuration
+      - SMTP_HOST=smtp
+      - SMTP_PORT=1025
+      - SMTP_FROM=${SMTP_FROM:-noreply@nuclear-ao3.local}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
     ports:
       - "8087:8085"
     depends_on:
@@ -210,6 +226,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      smtp:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8085/health"]
@@ -247,6 +265,26 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # SMTP Server - Lightweight mail relay for sending emails
+  # Development: MailHog (catches emails, web UI at http://localhost:8025)
+  # Production-like: Use the same image but it will relay emails
+  smtp:
+    image: mailhog/mailhog:latest
+    container_name: nuclear-ao3-smtp
+    ports:
+      - "1025:1025"  # SMTP server (services connect here)
+      - "8025:8025"  # Web UI (development only - see all sent emails)
+    restart: unless-stopped
+    environment:
+      - MH_SMTP_BIND_ADDR=0.0.0.0:1025
+      - MH_UI_BIND_ADDR=0.0.0.0:8025
+      - MH_API_BIND_ADDR=0.0.0.0:8025
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # GraphQL API Gateway
   api-gateway:
