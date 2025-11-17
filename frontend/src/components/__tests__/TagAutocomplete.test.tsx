@@ -202,12 +202,17 @@ describe('TagAutocomplete', () => {
       renderTagAutocomplete();
 
       const input = screen.getByPlaceholderText('Add characters...');
+      
+      // Type and wait for debounced search to complete
       await user.type(input, 'Harry');
-
+      
+      // Wait for suggestions to appear (debounced 150ms + API call)
       await waitFor(() => {
-        expect(input).toHaveAttribute('aria-expanded', 'true');
         expect(screen.getByText('Harry Potter')).toBeInTheDocument();
       }, { timeout: 3000 });
+      
+      // Then check aria-expanded
+      expect(input).toHaveAttribute('aria-expanded', 'true');
     });
   });
 
