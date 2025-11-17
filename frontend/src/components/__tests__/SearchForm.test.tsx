@@ -84,7 +84,32 @@ const defaultProps = {
   onRecommendations: mockOnRecommendations,
 };
 
-const renderSearchForm = (props = {}, mocks = []) => {
+const defaultMocks = [
+  {
+    request: {
+      query: ENHANCED_SEARCH_WORKS,
+      variables: {
+        query: '',
+        filters: {},
+        analysis: {}
+      },
+    },
+    result: {
+      data: {
+        search: {
+          enhancedWorks: {
+            total: 0,
+            works: [],
+            analytics: null,
+            smartSuggestions: null
+          }
+        }
+      },
+    },
+  },
+];
+
+const renderSearchForm = (props = {}, mocks = defaultMocks) => {
   return render(
     <MockedProvider mocks={mocks} addTypename={false}>
       <SearchForm {...defaultProps} {...props} />
