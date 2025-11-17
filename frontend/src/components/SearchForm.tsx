@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useId, useCallback, useMemo } from 'react';
 import { Search, Filter, X, AlertCircle, Loader2 } from 'lucide-react';
-import { searchWorks } from '@/lib/api';
+import { useLazyQuery } from '@apollo/client';
+import { ENHANCED_SEARCH_WORKS } from '@/lib/graphql';
 import TagAutocomplete from './TagAutocomplete';
 import { SmartRecommendation } from './SmartRecommendations';
 // Temporarily disable render profiler to fix loading issues
@@ -222,89 +223,86 @@ const SearchForm = React.memo(function SearchForm({
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const firstAdvancedFieldRef = useRef<HTMLInputElement>(null);
 
-  const [loading, setLoading] = useState(false);
-
-  const performSearch = async (searchParams: any) => {
-    setLoading(true);
-    setSearchError('');
-    setAnnounceResults('Searching...');
-    
-    try {
-      const query = searchParams.query || '';
-      const apiParams = {
-        page: 1,
-        limit: 20,
-        fandoms: searchParams.filters.fandoms,
-        characters: searchParams.filters.characters,
-        relationships: searchParams.filters.relationships,
-        tags: searchParams.filters.freeform_tags,
-        rating: searchParams.filters.rating ? [searchParams.filters.rating] : [],
-        wordCountMin: searchParams.filters.word_count_min,
-        wordCountMax: searchParams.filters.word_count_max,
-        language: searchParams.filters.language ? [searchParams.filters.language] : [],
-        status: searchParams.filters.status,
-        relationshipCount: searchParams.filters.relationship_count,
-        tagProminence: searchParams.filters.tag_prominence,
-        sort: searchParams.filters.sort || 'quality_score',
-      };
-
-      const data = await searchWorks(query, apiParams);
-      
-      // Normalize the data to match expected structure
-      const normalizedWorks = (data.works || []).map((work: any) => {
-        // Helper function to parse stringified JSON arrays
-        const parseTagArray = (tagArray: any): Array<{ name: string; category: string }> => {
-          if (!tagArray) return [];
-          if (Array.isArray(tagArray)) {
-            return tagArray.map(tag => {
-              if (typeof tag === 'string') {
-                try {
-                  // Parse stringified JSON like "{\"Harry Potter - J. K. Rowling\"}"
-                  const parsed = JSON.parse(tag);
-                  if (Array.isArray(parsed)) {
-                    return parsed.map(t => ({ name: t, category: '' }));
-                  } else if (typeof parsed === 'object') {
-                    // Handle object format
-                    return Object.values(parsed).map(t => ({ name: t as string, category: '' }));
-                  } else {
-                    return [{ name: parsed, category: '' }];
-                  }
-                } catch {
-                  return [{ name: tag, category: '' }];
-                }
-              }
-              return { name: tag?.name || tag, category: tag?.category || '' };
-            }).flat();
+  // GraphQL query hook
+  const [executeSearch, { loading, data: searchData, error: searchGraphQLError }] = useLazyQuery(ENHANCED_SEARCH_WORKS, {
+    fetchPolicy: 'network-only',
+    onCompleted: (data) => {
+      if (data?.search?.enhancedWorks) {
+        const works = data.search.enhancedWorks.works || [];
+        const smartSuggestions = data.search.enhancedWorks.smartSuggestions;
+        
+        // Map GraphQL response to component format
+        const normalizedWorks = works.map((work: any) => ({
+          id: work.id,
+          title: work.title,
+          author: work.authors?.[0]?.username || 'Anonymous',
+          summary: work.summary,
+          word_count: work.wordCount,
+          chapter_count: work.chapterCount,
+          max_chapters: work.maxChapters,
+          rating: work.rating,
+          status: work.isComplete ? 'complete' : 'in_progress',
+          language: work.language,
+          published_date: work.publishedAt,
+          updated_date: work.updatedAt,
+          relationships: work.relationships || [],
+          characters: work.characters || [],
+          freeform_tags: work.freeformTags || [],
+          fandoms: work.fandoms || [],
+          kudos_count: work.kudosCount,
+          bookmark_count: work.bookmarkCount,
+          hit_count: work.hitCount,
+          comment_count: work.commentCount,
+          tag_quality_score: work.tagQuality?.score,
+          missing_tag_suggestions: work.tagQuality?.missingSuggestions,
+        }));
+        
+        onResults(normalizedWorks);
+        setAnnounceResults(`Search completed. Found ${normalizedWorks.length} results.`);
+        setSearchError('');
+        
+        // Handle smart suggestions if callback provided
+        if (smartSuggestions && onRecommendations) {
+          const recommendations: SmartRecommendation[] = [];
+          
+          // Character suggestions
+          if (smartSuggestions.characterSuggestions?.length > 0) {
+            recommendations.push({
+              type: 'missing_character',
+              title: 'Missing Character Tags',
+              description: 'We detected potential missing character tags based on your search',
+              suggestions: smartSuggestions.characterSuggestions.map((s: any) => s.tag),
+              confidence_score: smartSuggestions.characterSuggestions[0]?.confidence || 0.8,
+              category: 'character',
+            });
           }
-          return [];
-        };
-
-        return {
-          ...work,
-          fandoms: parseTagArray(work.fandoms),
-          characters: parseTagArray(work.characters),
-          relationships: parseTagArray(work.relationships),
-          freeform_tags: parseTagArray(work.freeform_tags),
-          // Map snake_case to camelCase for consistency
-          wordCount: work.word_count,
-          chapterCount: work.chapter_count,
-          maxChapters: work.max_chapters,
-          publishedAt: work.published_at,
-          updatedAt: work.updated_at,
-        };
-      });
-      
-      onResults(normalizedWorks);
-      setAnnounceResults(`Search completed. Found ${normalizedWorks.length} results.`);
-      setSearchError('');
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchError(error instanceof Error ? error.message : 'Search failed. Please try again.');
+          
+          // Relationship expansions
+          if (smartSuggestions.relationshipExpansions?.length > 0) {
+            const suggestions = smartSuggestions.relationshipExpansions
+              .flatMap((exp: any) => exp.suggested.map((s: any) => s.name));
+            if (suggestions.length > 0) {
+              recommendations.push({
+                type: 'missing_relationship',
+                title: 'Relationship Expansion',
+                description: 'Detected relationships that could be expanded',
+                suggestions,
+                confidence_score: 0.75,
+                category: 'relationship',
+              });
+            }
+          }
+          
+          onRecommendations(recommendations);
+        }
+      }
+    },
+    onError: (error) => {
+      console.error('GraphQL Search error:', error);
+      setSearchError(error.message || 'Search failed. Please try again.');
       setAnnounceResults('Search failed. Please try again.');
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
   const handleSearch = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -322,44 +320,35 @@ const SearchForm = React.memo(function SearchForm({
     setSearchError('');
     setAnnounceResults('Searching...');
     
-    const searchParams = {
-      query: filters.title || '',
-      filters: {
-        title: filters.title,
-        author: filters.author,
-        relationships: filters.relationships,
-        characters: filters.characters,
-        freeform_tags: filters.freeformTags,
-        fandoms: filters.fandoms,
-        rating: filters.rating,
-        word_count_min: filters.wordCountMin,
-        word_count_max: filters.wordCountMax,
-        language: filters.language,
-        status: filters.status,
-        relationship_count: filters.relationshipCount,
-        tag_prominence: filters.tagProminence,
-        blocked_tags: filters.blockedTags,
-        hide_incomplete: filters.hideIncomplete,
-        hide_crossovers: filters.hideCrossovers,
-        hide_no_relationships: filters.hideNoRelationships,
-        updated_within: filters.updatedWithin,
-        published_after: filters.publishedAfter,
-        published_before: filters.publishedBefore,
-        min_kudos: filters.minKudos,
-        min_comments: filters.minComments,
-        min_bookmarks: filters.minBookmarks,
-        hide_orphaned: filters.hideOrphaned
-      },
-      options: {
-        exclude_poorly_tagged: filters.excludePoorlyTagged,
-        enable_smart_suggestions: filters.enableSmartSuggestions,
-        limit: 20,
-        offset: 0
+    // Execute GraphQL query
+    executeSearch({
+      variables: {
+        query: filters.title || '',
+        filters: {
+          author: filters.author,
+          relationships: filters.relationships,
+          characters: filters.characters,
+          freeformTags: filters.freeformTags,
+          fandoms: filters.fandoms,
+          rating: filters.rating,
+          wordCountMin: filters.wordCountMin,
+          wordCountMax: filters.wordCountMax,
+          language: filters.language,
+          completionStatus: filters.status,
+          blockedTags: filters.blockedTags,
+          hideIncomplete: filters.hideIncomplete,
+          hideCrossovers: filters.hideCrossovers,
+          minKudos: filters.minKudos,
+          minComments: filters.minComments,
+          minBookmarks: filters.minBookmarks,
+        },
+        analysis: {
+          enableSmartSuggestions: filters.enableSmartSuggestions,
+          excludePoorlyTagged: filters.excludePoorlyTagged,
+        }
       }
-    };
-
-    performSearch(searchParams);
-  }, [filters, searchWorks]);
+    });
+  }, [filters, executeSearch]);
 
   const addTag = useCallback((tagField: string, tag: string) => {
     setFilters(prev => ({
