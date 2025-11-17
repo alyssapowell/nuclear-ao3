@@ -68,7 +68,11 @@ describe('Route Health Checks', () => {
     test('Home page (/) renders without errors', async () => {
       const HomePage = await testPageComponent(() => import('../app/page'));
       
-      render(<HomePage />);
+      render(
+        <MockedProvider mocks={[]} addTypename={false}>
+          <HomePage />
+        </MockedProvider>
+      );
       
       // Should not throw any errors during render
       expect(screen.getByText(/Nuclear AO3/i)).toBeInTheDocument();
