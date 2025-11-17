@@ -246,9 +246,12 @@ describe('SmartRecommendations', () => {
       const mainHeading = screen.getByRole('heading', { name: /smart tag suggestions/i });
       expect(mainHeading).toBeInTheDocument();
 
-      // Card titles are h4, not h3
-      const cardTitles = screen.getAllByText(/Missing Character Tags|Canonical Tag Suggestions|Related Tags|Tag Quality Improvement|Relationship Expansion/);
-      expect(cardTitles.length).toBe(5); // One for each recommendation
+      // Verify recommendation titles are present
+      expect(screen.getByText('Missing Character Tags')).toBeInTheDocument();
+      expect(screen.getByText('Canonical Tag Suggestions')).toBeInTheDocument();
+      expect(screen.getByText('Related Tags')).toBeInTheDocument();
+      expect(screen.getByText('Tag Quality Improvement')).toBeInTheDocument();
+      expect(screen.getByText('Relationship Expansion')).toBeInTheDocument();
     });
 
     it('provides accessible button elements for suggestions', () => {

@@ -206,7 +206,8 @@ describe('TagAutocomplete', () => {
 
       await waitFor(() => {
         expect(input).toHaveAttribute('aria-expanded', 'true');
-      });
+        expect(screen.getByText('Harry Potter')).toBeInTheDocument();
+      }, { timeout: 3000 });
     });
   });
 
