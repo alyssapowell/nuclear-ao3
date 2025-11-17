@@ -504,9 +504,9 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-xl font-semibold text-slate-900">
+        <h2 className="text-xl font-semibold text-slate-900">
           Comments ({comments.length})
-        </h3>
+        </h2>
       </div>
 
       {error && (
@@ -525,7 +525,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
       {allowComments && (
         <div className="card">
           <div className="card-header">
-            <h4 className="text-lg font-medium text-slate-900">Leave a Comment</h4>
+            <h3 className="text-lg font-medium text-slate-900">Leave a Comment</h3>
           </div>
           <div className="card-body">
             <textarea
