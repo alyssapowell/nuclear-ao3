@@ -550,7 +550,7 @@ const SearchForm = React.memo(function SearchForm({
         <fieldset className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <legend className="sr-only">Basic search criteria</legend>
           <section className="space-y-4" aria-labelledby="basic-fields-1">
-            <h3 id="basic-fields-1" className="sr-only">Primary search fields</h3>
+            <h2 id="basic-fields-1" className="sr-only">Primary search fields</h2>
             <div>
               <label htmlFor={`${formId}-title`} className="block text-sm font-medium text-gray-700 mb-2">
                 Title
@@ -617,7 +617,7 @@ const SearchForm = React.memo(function SearchForm({
           </section>
 
           <section className="space-y-4" aria-labelledby="basic-fields-2">
-            <h3 id="basic-fields-2" className="sr-only">Tag search fields</h3>
+            <h2 id="basic-fields-2" className="sr-only">Tag search fields</h2>
             <MemoizedTagField
               label="Additional Tags"
               field="freeformTags"
@@ -644,7 +644,7 @@ const SearchForm = React.memo(function SearchForm({
 
             {/* Quick Filters */}
             <section className="grid grid-cols-2 gap-4" aria-labelledby="quick-filters">
-              <h4 id="quick-filters" className="sr-only">Quick filter options</h4>
+              <h3 id="quick-filters" className="sr-only">Quick filter options</h3>
               <div>
                 <label htmlFor={`${formId}-rating`} className="block text-sm font-medium text-gray-700 mb-2">
                   Rating
@@ -724,7 +724,7 @@ const SearchForm = React.memo(function SearchForm({
             </legend>
 
             <section className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-labelledby="advanced-fields">
-              <h4 id="advanced-fields" className="sr-only">Advanced search parameters</h4>
+              <h3 id="advanced-fields" className="sr-only">Advanced search parameters</h3>
               <div>
                 <label htmlFor={`${formId}-word-count-min`} className="block text-sm font-medium text-gray-700 mb-2">
                   Minimum Word Count
@@ -820,7 +820,7 @@ const SearchForm = React.memo(function SearchForm({
 
             {/* Content Filtering Section */}
             <section className="border-t border-gray-200 pt-4 mt-6">
-              <h4 className="text-md font-medium text-gray-800 mb-4">🚫 Content Filtering</h4>
+              <h3 className="text-md font-medium text-gray-800 mb-4">🚫 Content Filtering</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -891,7 +891,7 @@ const SearchForm = React.memo(function SearchForm({
 
             {/* Date & Engagement Filtering Section */}
             <section className="border-t border-gray-200 pt-4 mt-6">
-              <h4 className="text-md font-medium text-gray-800 mb-4">📅 Date & Engagement Filters</h4>
+              <h3 className="text-md font-medium text-gray-800 mb-4">📅 Date & Engagement Filters</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
