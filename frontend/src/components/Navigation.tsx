@@ -49,10 +49,12 @@ function NavDropdown({ label, icon, children, isActive }: NavDropdownProps) {
             ? 'text-orange-600 border-b-2 border-orange-600 pb-4 -mb-4' 
             : 'text-gray-700'
         }`}
+        aria-label={`${label} menu`}
+        aria-expanded={isOpen}
       >
         {icon && <span className="w-4 h-4">{icon}</span>}
         <span>{label}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
 
       {isOpen && (
@@ -292,12 +294,14 @@ export default function Navigation() {
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
+                    aria-label="User menu"
+                    aria-expanded={isUserMenuOpen}
                   >
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-orange-600" />
+                      <User className="w-4 h-4 text-orange-600" aria-hidden="true" />
                     </div>
                     <span className="hidden lg:block">{user.username}</span>
-                    <ChevronDown className="w-4 h-4" />
+                    <ChevronDown className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
 
@@ -323,8 +327,9 @@ export default function Navigation() {
                     <button
                       onClick={handleSignOut}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      aria-label="Sign out"
                     >
-                      <LogOut className="w-4 h-4 mr-2" />
+                      <LogOut className="w-4 h-4 mr-2" aria-hidden="true" />
                       Sign Out
                     </button>
                   </div>
@@ -354,11 +359,13 @@ export default function Navigation() {
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="p-2 rounded-md text-gray-700 hover:text-orange-600 hover:bg-gray-100 transition-colors"
+              aria-label={isMobileMenuOpen ? 'Close mobile menu' : 'Open mobile menu'}
+              aria-expanded={isMobileMenuOpen}
             >
               {isMobileMenuOpen ? (
-                <X className="h-6 w-6" />
+                <X className="h-6 w-6" aria-hidden="true" />
               ) : (
-                <Menu className="h-6 w-6" />
+                <Menu className="h-6 w-6" aria-hidden="true" />
               )}
             </button>
           </div>
