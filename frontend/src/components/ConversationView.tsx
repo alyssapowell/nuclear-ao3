@@ -201,7 +201,7 @@ export default function ConversationView({
             {onClose && (
               <button
                 onClick={onClose}
-                className="ml-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                className="ml-4 text-gray-700 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                 aria-label="Close conversation"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -217,7 +217,7 @@ export default function ConversationView({
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               Conversation Thread
             </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p className="text-sm text-gray-700 dark:text-gray-400 mt-1">
               {conversation.length} {conversation.length === 1 ? 'comment' : 'comments'} in this thread
             </p>
           </div>
@@ -260,11 +260,11 @@ export default function ConversationView({
                     Guest
                   </span>
                 )}
-                <span className="text-gray-500 dark:text-gray-400">
+                <span className="text-gray-700 dark:text-gray-400">
                   {new Date(comment.created_at).toLocaleDateString()}
                 </span>
                 {comment.level > 0 && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                  <span className="text-xs text-gray-400 dark:text-gray-700">
                     ↳ Reply {comment.level === 1 ? 'to thread' : `(${comment.level} deep)`}
                   </span>
                 )}
@@ -272,7 +272,7 @@ export default function ConversationView({
               
               <div className="flex items-center space-x-2">
                 {comment.kudos_count > 0 && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-xs text-gray-700 dark:text-gray-400">
                     ❤️ {comment.kudos_count}
                   </span>
                 )}
@@ -321,7 +321,7 @@ export default function ConversationView({
                         setReplyingTo(null);
                         setReplyContent('');
                       }}
-                      className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                      className="px-4 py-2 text-gray-700 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                     >
                       Cancel
                     </button>
@@ -356,7 +356,7 @@ export default function ConversationView({
               {submitting ? 'Posting...' : 'Reply to conversation'}
             </button>
             {replyingTo && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-700 dark:text-gray-400">
                 Close the reply above to reply to the conversation
               </p>
             )}

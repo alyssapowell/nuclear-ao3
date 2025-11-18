@@ -160,7 +160,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
           onClick={() => handlePageChange(currentPage - 1, 'Previous page.')}
           onKeyDown={(e) => handleKeyDown(e, currentPage - 1, 'Previous page.')}
           disabled={currentPage <= 1 || isLoading}
-          className="relative inline-flex items-center px-2 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="relative inline-flex items-center px-2 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-l-md hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={`Go to previous page, page ${currentPage - 1}`}
           title="Previous page"
         >
@@ -177,7 +177,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
                 type="button"
                 onClick={() => handlePageChange(1, 'First page.')}
                 onKeyDown={(e) => handleKeyDown(e, 1, 'First page.')}
-                className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label="Go to page 1"
                 disabled={isLoading}
               >
@@ -209,7 +209,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
                 className={`relative inline-flex items-center px-4 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isCurrent
                     ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                    : 'text-gray-500 bg-white border-gray-300 hover:bg-gray-50 focus:border-blue-500'
+                    : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 focus:border-blue-500'
                 }`}
                 aria-label={isCurrent ? `Current page, page ${page}` : `Go to page ${page}`}
                 aria-current={isCurrent ? 'page' : undefined}
@@ -236,7 +236,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
                 type="button"
                 onClick={() => handlePageChange(totalPages, 'Last page.')}
                 onKeyDown={(e) => handleKeyDown(e, totalPages, 'Last page.')}
-                className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="relative inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 aria-label={`Go to last page, page ${totalPages}`}
                 disabled={isLoading}
               >
@@ -252,7 +252,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
           onClick={() => handlePageChange(currentPage + 1, 'Next page.')}
           onKeyDown={(e) => handleKeyDown(e, currentPage + 1, 'Next page.')}
           disabled={currentPage >= totalPages || isLoading}
-          className="relative inline-flex items-center px-2 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="relative inline-flex items-center px-2 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-r-md hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={`Go to next page, page ${currentPage + 1}`}
           title="Next page"
         >

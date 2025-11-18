@@ -312,7 +312,7 @@ export default function SearchAutocomplete({
                     </div>
                     <div 
                       id={`suggestion-desc-${index}`}
-                      className="text-sm text-gray-500"
+                      className="text-sm text-gray-600"
                     >
                       {getSuggestionDescription(suggestion)}
                     </div>

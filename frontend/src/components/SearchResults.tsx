@@ -184,7 +184,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           className="flex items-center justify-center py-12"
         >
           <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full" aria-hidden="true"></div>
-          <span className="ml-3 text-lg text-gray-600">Searching the archive...</span>
+          <span className="ml-3 text-lg text-gray-700">Searching the archive...</span>
         </div>
       </div>
     );
@@ -218,7 +218,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
         <div className="text-center py-12">
           <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" aria-hidden="true" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No works found</h3>
-          <p className="text-gray-600 max-w-md mx-auto">
+          <p className="text-gray-700 max-w-md mx-auto">
             Try adjusting your search criteria or browse popular tags to discover new works.
           </p>
         </div>
@@ -253,7 +253,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="text-gray-600"
+          className="text-gray-700"
         >
           {totalCount > 0 ? (
             <>
@@ -364,7 +364,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                     Press Enter or Space to open this work
                   </div>
 
-                  <div className="flex items-center gap-2 text-gray-600 mb-2">
+                  <div className="flex items-center gap-2 text-gray-700 mb-2">
                     <User className="h-4 w-4" aria-hidden="true" />
                     <span>by <strong>{work.author}</strong></span>
                   </div>
@@ -372,7 +372,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                   {/* Metadata */}
                   <div 
                     id={`work-${work.id}-meta`}
-                    className="flex flex-wrap items-center gap-4 text-sm text-gray-600"
+                    className="flex flex-wrap items-center gap-4 text-sm text-gray-700"
                   >
                     <div className="flex items-center gap-1">
                       <span className={`px-2 py-1 text-xs font-medium rounded border ${getRatingColor(work.rating)}`}>
@@ -514,7 +514,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
                 {/* Statistics */}
                 <footer className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-4 text-sm text-gray-700">
                     {work.kudos_count !== undefined && (
                       <div className="flex items-center gap-1" title={`${formatNumber(work.kudos_count)} kudos`}>
                         <Heart className="h-4 w-4" aria-hidden="true" />
@@ -550,7 +550,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
                   {/* Tag Quality Score */}
                   {work.tag_quality_score !== undefined && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-600">
                       Tag Quality: {Math.round(work.tag_quality_score * 100)}%
                     </div>
                   )}

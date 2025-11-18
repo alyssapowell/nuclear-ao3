@@ -71,7 +71,7 @@ export default function NewCollectionPage() {
         </Link>
         <div className="border-l border-gray-300 pl-4">
           <h1 className="text-3xl font-bold text-gray-900">Create New Collection</h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-700 mt-1">
             Set up a new collection to organize works around themes, challenges, or events.
           </p>
         </div>
@@ -102,7 +102,7 @@ export default function NewCollectionPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-600">
                   Unique identifier for your collection. Use lowercase letters, numbers, and underscores only.
                 </p>
               </div>
@@ -120,7 +120,7 @@ export default function NewCollectionPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-600">
                   Display name for your collection that readers will see.
                 </p>
               </div>
@@ -137,7 +137,7 @@ export default function NewCollectionPage() {
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-600">
                   Optional description to help readers understand your collection's purpose.
                 </p>
               </div>
@@ -163,7 +163,7 @@ export default function NewCollectionPage() {
                       <Users className="w-4 h-4 mr-2" />
                       Open Submissions
                     </label>
-                    <p className="text-gray-500">Allow anyone to submit works to this collection</p>
+                    <p className="text-gray-600">Allow anyone to submit works to this collection</p>
                   </div>
                 </div>
 
@@ -182,7 +182,7 @@ export default function NewCollectionPage() {
                       <UserCheck className="w-4 h-4 mr-2" />
                       Moderated Submissions
                     </label>
-                    <p className="text-gray-500">Require approval before works appear in the collection</p>
+                    <p className="text-gray-600">Require approval before works appear in the collection</p>
                   </div>
                 </div>
 
@@ -201,7 +201,7 @@ export default function NewCollectionPage() {
                       <EyeOff className="w-4 h-4 mr-2" />
                       Anonymous Collection
                     </label>
-                    <p className="text-gray-500">Hide author names for works in this collection</p>
+                    <p className="text-gray-600">Hide author names for works in this collection</p>
                   </div>
                 </div>
 
@@ -220,7 +220,7 @@ export default function NewCollectionPage() {
                       <Lock className="w-4 h-4 mr-2" />
                       Unrevealed Collection
                     </label>
-                    <p className="text-gray-500">Hide works until you choose to reveal them (for challenges/gifts)</p>
+                    <p className="text-gray-600">Hide works until you choose to reveal them (for challenges/gifts)</p>
                   </div>
                 </div>
               </div>

@@ -185,7 +185,7 @@ export default function TagProminenceSelector({
                 <div key={tag.tagName} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-2">
                   <div className="flex items-center">
                     <span className="text-gray-700 text-sm">{tag.tagName}</span>
-                    <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    <span className="ml-2 text-xs text-gray-700 bg-gray-100 px-2 py-1 rounded">
                       {tag.tagType}
                     </span>
                     {tag.autoSuggested && (

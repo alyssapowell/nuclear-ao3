@@ -176,7 +176,7 @@ export default function UserBlockingButton({
             Block {username}?
           </h3>
           
-          <p className="text-sm text-gray-600 mb-6">
+          <p className="text-sm text-gray-700 mb-6">
             Choose how you want to block this user:
           </p>
 
@@ -187,7 +187,7 @@ export default function UserBlockingButton({
               className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
               <div className="font-medium text-gray-900">Hide Content</div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-700">
                 Hide their works from your searches and recommendations
               </div>
             </button>
@@ -198,7 +198,7 @@ export default function UserBlockingButton({
               className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
             >
               <div className="font-medium text-gray-900">Block Interactions</div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-gray-700">
                 Prevent them from commenting on your works or contacting you
               </div>
             </button>

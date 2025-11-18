@@ -176,7 +176,7 @@ export default function Navigation() {
                 <h1 className="text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
                   Nuclear AO3
                 </h1>
-                <p className="text-xs text-gray-500 -mt-1">Fast & Modern Archive</p>
+                <p className="text-xs text-gray-700 -mt-1">Fast & Modern Archive</p>
               </div>
               <div className="sm:hidden">
                 <h1 className="text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
@@ -408,7 +408,7 @@ export default function Navigation() {
 
             {/* Browse Section */}
             <div className="pt-2">
-              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                 Browse
               </div>
               {browseLinks.map((link) => (
@@ -433,7 +433,7 @@ export default function Navigation() {
                 {/* Create Section */}
                 {createLinks.length > 0 && (
                   <div className="pt-2">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Create
                     </div>
                     {createLinks.map((link) => (
@@ -457,7 +457,7 @@ export default function Navigation() {
                 {/* My Library Section */}
                 {libraryLinks.length > 0 && (
                   <div className="pt-2">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       My Library
                     </div>
                     {libraryLinks.map((link) => (

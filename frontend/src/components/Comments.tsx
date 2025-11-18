@@ -375,7 +375,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
             {canEditComment(comment) && (
               <button
                 onClick={() => startEditComment(comment)}
-                className="text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                className="text-sm text-gray-700 hover:text-gray-800 transition-colors"
               >
                 Edit
               </button>

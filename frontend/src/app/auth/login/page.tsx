@@ -155,7 +155,7 @@ function LoginContent() {
         </button>
       </form>
       
-      <p className="mt-4 text-center text-sm text-gray-600">
+      <p className="mt-4 text-center text-sm text-gray-700">
         Don't have an account?{' '}
         <a 
           href={`/auth/register${searchParams.get('redirect') ? `?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : ''}`}

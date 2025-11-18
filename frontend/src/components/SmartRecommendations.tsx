@@ -71,7 +71,7 @@ export default function SmartRecommendations({
       <div className="flex items-center space-x-2">
         <span className="text-lg">🤖</span>
         <h3 className="text-lg font-semibold text-gray-900">Smart Tag Suggestions</h3>
-        <span className="text-sm text-gray-500">({recommendations.length})</span>
+        <span className="text-sm text-gray-700">({recommendations.length})</span>
       </div>
 
       <div className="space-y-3">
@@ -86,7 +86,7 @@ export default function SmartRecommendations({
                   <span className="text-xl">{getRecommendationIcon(recommendation.type)}</span>
                   <div>
                     <h4 className="font-medium text-gray-900">{recommendation.title}</h4>
-                    <p className="text-sm text-gray-600">{recommendation.description}</p>
+                    <p className="text-sm text-gray-700">{recommendation.description}</p>
                   </div>
                 </div>
 
@@ -130,7 +130,7 @@ export default function SmartRecommendations({
         ))}
       </div>
 
-      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+      <div className="text-xs text-gray-700 bg-gray-50 rounded-lg p-3">
         <div className="flex items-start space-x-2">
           <span>ℹ️</span>
           <div>

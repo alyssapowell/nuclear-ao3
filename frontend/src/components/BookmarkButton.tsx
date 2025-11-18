@@ -177,7 +177,7 @@ function BookmarkDialog({ onSubmit, onCancel, isLoading }: BookmarkDialogProps) 
               className="w-full p-2 border border-gray-300 rounded-md"
               placeholder="tag1, tag2, tag3"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-600 mt-1">
               Separate tags with commas
             </p>
           </div>

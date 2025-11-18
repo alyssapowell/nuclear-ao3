@@ -172,7 +172,7 @@ function RegisterContent() {
             required
             minLength={6}
           />
-          <p className="mt-1 text-xs text-gray-500">Password must be at least 6 characters long</p>
+          <p className="mt-1 text-xs text-gray-600">Password must be at least 6 characters long</p>
         </div>
         
         <div>

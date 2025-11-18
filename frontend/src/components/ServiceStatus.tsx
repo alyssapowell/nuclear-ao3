@@ -144,7 +144,7 @@ export default function ServiceStatus() {
           <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
             Services ({serviceStatuses.filter(s => s.status === 'online').length}/{serviceStatuses.length})
           </span>
-          <div className={`transform transition-transform text-gray-600 dark:text-gray-300 ${isExpanded ? 'rotate-180' : ''}`}>
+          <div className={`transform transition-transform text-gray-700 dark:text-gray-300 ${isExpanded ? 'rotate-180' : ''}`}>
             ▼
           </div>
         </div>
@@ -170,7 +170,7 @@ export default function ServiceStatus() {
                 </div>
                 <div className="text-right">
                   {service.responseTime && (
-                    <div className="text-gray-600 dark:text-gray-300">{service.responseTime}ms</div>
+                    <div className="text-gray-700 dark:text-gray-300">{service.responseTime}ms</div>
                   )}
                   {service.error && (
                     <div className="text-red-600 dark:text-red-400" title={service.error}>
@@ -178,7 +178,7 @@ export default function ServiceStatus() {
                     </div>
                   )}
                   {service.lastChecked && (
-                    <div className="text-gray-500 dark:text-gray-400">
+                    <div className="text-gray-600 dark:text-gray-400">
                       {service.lastChecked.toLocaleTimeString()}
                     </div>
                   )}
@@ -188,7 +188,7 @@ export default function ServiceStatus() {
             
             {/* Overall system status */}
             <div className="border-t pt-2 mt-2">
-              <div className="text-xs text-gray-600">
+              <div className="text-xs text-gray-700">
                 <strong>System Status:</strong>{' '}
                 <span className={
                   overallStatus === 'online' 

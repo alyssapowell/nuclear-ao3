@@ -584,7 +584,7 @@ export default function MobileReadingInterface({
               <h2 className="text-lg font-semibold">Reading Settings</h2>
               <button
                 onClick={() => setShowSettings(false)}
-                className="text-gray-500 p-2"
+                className="text-gray-700 p-2"
               >
                 ✕
               </button>

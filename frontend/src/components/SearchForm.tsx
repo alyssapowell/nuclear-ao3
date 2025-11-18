@@ -80,7 +80,7 @@ const MemoizedTagField = React.memo(function TagField({
         tagType={field === 'fandoms' ? 'fandom' : field === 'freeformTags' ? 'freeform' : field === 'characters' ? 'character' : field === 'relationships' ? 'relationship' : undefined}
         aria-describedby={`${fieldId}-help`}
       />
-      <div id={`${fieldId}-help`} className="text-xs text-gray-500">
+      <div id={`${fieldId}-help`} className="text-xs text-gray-600">
         Start typing to see suggestions, then select to add tags
       </div>
     </section>
@@ -567,7 +567,7 @@ const SearchForm = React.memo(function SearchForm({
                 />
                 <Search className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" aria-hidden="true" />
               </div>
-              <div id={`${formId}-title-help`} className="mt-1 text-xs text-gray-500">
+              <div id={`${formId}-title-help`} className="mt-1 text-xs text-gray-600">
                 Enter keywords from the work title
               </div>
             </div>
@@ -585,7 +585,7 @@ const SearchForm = React.memo(function SearchForm({
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 aria-describedby={`${formId}-author-help`}
               />
-              <div id={`${formId}-author-help`} className="mt-1 text-xs text-gray-500">
+              <div id={`${formId}-author-help`} className="mt-1 text-xs text-gray-600">
                 Enter author username or display name
               </div>
             </div>
@@ -689,7 +689,7 @@ const SearchForm = React.memo(function SearchForm({
                     <option value="word_count">Word Count</option>
                   </optgroup>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-gray-600 mt-1">
                   Quality algorithms resist gaming and promote genuinely engaging works
                 </p>
               </div>
@@ -794,7 +794,7 @@ const SearchForm = React.memo(function SearchForm({
                   <option value="secondary">Important subplot (significant romantic arc)</option>
                   <option value="any">Background mentions (appears but not central)</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">How central are your selected relationships to the story's main plot?</p>
+                <p className="text-xs text-gray-600 mt-1">How central are your selected relationships to the story's main plot?</p>
               </div>
 
               <div>
@@ -813,7 +813,7 @@ const SearchForm = React.memo(function SearchForm({
                   <option value="6-10">Large ensemble (6-10 relationships total)</option>
                   <option value="10+">Comprehensive (10+ relationships total)</option>
                 </select>
-                <p className="text-xs text-gray-500 mt-1">Total number of relationships in the story - some readers prefer focused romance, others like multi-pairing stories</p>
+                <p className="text-xs text-gray-600 mt-1">Total number of relationships in the story - some readers prefer focused romance, others like multi-pairing stories</p>
               </div>
             </section>
 
@@ -850,7 +850,7 @@ const SearchForm = React.memo(function SearchForm({
                       ))}
                     </div>
                   )}
-                  <p className="text-xs text-gray-500 mt-1">Hide works containing these tags</p>
+                  <p className="text-xs text-gray-600 mt-1">Hide works containing these tags</p>
                 </div>
 
                 <div>
@@ -950,7 +950,7 @@ const SearchForm = React.memo(function SearchForm({
           <button
             type="button"
             onClick={clearAllFilters}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 rounded-md"
+            className="px-4 py-2 text-gray-700 hover:text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 rounded-md"
           >
             <X className="h-4 w-4 mr-2 inline" aria-hidden="true" />
             Clear All
@@ -980,7 +980,7 @@ const SearchForm = React.memo(function SearchForm({
         {loading && (
           <div
             id={`${formId}-loading`}
-            className="mt-2 text-center text-sm text-gray-600"
+            className="mt-2 text-center text-sm text-gray-700"
             role="status"
             aria-live="polite"
           >

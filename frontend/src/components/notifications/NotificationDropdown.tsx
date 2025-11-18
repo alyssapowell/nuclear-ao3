@@ -35,7 +35,7 @@ const getNotificationIcon = (sourceType: string): React.ReactNode => {
     case 'comment':
       return <Users size={16} className="text-green-500" />;
     default:
-      return <Clock size={16} className="text-gray-500" />;
+      return <Clock size={16} className="text-gray-700" />;
   }
 };
 
@@ -69,7 +69,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
             )}
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-700 transition-colors"
               aria-label="Close notifications"
             >
               ×
@@ -80,12 +80,12 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
 
       <div className="max-h-80 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-center text-gray-500">
+          <div className="p-4 text-center text-gray-700">
             <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full" />
             <p className="mt-2">Loading notifications...</p>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-gray-700">
             <Clock size={48} className="mx-auto mb-4 text-gray-300" />
             <p className="text-lg font-medium">No notifications</p>
             <p className="text-sm">You're all caught up!</p>
@@ -113,10 +113,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                         }`}>
                           {notification.title}
                         </p>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                        <p className="text-sm text-gray-700 mt-1 line-clamp-2">
                           {notification.description}
                         </p>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-700">
                           <span>{notification.actor_name}</span>
                           <span>•</span>
                           <span>

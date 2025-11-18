@@ -108,7 +108,7 @@ export default function ContactPage() {
                 <p className="text-gray-700 mb-3">
                   Found a technical issue? Help us improve by reporting bugs with detailed information:
                 </p>
-                <ul className="text-gray-600 text-sm space-y-1 mb-3">
+                <ul className="text-gray-700 text-sm space-y-1 mb-3">
                   <li>• What you were trying to do</li>
                   <li>• What happened vs. what you expected</li>
                   <li>• Your browser and operating system</li>
@@ -129,7 +129,7 @@ export default function ContactPage() {
                   <p className="text-gray-700">
                     Email: <span className="font-medium">press@nuclear-ao3.org</span>
                   </p>
-                  <p className="text-gray-600 text-sm">
+                  <p className="text-gray-700 text-sm">
                     Please include your media outlet, deadline, and specific information needed.
                   </p>
                 </div>
@@ -175,7 +175,7 @@ export default function ContactPage() {
                 className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
               >
                 <h3 className="font-medium text-gray-900 mb-2">📚 Help & FAQ</h3>
-                <p className="text-gray-600 text-sm">
+                <p className="text-gray-700 text-sm">
                   Common questions and step-by-step guides
                 </p>
               </a>
@@ -185,7 +185,7 @@ export default function ContactPage() {
                 className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
               >
                 <h3 className="font-medium text-gray-900 mb-2">🔒 Privacy Policy</h3>
-                <p className="text-gray-600 text-sm">
+                <p className="text-gray-700 text-sm">
                   How we protect and handle your data
                 </p>
               </a>
@@ -195,7 +195,7 @@ export default function ContactPage() {
                 className="block border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
               >
                 <h3 className="font-medium text-gray-900 mb-2">📋 Terms of Service</h3>
-                <p className="text-gray-600 text-sm">
+                <p className="text-gray-700 text-sm">
                   Community guidelines and platform rules
                 </p>
               </a>

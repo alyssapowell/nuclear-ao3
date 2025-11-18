@@ -134,7 +134,7 @@ export default function WorksPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Browse Works</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-700">
           Discover amazing fanworks from thousands of authors and fandoms.
         </p>
       </div>
@@ -241,7 +241,7 @@ export default function WorksPage() {
           <h2 className="text-xl font-semibold text-gray-900">
             {state.pagination.total.toLocaleString()} Works Found
           </h2>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm text-gray-600">
             Page {state.pagination.page} of {state.pagination.total_pages}
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function WorksPage() {
       {state.loading && (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-          <p className="mt-2 text-gray-600">Loading works...</p>
+          <p className="mt-2 text-gray-700">Loading works...</p>
         </div>
       )}
 
@@ -274,7 +274,7 @@ export default function WorksPage() {
           {state.works.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-lg shadow-sm">
               <h3 className="text-lg font-medium text-gray-900 mb-2">No works found</h3>
-              <p className="text-gray-600 mb-4">
+              <p className="text-gray-700 mb-4">
                 Try adjusting your filters or search terms.
               </p>
               <button

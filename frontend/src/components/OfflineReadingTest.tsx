@@ -191,10 +191,10 @@ export default function OfflineReadingTest() {
           <div className="flex items-start justify-between">
             <div>
               <h4 className="font-medium">{testWork.title}</h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-700">
                 by {testWork.authors.map(a => a.pseud_name).join(', ')}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-700 mt-1">
                 {testWork.word_count.toLocaleString()} words • {testWork.chapter_count} chapters
               </p>
               <div className="flex items-center space-x-2 mt-2">
@@ -249,10 +249,10 @@ export default function OfflineReadingTest() {
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              <span className="ml-3 text-gray-600">Loading...</span>
+              <span className="ml-3 text-gray-700">Loading...</span>
             </div>
           ) : offlineWorks.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-700">
               <CloudArrowDownIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <p>No works cached for offline reading</p>
               <p className="text-sm">Cache the test work above to see it here</p>
@@ -268,7 +268,7 @@ export default function OfflineReadingTest() {
                     <div>
                       <h4 className="font-medium">{work.title || `Work ${work.workId}`}</h4>
                       {work.authors && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-700">
                           by {work.authors.map((a: any) => a.pseud_name).join(', ')}
                         </p>
                       )}
@@ -280,7 +280,7 @@ export default function OfflineReadingTest() {
                         }`}>
                           {work.consentLevel === 'files_and_pwa' ? '📁 Full Offline' : '📱 PWA Only'}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-700">
                           Expires: {offlineManager.formatTimeRemaining(work.expiresAt)}
                         </span>
                         {work.isExpired && (

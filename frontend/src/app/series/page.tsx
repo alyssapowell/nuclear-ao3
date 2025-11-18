@@ -156,7 +156,7 @@ export default function SeriesPage() {
           >
             {series.title}
           </a>
-          <p className="text-sm text-gray-600 flex items-center mt-1">
+          <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
             by {series.username}
           </p>
@@ -179,7 +179,7 @@ export default function SeriesPage() {
         </p>
       )}
 
-      <div className="flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-3">
+      <div className="flex justify-between items-center text-sm text-gray-700 border-t border-gray-100 pt-3">
         <div className="flex items-center space-x-4">
           <span className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />
@@ -206,7 +206,7 @@ export default function SeriesPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Series</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-700">
           Discover collections of related works organized by their creators.
         </p>
       </div>
@@ -219,7 +219,7 @@ export default function SeriesPage() {
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'browse'
                 ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : 'border-transparent text-gray-700 hover:text-gray-700'
             }`}
           >
             Browse All Series
@@ -230,7 +230,7 @@ export default function SeriesPage() {
               className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === 'my'
                   ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-700 hover:text-gray-700'
               }`}
             >
               My Series
@@ -358,7 +358,7 @@ export default function SeriesPage() {
             {searchQuery ? (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No series found</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-700 mb-4">
                   No series match your search criteria. Try different keywords or browse all series.
                 </p>
                 <button
@@ -374,7 +374,7 @@ export default function SeriesPage() {
             ) : activeTab === 'my' ? (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">You haven't created any series yet</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-700 mb-4">
                   Series allow you to group related works together in a specific order.
                 </p>
                 <a
@@ -388,7 +388,7 @@ export default function SeriesPage() {
             ) : (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No series available</h3>
-                <p className="text-gray-600">
+                <p className="text-gray-700">
                   There are currently no series to browse. Check back later!
                 </p>
               </>

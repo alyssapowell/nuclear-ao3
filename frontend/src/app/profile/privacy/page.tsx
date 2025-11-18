@@ -196,7 +196,7 @@ export default function PrivacySettingsPage() {
       className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
         activeTab === tabId
           ? 'bg-orange-100 text-orange-700 border border-orange-200'
-          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
       }`}
     >
       <span className="mr-2">{icon}</span>
@@ -227,7 +227,7 @@ export default function PrivacySettingsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Content Filtering</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <ul className="space-y-2 text-sm text-gray-700">
             <li>• Hide explicit content</li>
             <li>• Filter by archive warnings</li>
             <li>• Block specific tags</li>
@@ -237,7 +237,7 @@ export default function PrivacySettingsPage() {
 
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Profile Privacy</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <ul className="space-y-2 text-sm text-gray-700">
             <li>• Control profile visibility</li>
             <li>• Manage contact permissions</li>
             <li>• Hide reading history</li>
@@ -247,7 +247,7 @@ export default function PrivacySettingsPage() {
 
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Work Defaults</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <ul className="space-y-2 text-sm text-gray-700">
             <li>• Default work privacy level</li>
             <li>• Comment policy preferences</li>
             <li>• Constructive criticism settings</li>
@@ -257,7 +257,7 @@ export default function PrivacySettingsPage() {
 
         <div className="bg-white border border-gray-200 rounded-lg p-6">
           <h3 className="font-semibold text-gray-900 mb-4">Notifications</h3>
-          <ul className="space-y-2 text-sm text-gray-600">
+          <ul className="space-y-2 text-sm text-gray-700">
             <li>• Email notification preferences</li>
             <li>• Comment and kudos alerts</li>
             <li>• Subscription updates</li>
@@ -272,7 +272,7 @@ export default function PrivacySettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Blocked Users</h2>
-        <span className="text-sm text-gray-500">{blockedUsers.length} blocked</span>
+        <span className="text-sm text-gray-700">{blockedUsers.length} blocked</span>
       </div>
 
       {loading ? (
@@ -287,7 +287,7 @@ export default function PrivacySettingsPage() {
             </svg>
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No blocked users</h3>
-          <p className="text-gray-500">You haven't blocked any users yet.</p>
+          <p className="text-gray-700">You haven't blocked any users yet.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -308,11 +308,11 @@ export default function PrivacySettingsPage() {
                        user.block_type === 'interaction' ? 'Interaction Block' : 'Content Block'}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-gray-700 mt-1">
                     Blocked {new Date(user.blocked_at).toLocaleDateString()}
                   </p>
                   {user.reason && (
-                    <p className="text-sm text-gray-600 mt-2">
+                    <p className="text-sm text-gray-700 mt-2">
                       <span className="font-medium">Reason:</span> {user.reason}
                     </p>
                   )}
@@ -346,7 +346,7 @@ export default function PrivacySettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Comment Moderation</h2>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-700">
           {comments.filter(c => c.status === 'pending_moderation' || c.status === 'flagged').length} requiring review
         </span>
       </div>
@@ -363,7 +363,7 @@ export default function PrivacySettingsPage() {
             </svg>
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No comments to moderate</h3>
-          <p className="text-gray-500">All comments on your works are up to date.</p>
+          <p className="text-gray-700">All comments on your works are up to date.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -387,7 +387,7 @@ export default function PrivacySettingsPage() {
                        comment.status === 'approved' ? 'Approved' : 'Hidden'}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mb-3">
+                  <p className="text-sm text-gray-700 mb-3">
                     On "{comment.work_title}" • {new Date(comment.created_at).toLocaleDateString()}
                   </p>
                   <div className="bg-gray-50 rounded-lg p-3 mb-3">
@@ -452,7 +452,7 @@ export default function PrivacySettingsPage() {
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy & Safety</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-700">
           Manage your privacy settings, blocked users, and content moderation preferences.
         </p>
       </div>

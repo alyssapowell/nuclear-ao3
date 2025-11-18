@@ -41,7 +41,7 @@ export default function SettingsWizard({ onComplete, onSkip }: SettingsWizardPro
     <div className="space-y-6">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold mb-2">Privacy Settings</h2>
-        <p className="text-gray-600">Configure your default privacy preferences</p>
+        <p className="text-gray-700">Configure your default privacy preferences</p>
       </div>
 
       <div className="space-y-4">
@@ -87,7 +87,7 @@ export default function SettingsWizard({ onComplete, onSkip }: SettingsWizardPro
     <div className="space-y-6">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold mb-2">Notification Preferences</h2>
-        <p className="text-gray-600">Choose when you want to be notified</p>
+        <p className="text-gray-700">Choose when you want to be notified</p>
       </div>
 
       <div className="space-y-3">
@@ -123,7 +123,7 @@ export default function SettingsWizard({ onComplete, onSkip }: SettingsWizardPro
     <div className="space-y-6">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold mb-2">Personalization</h2>
-        <p className="text-gray-600">Customize your experience</p>
+        <p className="text-gray-700">Customize your experience</p>
       </div>
 
       <div className="space-y-4">
@@ -168,7 +168,7 @@ export default function SettingsWizard({ onComplete, onSkip }: SettingsWizardPro
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h1 className="text-3xl font-bold">Welcome! Let's set up your account</h1>
-              <span className="text-sm text-gray-500">Step {currentStep} of 3</span>
+              <span className="text-sm text-gray-700">Step {currentStep} of 3</span>
             </div>
             
             <div className="w-full bg-gray-200 rounded-full h-2">

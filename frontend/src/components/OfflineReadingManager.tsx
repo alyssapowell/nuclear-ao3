@@ -237,7 +237,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
       default:
         return {
           label: 'Unknown',
-          color: 'text-gray-600',
+          color: 'text-gray-700',
           icon: ExclamationTriangleIcon,
           description: 'Consent level unknown'
         };
@@ -255,7 +255,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
             <CloudArrowDownSolidIcon className="w-6 h-6 text-blue-600" />
             <div>
               <h2 className="text-lg font-semibold">Offline Reading</h2>
-              <div className="flex items-center space-x-2 text-sm text-gray-500">
+              <div className="flex items-center space-x-2 text-sm text-gray-700">
                 <WifiIcon className={`w-4 h-4 ${isOnline ? 'text-green-500' : 'text-red-500'}`} />
                 <span>{isOnline ? 'Online' : 'Offline'}</span>
                 {totalCacheSize && <span>• {totalCacheSize} used</span>}
@@ -264,7 +264,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-2"
+            className="text-gray-700 hover:text-gray-700 p-2"
           >
             ✕
           </button>
@@ -275,10 +275,10 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              <span className="ml-3 text-gray-600">Loading offline works...</span>
+              <span className="ml-3 text-gray-700">Loading offline works...</span>
             </div>
           ) : offlineWorks.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-gray-700">
               <CloudArrowDownIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
               <h3 className="text-lg font-medium mb-2">No Offline Works</h3>
               <p className="text-sm">
@@ -291,7 +291,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
             <div className="space-y-4">
               {/* Cache Management Controls */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-700">
                   {offlineWorks.length} work{offlineWorks.length !== 1 ? 's' : ''} cached
                   {offlineWorks.some(w => w.isExpired) && (
                     <span className="ml-2 text-amber-600">
@@ -332,11 +332,11 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
                         <h3 className="font-medium text-gray-900 truncate">
                           {work.title}
                         </h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-gray-700 mt-1">
                           by {work.authors.map(a => a.pseud_name).join(', ')}
                         </p>
                         
-                        <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                        <div className="flex items-center space-x-4 mt-2 text-xs text-gray-700">
                           {work.word_count && (
                             <span>{work.word_count.toLocaleString()} words</span>
                           )}
@@ -355,7 +355,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
                           
                           <div className="flex items-center space-x-1">
                             <ClockIcon className="w-4 h-4 text-gray-400" />
-                            <span className={`text-xs ${work.isExpired ? 'text-amber-600' : 'text-gray-500'}`}>
+                            <span className={`text-xs ${work.isExpired ? 'text-amber-600' : 'text-gray-700'}`}>
                               {work.isExpired ? 'Expired' : formatTimeRemaining(work.expiresAt)}
                             </span>
                           </div>
@@ -391,7 +391,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-xs text-gray-600 text-center">
+          <div className="text-xs text-gray-700 text-center">
             <p className="mb-1">
               <strong>Respectful Offline Reading:</strong> We honor author preferences for offline access.
             </p>

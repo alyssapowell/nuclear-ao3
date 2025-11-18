@@ -130,7 +130,7 @@ export default function FeedbackPage() {
                 placeholder="Please share your feedback in as much detail as possible. For bug reports, include steps to reproduce the issue and any error messages you saw."
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <p className="text-gray-500 text-sm mt-2">
+              <p className="text-gray-700 text-sm mt-2">
                 The more specific you can be, the better we can address your feedback.
               </p>
             </div>
@@ -148,7 +148,7 @@ export default function FeedbackPage() {
                   <label htmlFor="includeEmail" className="text-sm font-medium text-gray-900">
                     I'd like to be contacted about this feedback
                   </label>
-                  <p className="text-gray-500 text-sm">
+                  <p className="text-gray-700 text-sm">
                     Check this if you want us to be able to follow up with questions or updates. 
                     Otherwise, your feedback will be submitted anonymously.
                   </p>
@@ -170,7 +170,7 @@ export default function FeedbackPage() {
                   placeholder="your.email@example.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-gray-500 text-sm mt-2">
+                <p className="text-gray-700 text-sm mt-2">
                   We'll only use this email to respond to your feedback. We never share your contact information.
                 </p>
               </div>

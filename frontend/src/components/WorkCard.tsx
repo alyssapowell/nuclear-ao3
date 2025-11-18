@@ -132,12 +132,12 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
           <Link href={`/works/${work.id}`} className="text-lg font-semibold text-blue-600 hover:text-blue-800">
             {work.title}
           </Link>
-          <p className="text-sm text-gray-600">by {work.author}</p>
+          <p className="text-sm text-gray-700">by {work.author}</p>
         </div>
         
         {showEnhancedFeatures && work.tag_quality_score !== undefined && (
           <div className="ml-4 text-right">
-            <div className="text-xs text-gray-500">Tag Quality</div>
+            <div className="text-xs text-gray-700">Tag Quality</div>
             <div className={`text-sm font-medium ${getQualityColor(work.tag_quality_score)}`}>
               {Math.round(work.tag_quality_score * 100)}%
             </div>
@@ -166,28 +166,28 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
       <div className="space-y-2 mb-4">
         {work.fandoms && work.fandoms.length > 0 && (
           <div>
-            <span className="text-xs font-medium text-gray-500 mb-1 block">Fandoms:</span>
+            <span className="text-xs font-medium text-gray-700 mb-1 block">Fandoms:</span>
             <TagGroup tags={work.fandoms} category="fandoms" />
           </div>
         )}
 
         {work.relationships && work.relationships.length > 0 && (
           <div>
-            <span className="text-xs font-medium text-gray-500 mb-1 block">Relationships:</span>
+            <span className="text-xs font-medium text-gray-700 mb-1 block">Relationships:</span>
             <TagGroup tags={work.relationships} category="relationships" />
           </div>
         )}
 
         {work.characters && work.characters.length > 0 && (
           <div>
-            <span className="text-xs font-medium text-gray-500 mb-1 block">Characters:</span>
+            <span className="text-xs font-medium text-gray-700 mb-1 block">Characters:</span>
             <TagGroup tags={work.characters} category="characters" />
           </div>
         )}
 
         {work.freeform_tags && work.freeform_tags.length > 0 && (
           <div>
-            <span className="text-xs font-medium text-gray-500 mb-1 block">Additional Tags:</span>
+            <span className="text-xs font-medium text-gray-700 mb-1 block">Additional Tags:</span>
             <TagGroup tags={work.freeform_tags} category="freeform_tags" />
           </div>
         )}
@@ -207,7 +207,7 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
         </div>
       )}
 
-      <div className="flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-3">
+      <div className="flex justify-between items-center text-sm text-gray-700 border-t border-gray-100 pt-3">
         <div className="flex items-center space-x-4">
           <span>{formatNumber(work.word_count)} words</span>
           <span>

@@ -70,7 +70,7 @@ export default function KudosButton({ workId, initialKudos, hasGivenKudos = fals
           hasKudos 
             ? 'bg-red-100 text-red-700 cursor-not-allowed' 
             : fetchingStatus
-            ? 'bg-gray-100 text-gray-500 cursor-wait'
+            ? 'bg-gray-100 text-gray-700 cursor-wait'
             : 'bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700'
         }`}
         title={hasKudos ? 'You have already left kudos' : fetchingStatus ? 'Loading...' : 'Leave kudos'}

@@ -49,7 +49,7 @@ export default function HomePage() {
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           Welcome to Nuclear AO3
         </h1>
-        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+        <p className="text-xl text-gray-700 max-w-2xl mx-auto">
           A fast, modern archive of our own. Discover amazing fanworks with enhanced search, 
           smart recommendations, and powerful filtering.
         </p>
@@ -84,7 +84,7 @@ export default function HomePage() {
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
             Start Your Search
           </h2>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-700 mb-6">
             Use the search form above to find works by title, author, tags, or browse by fandom.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">

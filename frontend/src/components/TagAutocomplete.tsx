@@ -316,7 +316,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
               <header className="flex items-center justify-between">
                 <span className="text-gray-900">{tag.name}</span>
                 {tag.use_count && tag.use_count > 0 && (
-                  <span className="text-xs text-gray-500" aria-label={`${tag.use_count} works`}>
+                  <span className="text-xs text-gray-700" aria-label={`${tag.use_count} works`}>
                     {tag.use_count} works
                   </span>
                 )}
@@ -331,7 +331,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
           
           {/* Help text for new tag creation */}
           {suggestions.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-500">
+            <div className="px-3 py-2 text-xs text-gray-700">
               {tagType === 'fandom' 
                 ? 'No fandoms found. Please choose from existing fandoms or contact an admin to add new ones.'
                 : 'No existing tags found. Press Enter, comma, or Tab to create a new tag.'

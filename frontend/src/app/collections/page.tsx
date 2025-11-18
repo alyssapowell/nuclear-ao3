@@ -158,7 +158,7 @@ export default function CollectionsPage() {
           >
             {collection.title}
           </a>
-          <p className="text-sm text-gray-600 flex items-center mt-1">
+          <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
             Collection by {collection.name}
           </p>
@@ -205,7 +205,7 @@ export default function CollectionsPage() {
         </p>
       )}
 
-      <div className="flex justify-between items-center text-sm text-gray-500 border-t border-gray-100 pt-3">
+      <div className="flex justify-between items-center text-sm text-gray-700 border-t border-gray-100 pt-3">
         <div className="flex items-center space-x-4">
           <span className="flex items-center">
             <BookOpen className="w-4 h-4 mr-1" />
@@ -230,7 +230,7 @@ export default function CollectionsPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Collections</h1>
-        <p className="text-gray-600">
+        <p className="text-gray-700">
           Discover curated collections of works organized around themes, challenges, or events.
         </p>
       </div>
@@ -243,7 +243,7 @@ export default function CollectionsPage() {
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'browse'
                 ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                : 'border-transparent text-gray-700 hover:text-gray-700'
             }`}
           >
             Browse All Collections
@@ -254,7 +254,7 @@ export default function CollectionsPage() {
               className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === 'my'
                   ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                  : 'border-transparent text-gray-700 hover:text-gray-700'
               }`}
             >
               My Collections
@@ -382,7 +382,7 @@ export default function CollectionsPage() {
             {searchQuery ? (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No collections found</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-700 mb-4">
                   No collections match your search criteria. Try different keywords or browse all collections.
                 </p>
                 <button
@@ -398,7 +398,7 @@ export default function CollectionsPage() {
             ) : activeTab === 'my' ? (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">You haven't created any collections yet</h3>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-700 mb-4">
                   Collections allow you to organize works around themes, challenges, or special events.
                 </p>
                 <a
@@ -412,7 +412,7 @@ export default function CollectionsPage() {
             ) : (
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No collections available</h3>
-                <p className="text-gray-600">
+                <p className="text-gray-700">
                   There are currently no collections to browse. Check back later!
                 </p>
               </>

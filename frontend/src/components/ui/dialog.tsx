@@ -52,7 +52,7 @@ export interface DialogDescriptionProps {
 }
 
 export function DialogDescription({ children }: DialogDescriptionProps) {
-  return <p className="text-sm text-gray-600 mt-2">{children}</p>
+  return <p className="text-sm text-gray-700 mt-2">{children}</p>
 }
 
 export interface DialogTriggerProps {

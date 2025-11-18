@@ -130,7 +130,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             ) : (
               <SignalSlashIcon className="w-4 h-4 text-red-600" />
             )}
-            <span className="text-xs text-gray-600">
+            <span className="text-xs text-gray-700">
               {pwaState.isOnline ? 'Online' : 'Offline'}
             </span>
             
@@ -174,7 +174,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                 className={`flex flex-col items-center justify-center py-2 px-1 text-xs transition-colors ${
                   active 
                     ? 'text-blue-600 bg-blue-50' 
-                    : 'text-gray-600 hover:text-blue-600'
+                    : 'text-gray-700 hover:text-blue-600'
                 }`}
               >
                 <Icon className="w-6 h-6 mb-1" />
@@ -201,7 +201,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
               <div>
                 <h2 className="text-lg font-semibold">Menu</h2>
                 {user && (
-                  <p className="text-sm text-gray-600">Welcome, {user.username}</p>
+                  <p className="text-sm text-gray-700">Welcome, {user.username}</p>
                 )}
               </div>
               <button
@@ -286,12 +286,12 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                     />
                   ) : (
                     <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                      <UserIcon className="w-6 h-6 text-gray-600" />
+                      <UserIcon className="w-6 h-6 text-gray-700" />
                     </div>
                   )}
                   <div>
                     <div className="font-medium">{user.username}</div>
-                    <div className="text-sm text-gray-600">Author & Reader</div>
+                    <div className="text-sm text-gray-700">Author & Reader</div>
                   </div>
                 </div>
               </div>
@@ -363,7 +363,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-gray-200 text-center text-xs text-gray-500">
+            <div className="p-4 border-t border-gray-200 text-center text-xs text-gray-700">
               <div className="mb-2">Nuclear AO3 v2.0.0</div>
               <div className="flex justify-center space-x-4">
                 <Link href="/privacy" className="hover:text-gray-700">Privacy</Link>

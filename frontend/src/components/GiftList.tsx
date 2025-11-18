@@ -36,7 +36,7 @@ export function GiftList({ workId, gifts: initialGifts, authToken }: GiftListPro
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-600">
+      <div className="flex items-center gap-2 text-sm text-gray-700">
         <GiftIcon className="h-4 w-4 animate-pulse" />
         <span>Loading gifts...</span>
       </div>

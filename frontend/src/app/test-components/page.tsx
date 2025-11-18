@@ -117,7 +117,7 @@ export default function TestComponents() {
               tagType="fandom"
               required
             />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-gray-600">
               Try typing: "Marvel", "Harry Potter", "Supernatural". Use comma or Enter to add tags.
             </p>
           </div>
@@ -162,7 +162,7 @@ export default function TestComponents() {
         {/* Display current tag state */}
         <div className="mt-6 p-4 bg-gray-50 rounded-md">
           <h3 className="text-sm font-medium text-gray-700 mb-2">Current Tags State:</h3>
-          <pre className="text-xs text-gray-600">
+          <pre className="text-xs text-gray-700">
 {JSON.stringify({
   fandoms,
   characters,
@@ -188,7 +188,7 @@ export default function TestComponents() {
             className="min-h-[300px]"
           />
           
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2 text-xs text-gray-600">
             Try the formatting buttons, add links, create lists, and use headings.
           </p>
         </div>
@@ -196,7 +196,7 @@ export default function TestComponents() {
         {/* Display current content */}
         <div className="mt-6 p-4 bg-gray-50 rounded-md">
           <h3 className="text-sm font-medium text-gray-700 mb-2">Generated HTML:</h3>
-          <pre className="text-xs text-gray-600 whitespace-pre-wrap">
+          <pre className="text-xs text-gray-700 whitespace-pre-wrap">
             {content}
           </pre>
         </div>

@@ -268,7 +268,7 @@ export default function SearchFormREST({ onResults, onRecommendations }: SearchF
             excludePoorlyTagged: false,
             enableSmartSuggestions: true
           })}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+          className="px-4 py-2 text-gray-700 hover:text-gray-800 font-medium"
         >
           Clear All
         </button>

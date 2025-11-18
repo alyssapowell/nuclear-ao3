@@ -206,7 +206,7 @@ export default function PWATestPage() {
             <option value="minimal">Minimal (PWA Only - 24h)</option>
             <option value="full">Full (Files + PWA - 30 days)</option>
           </select>
-          <span className="text-sm text-gray-600">Current TTL: <span data-testid="ttl-display-inline">{ttlDisplay}</span></span>
+          <span className="text-sm text-gray-700">Current TTL: <span data-testid="ttl-display-inline">{ttlDisplay}</span></span>
         </div>
       </div>
 
@@ -243,7 +243,7 @@ export default function PWATestPage() {
         <div className="bg-white p-6 rounded-lg border shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Cache Management Tests</h3>
           <div className="space-y-2">
-            <div data-testid="cache-status" className="text-sm text-gray-600 mt-2">
+            <div data-testid="cache-status" className="text-sm text-gray-700 mt-2">
               Cache Status: {cacheStatus}
             </div>
             
@@ -273,7 +273,7 @@ export default function PWATestPage() {
               <div key={work.workId} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                 <div>
                   <p className="font-medium">{work.title}</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-700">
                     Consent: {work.consentLevel} | 
                     Expires: {offlineReadingManager.formatTimeRemaining(work.expiresAt)} |
                     {work.isExpired ? ' ⚠️ Expired' : ' ✅ Valid'}
@@ -300,7 +300,7 @@ export default function PWATestPage() {
         
         <div className="max-h-64 overflow-y-auto space-y-1">
           {testResults.length === 0 ? (
-            <p className="text-gray-500">No test results yet. Click a test button to start.</p>
+            <p className="text-gray-700">No test results yet. Click a test button to start.</p>
           ) : (
             testResults.map((result, index) => (
               <div key={index} className="text-xs leading-relaxed">

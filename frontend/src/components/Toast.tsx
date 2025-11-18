@@ -128,7 +128,7 @@ const ToastItem = ({ toast, onClose }: ToastProps) => {
           <div className="ml-4 flex-shrink-0 flex">
             <button
               onClick={handleClose}
-              className="inline-flex text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors"
+              className="inline-flex text-gray-400 hover:text-gray-700 focus:outline-none focus:text-gray-700 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
