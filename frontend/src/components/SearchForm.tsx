@@ -500,7 +500,6 @@ const SearchForm = React.memo(function SearchForm({
       <form
         onSubmit={handleSearch}
         onKeyDown={handleFormKeyDown}
-        role="search"
         aria-labelledby={`${formId}-heading`}
         aria-describedby={`${formId}-instructions ${searchError ? errorId : ''}`}
       >
