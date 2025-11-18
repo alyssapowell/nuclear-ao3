@@ -129,7 +129,7 @@ export default function ProfilePage() {
                           href={profile.website}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center text-orange-600 hover:text-orange-700 transition-colors"
+                          className="flex items-center text-orange-700 hover:text-orange-700 transition-colors"
                         >
                           🔗 Website
                         </a>
@@ -253,7 +253,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Link href="/dashboard" className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-orange-300 transition-colors">
                 <div className="text-center">
-                  <svg className="w-8 h-8 mx-auto mb-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 mx-auto mb-3 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6a2 2 0 01-2 2H10a2 2 0 01-2-2V5z" />
                   </svg>
@@ -264,7 +264,7 @@ export default function ProfilePage() {
               
               <Link href="/works/new" className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-blue-300 transition-colors">
                 <div className="text-center">
-                  <svg className="w-8 h-8 mx-auto mb-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-8 h-8 mx-auto mb-3 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   <h3 className="font-semibold text-slate-900 mb-2">Post New Work</h3>

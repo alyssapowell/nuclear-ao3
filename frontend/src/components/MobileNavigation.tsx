@@ -137,7 +137,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             {offlineWorksCount > 0 && (
               <button
                 onClick={() => setShowOfflineManager(true)}
-                className="text-xs text-blue-600 ml-2 hover:text-blue-800"
+                className="text-xs text-blue-700 ml-2 hover:text-blue-800"
               >
                 {offlineWorksCount} work{offlineWorksCount !== 1 ? 's' : ''} offline
               </button>
@@ -145,7 +145,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
           </div>
 
           {/* Logo */}
-          <Link href="/" className="font-bold text-lg text-blue-600">
+          <Link href="/" className="font-bold text-lg text-blue-700">
             Nuclear AO3
           </Link>
 
@@ -173,8 +173,8 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                 href={item.href}
                 className={`flex flex-col items-center justify-center py-2 px-1 text-xs transition-colors ${
                   active 
-                    ? 'text-blue-600 bg-blue-50' 
-                    : 'text-gray-700 hover:text-blue-600'
+                    ? 'text-blue-700 bg-blue-50' 
+                    : 'text-gray-700 hover:text-blue-700'
                 }`}
               >
                 <Icon className="w-6 h-6 mb-1" />
@@ -216,7 +216,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             {pwaState.isInstallable && !pwaState.isInstalled && (
               <div className="p-4 bg-blue-50 border-b border-blue-200">
                 <div className="flex items-start space-x-3">
-                  <ArrowDownTrayIcon className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <ArrowDownTrayIcon className="w-5 h-5 text-blue-700 mt-0.5" />
                   <div className="flex-1">
                     <h3 className="text-sm font-medium text-blue-900">
                       Install Nuclear AO3
@@ -238,7 +238,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                       </button>
                       <button
                         onClick={pwaActions.dismissInstallPrompt}
-                        className="px-3 py-1 text-blue-600 text-xs rounded-md hover:bg-blue-100"
+                        className="px-3 py-1 text-blue-700 text-xs rounded-md hover:bg-blue-100"
                       >
                         Later
                       </button>

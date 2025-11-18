@@ -65,7 +65,7 @@ function EnhancedTagInput({ tags, onChange, placeholder, tagType, required }: En
               <button
                 type="button"
                 onClick={() => removeTag(index)}
-                className="ml-2 text-blue-600 hover:text-blue-800 focus:outline-none"
+                className="ml-2 text-blue-700 hover:text-blue-800 focus:outline-none"
                 aria-label={`Remove ${tag} tag`}
               >
                 ×

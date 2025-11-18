@@ -316,7 +316,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
             {canReply && (
               <button
                 onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
-                className="text-sm text-orange-600 hover:text-orange-700 transition-colors"
+                className="text-sm text-orange-700 hover:text-orange-700 transition-colors"
               >
                 {replyingTo === comment.id ? 'Cancel Reply' : 'Reply'}
               </button>
@@ -332,7 +332,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
                     // Update URL for sharing/navigation
                     navigation.toConversation(workId, comment.id, true);
                   }}
-                  className="hidden md:inline-flex text-sm text-blue-600 hover:text-blue-700 transition-colors items-center gap-1"
+                  className="hidden md:inline-flex text-sm text-blue-700 hover:text-blue-700 transition-colors items-center gap-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -343,7 +343,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
                 {/* Mobile: Navigate to conversation page */}
                 <button
                   onClick={() => router.push(getConversationUrl(workId, comment.id))}
-                  className="md:hidden text-sm text-blue-600 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
+                  className="md:hidden text-sm text-blue-700 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />

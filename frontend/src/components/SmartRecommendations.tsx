@@ -108,7 +108,7 @@ export default function SmartRecommendations({
                     {recommendation.suggestions.length > 3 && (
                       <button
                         onClick={() => setExpandedId(expandedId === index ? null : index)}
-                        className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                        className="mt-2 text-sm text-blue-700 hover:text-blue-800"
                       >
                         {expandedId === index 
                           ? 'Show less' 

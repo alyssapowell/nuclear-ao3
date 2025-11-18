@@ -154,7 +154,7 @@ export default function CollectionsPage() {
         <div className="flex-1">
           <a 
             href={`/collections/${collection.id}`}
-            className="text-lg font-semibold text-blue-600 hover:text-blue-800"
+            className="text-lg font-semibold text-blue-700 hover:text-blue-800"
           >
             {collection.title}
           </a>
@@ -242,7 +242,7 @@ export default function CollectionsPage() {
             onClick={() => setActiveTab('browse')}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               activeTab === 'browse'
-                ? 'border-orange-500 text-orange-600'
+                ? 'border-orange-500 text-orange-700'
                 : 'border-transparent text-gray-700 hover:text-gray-700'
             }`}
           >
@@ -253,7 +253,7 @@ export default function CollectionsPage() {
               onClick={() => setActiveTab('my')}
               className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === 'my'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-gray-700 hover:text-gray-700'
               }`}
             >

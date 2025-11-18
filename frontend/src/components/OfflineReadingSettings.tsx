@@ -137,7 +137,7 @@ export default function OfflineReadingSettings({
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start space-x-2">
-          <InformationCircleIcon className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <InformationCircleIcon className="w-5 h-5 text-blue-700 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-1">Per-Work Overrides</p>
             <p>You can override this default setting for specific works when posting or editing them.</p>

@@ -438,16 +438,16 @@ export default function PrivacyPolicyPage() {
         <div className="bg-green-50 rounded-lg p-4">
           <h3 className="font-semibold text-green-900 mb-2">Privacy Resources</h3>
           <div className="flex flex-wrap gap-4 text-sm">
-            <Link href="/profile/privacy" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/profile/privacy" className="text-orange-700 hover:text-orange-700 underline">
               Privacy Settings
             </Link>
-            <Link href="/terms" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/terms" className="text-orange-700 hover:text-orange-700 underline">
               Terms of Service
             </Link>
-            <Link href="/accessibility" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/accessibility" className="text-orange-700 hover:text-orange-700 underline">
               Accessibility Statement
             </Link>
-            <Link href="/contact" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/contact" className="text-orange-700 hover:text-orange-700 underline">
               Contact Us
             </Link>
           </div>

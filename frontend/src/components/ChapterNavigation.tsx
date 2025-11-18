@@ -140,7 +140,7 @@ export default function ChapterNavigation({
                       </div>
                     </div>
                     {index === currentChapter && (
-                      <div className="text-orange-600 text-xs font-bold">
+                      <div className="text-orange-700 text-xs font-bold">
                         CURRENT
                       </div>
                     )}

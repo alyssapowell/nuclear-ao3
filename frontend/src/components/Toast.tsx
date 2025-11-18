@@ -115,7 +115,7 @@ const ToastItem = ({ toast, onClose }: ToastProps) => {
                     className={`text-sm font-medium rounded px-2 py-1 transition-colors ${
                       action.variant === 'primary' 
                         ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                        : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
+                        : 'text-orange-700 hover:text-orange-700 hover:bg-orange-50'
                     }`}
                   >
                     {action.label}

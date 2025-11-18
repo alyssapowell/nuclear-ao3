@@ -133,7 +133,7 @@ export default function TagProminenceSelector({
                 <div key={tag.tagName} className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="flex items-center">
                     <span className="text-blue-800">{tag.tagName}</span>
-                    <span className="ml-2 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                    <span className="ml-2 text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded">
                       {tag.tagType}
                     </span>
                     {tag.autoSuggested && (
@@ -145,7 +145,7 @@ export default function TagProminenceSelector({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateTagProminence(tag.tagName, 'primary')}
-                      className="text-xs text-orange-600 hover:text-orange-800"
+                      className="text-xs text-orange-700 hover:text-orange-800"
                       title="Move to primary"
                       disabled={primaryRelationships.length >= 3 && tag.tagType === 'relationship'}
                     >
@@ -197,7 +197,7 @@ export default function TagProminenceSelector({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => updateTagProminence(tag.tagName, 'secondary')}
-                      className="text-xs text-blue-600 hover:text-blue-800"
+                      className="text-xs text-blue-700 hover:text-blue-800"
                       title="Move to secondary"
                     >
                       ↑ Secondary

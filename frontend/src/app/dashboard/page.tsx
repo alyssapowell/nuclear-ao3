@@ -191,7 +191,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-8 w-8 text-orange-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
               </div>
@@ -207,7 +207,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-8 w-8 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               </div>
@@ -244,7 +244,7 @@ export default function DashboardPage() {
               onClick={() => setActiveTab('works')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'works'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -254,7 +254,7 @@ export default function DashboardPage() {
               onClick={() => setActiveTab('bookmarks')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'bookmarks'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -264,7 +264,7 @@ export default function DashboardPage() {
               onClick={() => setActiveTab('subscriptions')}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'subscriptions'
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -309,7 +309,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-3 mb-2">
                           <Link
                             href={`/works/${work.id}`}
-                            className="text-xl font-bold text-slate-900 hover:text-orange-600"
+                            className="text-xl font-bold text-slate-900 hover:text-orange-700"
                           >
                             {work.title}
                           </Link>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 ml-4">
                         <Link
                           href={`/works/${work.id}/edit`}
-                          className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+                          className="text-orange-700 hover:text-orange-700 text-sm font-medium"
                         >
                           Edit
                         </Link>
@@ -405,7 +405,7 @@ export default function DashboardPage() {
                       <div className="flex-1">
                         <Link
                           href={`/works/${bookmark.work.id}`}
-                          className="text-xl font-bold text-slate-900 hover:text-orange-600 block mb-2"
+                          className="text-xl font-bold text-slate-900 hover:text-orange-700 block mb-2"
                         >
                           {bookmark.work.title}
                         </Link>

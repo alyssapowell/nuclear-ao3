@@ -112,7 +112,7 @@ export default function SeriesPage() {
               <span>by</span>
               <Link 
                 href={`/users/${series.user_id}`}
-                className="text-orange-600 hover:text-orange-700 font-medium"
+                className="text-orange-700 hover:text-orange-700 font-medium"
               >
                 {series.username || 'Unknown Author'}
               </Link>
@@ -132,7 +132,7 @@ export default function SeriesPage() {
         {/* Series Statistics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{series.work_count}</div>
+            <div className="text-2xl font-bold text-blue-700">{series.work_count}</div>
             <div className="text-sm text-slate-600">Works</div>
           </div>
           <div className="text-center">
@@ -225,7 +225,7 @@ export default function SeriesPage() {
       <div className="mt-8 text-center">
         <Link 
           href="/series"
-          className="inline-flex items-center text-orange-600 hover:text-orange-700 transition-colors"
+          className="inline-flex items-center text-orange-700 hover:text-orange-700 transition-colors"
         >
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />

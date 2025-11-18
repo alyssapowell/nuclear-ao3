@@ -159,7 +159,7 @@ function LoginContent() {
         Don't have an account?{' '}
         <a 
           href={`/auth/register${searchParams.get('redirect') ? `?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : ''}`}
-          className="text-orange-600 hover:text-orange-500"
+          className="text-orange-700 hover:text-orange-500"
         >
           Sign up here
         </a>

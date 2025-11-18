@@ -148,7 +148,7 @@ export default function GDPRConsentBanner({ onConsentUpdate, className = '' }: G
             <div className="flex items-center gap-3 flex-shrink-0">
               <button
                 onClick={() => setShowDetails(true)}
-                className="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
+                className="text-sm text-orange-700 hover:text-orange-700 font-medium flex items-center gap-1"
               >
                 <Settings className="w-4 h-4" />
                 Customize
@@ -320,11 +320,11 @@ export default function GDPRConsentBanner({ onConsentUpdate, className = '' }: G
 
             <div className="mt-4 text-xs text-slate-500 text-center">
               By using Nuclear AO3, you agree to our{' '}
-              <a href="/privacy-policy" className="text-orange-600 hover:text-orange-700 underline">
+              <a href="/privacy-policy" className="text-orange-700 hover:text-orange-700 underline">
                 Privacy Policy
               </a>{' '}
               and{' '}
-              <a href="/terms-of-service" className="text-orange-600 hover:text-orange-700 underline">
+              <a href="/terms-of-service" className="text-orange-700 hover:text-orange-700 underline">
                 Terms of Service
               </a>
               . We are committed to protecting your privacy and the fan community.

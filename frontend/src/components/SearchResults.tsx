@@ -317,7 +317,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                       ))}
                     </div>
                   )}
-                  <div className="text-xs text-blue-600 mt-1">
+                  <div className="text-xs text-blue-700 mt-1">
                     Confidence: {Math.round(rec.confidence_score * 100)}%
                   </div>
                 </div>
@@ -350,7 +350,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                 <header className="mb-4">
                   <h4 
                     id={`work-${work.id}-title`}
-                    className="text-xl font-semibold text-blue-600 hover:text-blue-700 cursor-pointer mb-2"
+                    className="text-xl font-semibold text-blue-700 hover:text-blue-700 cursor-pointer mb-2"
                     tabIndex={0}
                     onClick={() => handleWorkClick(work.id, work.title)}
                     onKeyDown={(e) => handleWorkKeyDown(e, work.id, work.title)}
@@ -429,7 +429,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                       <button
                         type="button"
                         onClick={() => toggleSummary(work.id)}
-                        className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
+                        className="mt-2 text-blue-700 hover:text-blue-700 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
                         aria-expanded={isExpanded}
                         aria-controls={`work-${work.id}-summary`}
                       >

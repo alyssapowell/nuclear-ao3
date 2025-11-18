@@ -198,7 +198,7 @@ export default function AttributionsPage() {
                       href={dep.repository}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 underline"
+                      className="text-blue-700 hover:text-blue-800 underline"
                     >
                       Repository →
                     </a>

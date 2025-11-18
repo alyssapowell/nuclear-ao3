@@ -252,7 +252,7 @@ export default function EditSeriesPage() {
                   id="is_complete"
                   checked={formData.is_complete}
                   onChange={(e) => setFormData(prev => ({ ...prev, is_complete: e.target.checked }))}
-                  className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500"
+                  className="w-4 h-4 text-orange-700 border-slate-300 rounded focus:ring-orange-500"
                 />
                 <label htmlFor="is_complete" className="ml-2 text-sm text-slate-700">
                   This series is complete
@@ -310,7 +310,7 @@ export default function EditSeriesPage() {
                       <button
                         type="button"
                         onClick={() => handleAddWork(work.id)}
-                        className="text-orange-600 hover:text-orange-700 text-sm font-medium"
+                        className="text-orange-700 hover:text-orange-700 text-sm font-medium"
                       >
                         Add to Series
                       </button>

@@ -44,9 +44,9 @@ function NavDropdown({ label, icon, children, isActive }: NavDropdownProps) {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center space-x-1 text-sm font-medium transition-colors hover:text-orange-600 ${
+        className={`flex items-center space-x-1 text-sm font-medium transition-colors hover:text-orange-700 ${
           isActive 
-            ? 'text-orange-600 border-b-2 border-orange-600 pb-4 -mb-4' 
+            ? 'text-orange-700 border-b-2 border-orange-600 pb-4 -mb-4' 
             : 'text-gray-700'
         }`}
         aria-label={`${label} menu`}
@@ -173,13 +173,13 @@ export default function Navigation() {
             <Link href="/" className="flex items-center space-x-2 group">
               <div className="text-2xl">🚀</div>
               <div className="hidden sm:block">
-                <h1 className="text-xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
+                <h1 className="text-xl font-bold text-gray-900 group-hover:text-orange-700 transition-colors">
                   Nuclear AO3
                 </h1>
                 <p className="text-xs text-gray-700 -mt-1">Fast & Modern Archive</p>
               </div>
               <div className="sm:hidden">
-                <h1 className="text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors">
+                <h1 className="text-lg font-bold text-gray-900 group-hover:text-orange-700 transition-colors">
                   Nuclear AO3
                 </h1>
               </div>
@@ -207,9 +207,9 @@ export default function Navigation() {
             {/* Search Link (standalone) */}
             <Link
               href="/search"
-              className={`text-sm font-medium transition-colors hover:text-orange-600 ${
+              className={`text-sm font-medium transition-colors hover:text-orange-700 ${
                 isActive('/search') 
-                  ? 'text-orange-600 border-b-2 border-orange-600 pb-4 -mb-4' 
+                  ? 'text-orange-700 border-b-2 border-orange-600 pb-4 -mb-4' 
                   : 'text-gray-700'
               }`}
             >
@@ -228,8 +228,8 @@ export default function Navigation() {
                   href={link.href}
                   className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                     isActive(link.href)
-                      ? 'text-orange-600 bg-orange-50'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-orange-600'
+                      ? 'text-orange-700 bg-orange-50'
+                      : 'text-gray-700 hover:bg-gray-50 hover:text-orange-700'
                   }`}
                 >
                   {link.icon}
@@ -251,8 +251,8 @@ export default function Navigation() {
                     href={link.href}
                     className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                       isActive(link.href)
-                        ? 'text-orange-600 bg-orange-50'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-orange-600'
+                        ? 'text-orange-700 bg-orange-50'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-orange-700'
                     }`}
                   >
                     {link.icon}
@@ -275,8 +275,8 @@ export default function Navigation() {
                     href={link.href}
                     className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                       isActive(link.href)
-                        ? 'text-orange-600 bg-orange-50'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-orange-600'
+                        ? 'text-orange-700 bg-orange-50'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-orange-700'
                     }`}
                   >
                     {link.icon}
@@ -293,12 +293,12 @@ export default function Navigation() {
                   {/* <NotificationBell /> Temporarily disabled - notification service not running */}
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
+                    className="flex items-center space-x-2 text-sm font-medium text-gray-700 hover:text-orange-700 transition-colors"
                     aria-label="User menu"
                     aria-expanded={isUserMenuOpen}
                   >
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-orange-600" aria-hidden="true" />
+                      <User className="w-4 h-4 text-orange-700" aria-hidden="true" />
                     </div>
                     <span className="hidden lg:block">{user.username}</span>
                     <ChevronDown className="w-4 h-4" aria-hidden="true" />
@@ -339,7 +339,7 @@ export default function Navigation() {
               <div className="flex items-center space-x-4">
                 <Link
                   href="/auth/login"
-                  className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
+                  className="text-sm font-medium text-gray-700 hover:text-orange-700 transition-colors"
                 >
                   Log In
                 </Link>
@@ -358,7 +358,7 @@ export default function Navigation() {
             {/* <NotificationBell /> Temporarily disabled - notification service not running */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-700 hover:text-orange-600 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-md text-gray-700 hover:text-orange-700 hover:bg-gray-100 transition-colors"
               aria-label={isMobileMenuOpen ? 'Close mobile menu' : 'Open mobile menu'}
               aria-expanded={isMobileMenuOpen}
             >
@@ -397,8 +397,8 @@ export default function Navigation() {
               href="/search"
               className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                 isActive('/search')
-                  ? 'text-orange-600 bg-orange-50'
-                  : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
+                  ? 'text-orange-700 bg-orange-50'
+                  : 'text-gray-700 hover:text-orange-700 hover:bg-gray-50'
               }`}
               onClick={() => setIsMobileMenuOpen(false)}
             >
@@ -417,8 +417,8 @@ export default function Navigation() {
                   href={link.href}
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                     isActive(link.href)
-                      ? 'text-orange-600 bg-orange-50'
-                      : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
+                      ? 'text-orange-700 bg-orange-50'
+                      : 'text-gray-700 hover:text-orange-700 hover:bg-gray-50'
                   }`}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
@@ -442,8 +442,8 @@ export default function Navigation() {
                         href={link.href}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                           isActive(link.href)
-                            ? 'text-orange-600 bg-orange-50'
-                            : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
+                            ? 'text-orange-700 bg-orange-50'
+                            : 'text-gray-700 hover:text-orange-700 hover:bg-gray-50'
                         }`}
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
@@ -466,8 +466,8 @@ export default function Navigation() {
                         href={link.href}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                           isActive(link.href)
-                            ? 'text-orange-600 bg-orange-50'
-                            : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
+                            ? 'text-orange-700 bg-orange-50'
+                            : 'text-gray-700 hover:text-orange-700 hover:bg-gray-50'
                         }`}
                         onClick={() => setIsMobileMenuOpen(false)}
                       >
@@ -483,20 +483,20 @@ export default function Navigation() {
                 <div className="px-3 py-2">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-orange-600" />
+                      <User className="w-4 h-4 text-orange-700" />
                     </div>
                     <span className="text-base font-medium text-gray-900">{user.username}</span>
                   </div>
                   <Link
                     href="/profile"
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-600 hover:bg-gray-50 transition-colors"
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Profile Settings
                   </Link>
                   <button
                     onClick={handleSignOut}
-                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-600 hover:bg-gray-50 transition-colors"
+                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
                   >
                     Sign Out
                   </button>
@@ -509,7 +509,7 @@ export default function Navigation() {
                 <hr className="my-2" />
                 <Link
                   href="/auth/login"
-                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-600 hover:bg-gray-50 transition-colors"
+                  className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Log In

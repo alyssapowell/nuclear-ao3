@@ -142,7 +142,7 @@ export default function FeedbackPage() {
                   id="includeEmail"
                   checked={includeEmail}
                   onChange={(e) => setIncludeEmail(e.target.checked)}
-                  className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="mt-1 h-4 w-4 text-blue-700 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <div className="flex-1">
                   <label htmlFor="includeEmail" className="text-sm font-medium text-gray-900">
@@ -208,7 +208,7 @@ export default function FeedbackPage() {
                 </p>
                 <a 
                   href="/contact" 
-                  className="text-blue-600 hover:underline text-sm font-medium"
+                  className="text-blue-700 hover:underline text-sm font-medium"
                 >
                   View Contact Options →
                 </a>
@@ -221,7 +221,7 @@ export default function FeedbackPage() {
                 </p>
                 <a 
                   href="/help" 
-                  className="text-blue-600 hover:underline text-sm font-medium"
+                  className="text-blue-700 hover:underline text-sm font-medium"
                 >
                   Browse Help Topics →
                 </a>

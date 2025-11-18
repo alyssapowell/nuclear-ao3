@@ -209,7 +209,7 @@ export default function ExportProgress({ exportId, onComplete, onClose }: Export
             {timeLeft !== 'Expired' && (
               <button
                 onClick={handleRefreshTTL}
-                className="flex items-center text-xs text-orange-600 hover:text-orange-700 font-medium"
+                className="flex items-center text-xs text-orange-700 hover:text-orange-700 font-medium"
                 title="Extend download time by 24 hours"
               >
                 <ClockIcon className="w-3 h-3 mr-1" />

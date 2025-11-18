@@ -129,7 +129,7 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <Link href={`/works/${work.id}`} className="text-lg font-semibold text-blue-600 hover:text-blue-800">
+          <Link href={`/works/${work.id}`} className="text-lg font-semibold text-blue-700 hover:text-blue-800">
             {work.title}
           </Link>
           <p className="text-sm text-gray-700">by {work.author}</p>

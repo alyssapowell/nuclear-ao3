@@ -66,7 +66,7 @@ export default function ExportButton({ workId, workTitle, authToken }: ExportBut
         {/* Main Export Button */}
         <button
           onClick={() => setShowQuickMenu(!showQuickMenu)}
-          className="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-700 hover:text-orange-600 border border-slate-300 rounded-md hover:border-orange-500 transition-colors duration-200"
+          className="inline-flex items-center px-3 py-2 text-sm font-medium text-slate-700 hover:text-orange-700 border border-slate-300 rounded-md hover:border-orange-500 transition-colors duration-200"
           title="Export this work"
         >
           <ArrowDownTrayIcon className="w-4 h-4 mr-1.5" />
@@ -83,7 +83,7 @@ export default function ExportButton({ workId, workTitle, authToken }: ExportBut
               
               <button
                 onClick={() => handleQuickExport('epub')}
-                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
               >
                 <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                 EPUB
@@ -92,7 +92,7 @@ export default function ExportButton({ workId, workTitle, authToken }: ExportBut
               
               <button
                 onClick={() => handleQuickExport('mobi')}
-                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
               >
                 <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                 MOBI
@@ -101,7 +101,7 @@ export default function ExportButton({ workId, workTitle, authToken }: ExportBut
               
               <button
                 onClick={() => handleQuickExport('pdf')}
-                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
               >
                 <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                 PDF
@@ -111,7 +111,7 @@ export default function ExportButton({ workId, workTitle, authToken }: ExportBut
               <div className="border-t border-slate-100 mt-1">
                 <button
                   onClick={handleCustomExport}
-                  className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                  className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                 >
                   <Cog6ToothIcon className="w-4 h-4 mr-2" />
                   Custom Options...

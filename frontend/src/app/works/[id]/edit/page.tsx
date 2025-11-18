@@ -342,7 +342,7 @@ export default function EditWorkPage() {
       <div className="mb-8">
         <Link 
           href={`/works/${workId}`}
-          className="inline-flex items-center text-orange-600 hover:text-orange-700 mb-6 font-medium"
+          className="inline-flex items-center text-orange-700 hover:text-orange-700 mb-6 font-medium"
         >
           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -367,7 +367,7 @@ export default function EditWorkPage() {
             onClick={() => setActiveTab('work')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'work'
-                ? 'border-orange-500 text-orange-600'
+                ? 'border-orange-500 text-orange-700'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -377,7 +377,7 @@ export default function EditWorkPage() {
             onClick={() => setActiveTab('chapters')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'chapters'
-                ? 'border-orange-500 text-orange-600'
+                ? 'border-orange-500 text-orange-700'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
           >
@@ -494,7 +494,7 @@ export default function EditWorkPage() {
                         type="checkbox"
                         checked={workForm.category?.includes(category) || false}
                         onChange={(e) => handleCategoryChange(category, e.target.checked)}
-                        className="mr-2 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                        className="mr-2 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                       />
                       <span className="text-sm text-slate-700">{category}</span>
                     </label>
@@ -513,7 +513,7 @@ export default function EditWorkPage() {
                         type="checkbox"
                         checked={workForm.warnings?.includes(warning) || false}
                         onChange={(e) => handleWarningChange(warning, e.target.checked)}
-                        className="mr-2 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                        className="mr-2 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                       />
                       <span className="text-sm text-slate-700">{warning}</span>
                     </label>
@@ -597,7 +597,7 @@ export default function EditWorkPage() {
                       name="is_complete"
                       checked={workForm.is_complete || false}
                       onChange={handleWorkInputChange}
-                      className="mr-2 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                      className="mr-2 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                     />
                     <span className="text-sm font-medium text-slate-700">Mark as Complete</span>
                   </label>
@@ -619,7 +619,7 @@ export default function EditWorkPage() {
                     name="restricted_to_users"
                     checked={workForm.restricted_to_users || false}
                     onChange={handleWorkInputChange}
-                    className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                    className="mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-slate-700">Registered Users Only</span>
@@ -633,7 +633,7 @@ export default function EditWorkPage() {
                     name="restricted_to_adults"
                     checked={workForm.restricted_to_adults || false}
                     onChange={handleWorkInputChange}
-                    className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                    className="mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-slate-700">Adults Only</span>
@@ -647,7 +647,7 @@ export default function EditWorkPage() {
                     name="is_anonymous"
                     checked={workForm.is_anonymous || false}
                     onChange={handleWorkInputChange}
-                    className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                    className="mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-slate-700">Post Anonymously</span>
@@ -680,7 +680,7 @@ export default function EditWorkPage() {
                     name="moderate_comments"
                     checked={workForm.moderate_comments || false}
                     onChange={handleWorkInputChange}
-                    className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                    className="mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
                   />
                   <div>
                     <span className="text-sm font-medium text-slate-700">Moderate Comments</span>
@@ -749,7 +749,7 @@ export default function EditWorkPage() {
                         setIsCreatingChapter(true);
                         setSelectedChapter(null);
                       }}
-                      className="text-orange-600 hover:text-orange-700 text-sm font-medium mt-2"
+                      className="text-orange-700 hover:text-orange-700 text-sm font-medium mt-2"
                     >
                       Create your first chapter
                     </button>

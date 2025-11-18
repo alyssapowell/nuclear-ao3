@@ -191,7 +191,7 @@ export default function ConversationView({
           <nav className="mb-3" aria-label="Conversation breadcrumb">
             <button
               onClick={onBackToComments || navigateToComments}
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center text-sm"
+              className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center text-sm"
             >
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -224,7 +224,7 @@ export default function ConversationView({
           
           <button
             onClick={() => shareConversation(rootComment?.content ? `Thread starting with "${rootComment.content.substring(0, 50)}..."` : undefined)}
-            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center px-2 py-1 border border-blue-200 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            className="text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center px-2 py-1 border border-blue-200 dark:border-blue-600 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
             title="Share this conversation"
           >
             <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -290,7 +290,7 @@ export default function ConversationView({
             <div className="flex items-center space-x-4 text-sm">
               <button
                 onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
-                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                className="text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 Reply
               </button>

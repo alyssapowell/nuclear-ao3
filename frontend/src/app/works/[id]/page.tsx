@@ -207,7 +207,7 @@ export default function WorkPage() {
                   ) : (
                     <Link 
                       href={`/users/${author.username}`}
-                      className="text-orange-600 hover:text-orange-700 font-medium"
+                      className="text-orange-700 hover:text-orange-700 font-medium"
                     >
                       {author.pseud_name}
                     </Link>

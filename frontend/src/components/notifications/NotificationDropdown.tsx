@@ -153,7 +153,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            className="w-full text-center text-sm text-blue-600 hover:text-blue-800"
+            className="w-full text-center text-sm text-blue-700 hover:text-blue-800"
             onClick={() => {
               window.location.href = '/notifications';
               onClose();

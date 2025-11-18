@@ -137,7 +137,7 @@ export default function TagInput({
       return <span className="text-green-600 text-xs font-medium">CANONICAL</span>;
     }
     if (suggestion.use_count > 100) {
-      return <span className="text-blue-600 text-xs">POPULAR</span>;
+      return <span className="text-blue-700 text-xs">POPULAR</span>;
     }
     return null;
   };
@@ -147,7 +147,7 @@ export default function TagInput({
       case 'fandom': return 'text-purple-600';
       case 'character': return 'text-green-600';
       case 'relationship': return 'text-red-600';
-      case 'freeform': return 'text-blue-600';
+      case 'freeform': return 'text-blue-700';
       default: return 'text-slate-600';
     }
   };

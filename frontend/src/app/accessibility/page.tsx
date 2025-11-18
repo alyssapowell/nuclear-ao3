@@ -213,7 +213,7 @@ export default function AccessibilityPage() {
                   <li>• Your browser and operating system</li>
                   <li>• A description of the problem</li>
                 </ul>
-                <a href="/contact" className="text-blue-600 hover:underline font-medium">
+                <a href="/contact" className="text-blue-700 hover:underline font-medium">
                   Contact Support →
                 </a>
               </div>
@@ -228,7 +228,7 @@ export default function AccessibilityPage() {
                   <li>• Detailed investigation and response within 5 business days</li>
                   <li>• Critical accessibility issues prioritized for immediate attention</li>
                 </ul>
-                <a href="/feedback" className="text-blue-600 hover:underline font-medium">
+                <a href="/feedback" className="text-blue-700 hover:underline font-medium">
                   Send Feedback →
                 </a>
               </div>

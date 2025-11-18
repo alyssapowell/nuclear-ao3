@@ -80,7 +80,7 @@ export default function HelpPage() {
                 <h3 className="text-lg font-medium text-gray-900 mb-2">How is my data protected?</h3>
                 <p className="text-gray-700">
                   Your data is encrypted end-to-end, we collect minimal information, and we aggressively delete 
-                  unnecessary data. See our <a href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</a> for complete details.
+                  unnecessary data. See our <a href="/privacy" className="text-blue-700 hover:underline">Privacy Policy</a> for complete details.
                 </p>
               </div>
               
@@ -95,7 +95,7 @@ export default function HelpPage() {
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">How do I delete my account?</h3>
                 <p className="text-gray-700">
-                  Contact us through the <a href="/contact" className="text-blue-600 hover:underline">Contact</a> page. 
+                  Contact us through the <a href="/contact" className="text-blue-700 hover:underline">Contact</a> page. 
                   Account deletion is permanent and removes all your data within 30 days, as outlined in our privacy policy.
                 </p>
               </div>
@@ -198,10 +198,10 @@ export default function HelpPage() {
               </p>
               <div className="space-y-2">
                 <p className="text-gray-700">
-                  • <a href="/contact" className="text-blue-600 hover:underline">Contact Support</a> - Get help from our team
+                  • <a href="/contact" className="text-blue-700 hover:underline">Contact Support</a> - Get help from our team
                 </p>
                 <p className="text-gray-700">
-                  • <a href="/feedback" className="text-blue-600 hover:underline">Send Feedback</a> - Suggest improvements or report bugs
+                  • <a href="/feedback" className="text-blue-700 hover:underline">Send Feedback</a> - Suggest improvements or report bugs
                 </p>
                 <p className="text-gray-700">
                   • Check our community forums (coming soon) for user discussions

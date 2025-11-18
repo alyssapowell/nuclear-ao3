@@ -67,7 +67,7 @@ export default function AboutPage() {
                 href="https://github.com/liberationlicense/license" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-orange-600 hover:text-orange-700 underline"
+                className="text-orange-700 hover:text-orange-700 underline"
               >
                 Liberation License
               </a>
@@ -250,13 +250,13 @@ export default function AboutPage() {
       {/* Navigation */}
       <footer className="mt-12 pt-8 border-t border-slate-200 text-center">
         <div className="flex flex-wrap justify-center gap-6 text-sm">
-          <Link href="/terms" className="text-orange-600 hover:text-orange-700 underline">
+          <Link href="/terms" className="text-orange-700 hover:text-orange-700 underline">
             Terms of Service
           </Link>
-          <Link href="/privacy" className="text-orange-600 hover:text-orange-700 underline">
+          <Link href="/privacy" className="text-orange-700 hover:text-orange-700 underline">
             Privacy Policy
           </Link>
-          <Link href="/attributions" className="text-orange-600 hover:text-orange-700 underline">
+          <Link href="/attributions" className="text-orange-700 hover:text-orange-700 underline">
             Open Source Attributions
           </Link>
         </div>

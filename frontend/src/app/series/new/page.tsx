@@ -164,7 +164,7 @@ export default function CreateSeriesPage() {
                 id="is_complete"
                 checked={formData.is_complete}
                 onChange={(e) => setFormData(prev => ({ ...prev, is_complete: e.target.checked }))}
-                className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500"
+                className="w-4 h-4 text-orange-700 border-slate-300 rounded focus:ring-orange-500"
               />
               <label htmlFor="is_complete" className="ml-2 text-sm text-slate-700">
                 This series is complete
@@ -205,7 +205,7 @@ export default function CreateSeriesPage() {
                     id={`work-${work.id}`}
                     checked={(formData.work_ids || []).includes(work.id)}
                     onChange={(e) => handleWorkSelection(work.id, e.target.checked)}
-                    className="w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500 mt-1"
+                    className="w-4 h-4 text-orange-700 border-slate-300 rounded focus:ring-orange-500 mt-1"
                   />
                   <label htmlFor={`work-${work.id}`} className="flex-1 cursor-pointer">
                     <div className="font-medium text-slate-900">{work.title}</div>

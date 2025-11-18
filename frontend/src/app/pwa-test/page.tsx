@@ -171,7 +171,7 @@ export default function PWATestPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-blue-50 p-4 rounded-lg border">
           <h3 className="font-semibold text-blue-800">Service Worker</h3>
-          <p className="text-sm text-blue-600" data-testid="sw-status">{swStatus}</p>
+          <p className="text-sm text-blue-700" data-testid="sw-status">{swStatus}</p>
         </div>
         
         <div className="bg-green-50 p-4 rounded-lg border">
@@ -186,7 +186,7 @@ export default function PWATestPage() {
 
         <div className="bg-orange-50 p-4 rounded-lg border">
           <h3 className="font-semibold text-orange-800">Consent TTL</h3>
-          <p className="text-sm text-orange-600" data-testid="ttl-display">{ttlDisplay}</p>
+          <p className="text-sm text-orange-700" data-testid="ttl-display">{ttlDisplay}</p>
         </div>
       </div>
 

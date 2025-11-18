@@ -58,7 +58,7 @@ const MemoizedTagField = React.memo(function TagField({
               <button
                 type="button"
                 onClick={() => onRemoveTag(index, tag)}
-                className="text-blue-600 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded-full p-0.5"
+                className="text-blue-700 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded-full p-0.5"
                 aria-label={`Remove ${tag} from ${label.toLowerCase()}`}
                 title={`Remove ${tag}`}
               >
@@ -517,7 +517,7 @@ const SearchForm = React.memo(function SearchForm({
                 type="checkbox"
                 checked={filters.excludePoorlyTagged}
                 onChange={(e) => handleInputChange('excludePoorlyTagged', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
               />
               <label 
                 htmlFor={`${formId}-exclude-poorly-tagged`}
@@ -533,7 +533,7 @@ const SearchForm = React.memo(function SearchForm({
                 type="checkbox"
                 checked={filters.enableSmartSuggestions}
                 onChange={(e) => handleInputChange('enableSmartSuggestions', e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
               />
               <label 
                 htmlFor={`${formId}-smart-suggestions`}
@@ -702,7 +702,7 @@ const SearchForm = React.memo(function SearchForm({
           <button
             type="button"
             onClick={toggleAdvanced}
-            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
+            className="flex items-center gap-2 px-4 py-2 text-blue-700 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-md"
             aria-expanded={showAdvanced}
             aria-controls={filtersId}
           >
@@ -861,7 +861,7 @@ const SearchForm = React.memo(function SearchForm({
                         type="checkbox"
                         checked={filters.hideIncomplete || false}
                         onChange={(e) => handleInputChange('hideIncomplete', e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Hide incomplete works</span>
                     </label>
@@ -870,7 +870,7 @@ const SearchForm = React.memo(function SearchForm({
                         type="checkbox"
                         checked={filters.hideCrossovers || false}
                         onChange={(e) => handleInputChange('hideCrossovers', e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Hide crossovers</span>
                     </label>
@@ -879,7 +879,7 @@ const SearchForm = React.memo(function SearchForm({
                         type="checkbox"
                         checked={filters.hideNoRelationships || false}
                         onChange={(e) => handleInputChange('hideNoRelationships', e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Hide gen fic (no relationships)</span>
                     </label>

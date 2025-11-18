@@ -92,7 +92,7 @@ export default function RespectfulExportButton({
 
   const getButtonColor = () => {
     if (isOnlineOnly) return 'text-slate-400 border-slate-200 cursor-not-allowed';
-    return 'text-slate-700 hover:text-orange-600 border-slate-300 hover:border-orange-500';
+    return 'text-slate-700 hover:text-orange-700 border-slate-300 hover:border-orange-500';
   };
 
   const ButtonIcon = getButtonIcon();
@@ -117,7 +117,7 @@ export default function RespectfulExportButton({
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
                 <div className="flex items-start space-x-3">
-                  <InformationCircleIcon className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <InformationCircleIcon className="w-6 h-6 text-blue-700 flex-shrink-0 mt-0.5" />
                   <div>
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">
                       Author's Choice: Online Only
@@ -181,7 +181,7 @@ export default function RespectfulExportButton({
                   </div>
                   <button
                     onClick={() => handleQuickExport('epub')}
-                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                   >
                     <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                     EPUB
@@ -190,7 +190,7 @@ export default function RespectfulExportButton({
                   
                   <button
                     onClick={() => handleQuickExport('mobi')}
-                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                   >
                     <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                     MOBI
@@ -217,7 +217,7 @@ export default function RespectfulExportButton({
                   </div>
                   <button
                     onClick={handlePWAOfflineReading}
-                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600"
+                    className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
                   >
                     <DevicePhoneMobileIcon className="w-4 h-4 mr-2" />
                     Read Offline
@@ -232,7 +232,7 @@ export default function RespectfulExportButton({
               {allowsDownloads && (
                 <button
                   onClick={handleCustomExport}
-                  className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                  className="w-full flex items-center px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 hover:text-orange-700"
                 >
                   <Cog6ToothIcon className="w-4 h-4 mr-2" />
                   Custom Options...

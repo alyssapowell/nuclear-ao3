@@ -345,7 +345,7 @@ type Mutation {
           </p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center">
-              <div className="text-blue-600 text-sm font-medium">
+              <div className="text-blue-700 text-sm font-medium">
                 🚀 Base URL: <code className="bg-blue-100 px-2 py-1 rounded">http://localhost:8080</code>
               </div>
             </div>
@@ -458,7 +458,7 @@ type Mutation {
                                   <tbody>
                                     {endpoint.params.map((param, i) => (
                                       <tr key={i} className="border-b">
-                                        <td className="py-2 font-mono text-blue-600">{param.name}</td>
+                                        <td className="py-2 font-mono text-blue-700">{param.name}</td>
                                         <td className="py-2 font-mono text-gray-700">{param.type}</td>
                                         <td className="py-2">
                                           {param.required ? (
@@ -492,7 +492,7 @@ type Mutation {
                                   <tbody>
                                     {endpoint.body.map((field, i) => (
                                       <tr key={i} className="border-b">
-                                        <td className="py-2 font-mono text-blue-600">{field.name}</td>
+                                        <td className="py-2 font-mono text-blue-700">{field.name}</td>
                                         <td className="py-2 font-mono text-gray-700">{field.type}</td>
                                         <td className="py-2">
                                           {field.required ? (

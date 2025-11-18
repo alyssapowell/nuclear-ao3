@@ -443,7 +443,7 @@ export default function PrivacyWizard({
                 type="checkbox"
                 checked={settings.hideArchiveWarnings.includes(warning)}
                 onChange={() => toggleArrayItem('hideArchiveWarnings', warning)}
-                className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300 rounded"
+                className="mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300 rounded"
               />
               <span className="text-sm text-slate-700">{warning}</span>
             </label>
@@ -483,7 +483,7 @@ export default function PrivacyWizard({
                     value={option.value}
                     checked={settings.profileVisibility === option.value}
                     onChange={(e) => updateSetting('profileVisibility', e.target.value as any)}
-                    className="mt-1 mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300"
+                    className="mt-1 mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300"
                   />
                   <div>
                     <div className="text-sm font-medium text-slate-700">{option.label}</div>
@@ -591,7 +591,7 @@ export default function PrivacyWizard({
                     value={option.value}
                     checked={settings.defaultWorkPrivacy === option.value}
                     onChange={(e) => updateSetting('defaultWorkPrivacy', e.target.value as any)}
-                    className="mt-1 mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300"
+                    className="mt-1 mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300"
                   />
                   <div>
                     <div className="text-sm font-medium text-slate-700">{option.label}</div>
@@ -619,7 +619,7 @@ export default function PrivacyWizard({
                     value={option.value}
                     checked={settings.defaultCommentPolicy === option.value}
                     onChange={(e) => updateSetting('defaultCommentPolicy', e.target.value as any)}
-                    className="mt-1 mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300"
+                    className="mt-1 mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300"
                   />
                   <div>
                     <div className="text-sm font-medium text-slate-700">{option.label}</div>
@@ -701,7 +701,7 @@ export default function PrivacyWizard({
                     value={option.value}
                     checked={settings.emailDigestFrequency === option.value}
                     onChange={(e) => updateSetting('emailDigestFrequency', e.target.value as any)}
-                    className="mt-1 mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-slate-300"
+                    className="mt-1 mr-3 h-4 w-4 text-orange-700 focus:ring-orange-500 border-slate-300"
                   />
                   <div>
                     <div className="text-sm font-medium text-slate-700">{option.label}</div>

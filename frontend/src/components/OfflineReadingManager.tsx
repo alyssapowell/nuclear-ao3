@@ -252,7 +252,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <CloudArrowDownSolidIcon className="w-6 h-6 text-blue-600" />
+            <CloudArrowDownSolidIcon className="w-6 h-6 text-blue-700" />
             <div>
               <h2 className="text-lg font-semibold">Offline Reading</h2>
               <div className="flex items-center space-x-2 text-sm text-gray-700">

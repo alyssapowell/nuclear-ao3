@@ -148,7 +148,7 @@ export default function TermsOfServicePage() {
               Your privacy is fundamental to our mission. We collect minimal data necessary 
               for service operation and implement strong protections for all user information. 
               For complete details, see our{' '}
-              <Link href="/privacy" className="text-orange-600 hover:text-orange-700 underline">
+              <Link href="/privacy" className="text-orange-700 hover:text-orange-700 underline">
                 Privacy Policy
               </Link>.
             </p>
@@ -296,11 +296,11 @@ export default function TermsOfServicePage() {
             <p>
               If you have questions about these Terms of Service, please contact us through 
               our{' '}
-              <Link href="/contact" className="text-orange-600 hover:text-orange-700 underline">
+              <Link href="/contact" className="text-orange-700 hover:text-orange-700 underline">
                 Contact page
               </Link>
               {' '}or{' '}
-              <Link href="/feedback" className="text-orange-600 hover:text-orange-700 underline">
+              <Link href="/feedback" className="text-orange-700 hover:text-orange-700 underline">
                 Feedback system
               </Link>.
             </p>
@@ -318,16 +318,16 @@ export default function TermsOfServicePage() {
         <div className="bg-slate-50 rounded-lg p-4">
           <h3 className="font-semibold text-slate-900 mb-2">Related Policies</h3>
           <div className="flex flex-wrap gap-4 text-sm">
-            <Link href="/privacy" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/privacy" className="text-orange-700 hover:text-orange-700 underline">
               Privacy Policy
             </Link>
-            <Link href="/about" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/about" className="text-orange-700 hover:text-orange-700 underline">
               About Nuclear AO3
             </Link>
-            <Link href="/help" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/help" className="text-orange-700 hover:text-orange-700 underline">
               Help & FAQ
             </Link>
-            <Link href="/contact" className="text-orange-600 hover:text-orange-700 underline">
+            <Link href="/contact" className="text-orange-700 hover:text-orange-700 underline">
               Contact Us
             </Link>
           </div>

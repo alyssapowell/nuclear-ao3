@@ -208,7 +208,7 @@ const SearchPagination: React.FC<SearchPaginationProps> = ({
                 onKeyDown={(e) => !isCurrent && handleKeyDown(e, page, `Page ${page}.`)}
                 className={`relative inline-flex items-center px-4 py-2 text-sm font-medium border focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isCurrent
-                    ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                    ? 'z-10 bg-blue-50 border-blue-500 text-blue-700'
                     : 'text-gray-700 bg-white border-gray-300 hover:bg-gray-50 focus:border-blue-500'
                 }`}
                 aria-label={isCurrent ? `Current page, page ${page}` : `Go to page ${page}`}

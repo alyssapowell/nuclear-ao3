@@ -213,7 +213,7 @@ function RegisterContent() {
         Already have an account?{' '}
         <a 
           href={`/auth/login${searchParams.get('redirect') ? `?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : ''}`}
-          className="text-orange-600 hover:text-orange-500"
+          className="text-orange-700 hover:text-orange-500"
         >
           Sign in here
         </a>

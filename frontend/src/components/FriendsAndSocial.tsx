@@ -181,7 +181,7 @@ export default function FriendsAndSocial({ authToken }: FriendsAndSocialProps) {
               onClick={() => setActiveTab(tab.id as any)}
               className={`py-2 px-1 border-b-2 font-medium text-sm ${
                 activeTab === tab.id
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >
@@ -273,7 +273,7 @@ export default function FriendsAndSocial({ authToken }: FriendsAndSocialProps) {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                              <span className="text-orange-600 font-medium">
+                              <span className="text-orange-700 font-medium">
                                 {friend?.username?.charAt(0).toUpperCase() || '?'}
                               </span>
                             </div>
@@ -330,7 +330,7 @@ export default function FriendsAndSocial({ authToken }: FriendsAndSocialProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                            <span className="text-orange-600 font-medium">
+                            <span className="text-orange-700 font-medium">
                               {requester?.username?.charAt(0).toUpperCase() || '?'}
                             </span>
                           </div>

@@ -251,7 +251,7 @@ export default function UserProfileSettings({ authToken }: UserProfileSettingsPr
               onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
                 activeTab === tab.id
-                  ? 'border-orange-500 text-orange-600'
+                  ? 'border-orange-500 text-orange-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
               }`}
             >

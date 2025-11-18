@@ -292,7 +292,7 @@ export default function NewWorkPage() {
                           <button
                             type="button"
                             onClick={() => removeTag('fandom', index)}
-                            className="ml-2 text-orange-600 hover:text-orange-800 focus:outline-none"
+                            className="ml-2 text-orange-700 hover:text-orange-800 focus:outline-none"
                             aria-label={`Remove ${fandom}`}
                           >
                             ×
@@ -460,7 +460,7 @@ export default function NewWorkPage() {
                       <label key={warning.value} className="flex items-start">
                         <input
                           type="checkbox"
-                          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 mt-0.5"
+                          className="rounded border-slate-300 text-orange-700 focus:ring-orange-500 mt-0.5"
                           checked={formData.warnings.includes(warning.value)}
                           onChange={(e) => {
                             if (e.target.checked) {
@@ -499,7 +499,7 @@ export default function NewWorkPage() {
                       <label key={category.value} className="flex items-center">
                         <input
                           type="checkbox"
-                          className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                          className="rounded border-slate-300 text-orange-700 focus:ring-orange-500"
                           checked={formData.category.includes(category.value)}
                           onChange={(e) => {
                             if (e.target.checked) {

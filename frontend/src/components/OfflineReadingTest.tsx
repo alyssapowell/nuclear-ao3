@@ -152,7 +152,7 @@ export default function OfflineReadingTest() {
           
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="flex items-center space-x-2">
-              <CloudArrowDownIcon className={`w-5 h-5 ${pwaState.isInstalled ? 'text-blue-600' : 'text-gray-400'}`} />
+              <CloudArrowDownIcon className={`w-5 h-5 ${pwaState.isInstalled ? 'text-blue-700' : 'text-gray-400'}`} />
               <span className="font-medium">
                 PWA: {pwaState.isInstalled ? 'Installed' : 'Not Installed'}
               </span>

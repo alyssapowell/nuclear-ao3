@@ -64,7 +64,7 @@ export default function NewCollectionPage() {
       <div className="flex items-center gap-4 mb-8">
         <Link
           href="/collections"
-          className="inline-flex items-center text-orange-600 hover:text-orange-700 transition-colors"
+          className="inline-flex items-center text-orange-700 hover:text-orange-700 transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Collections
@@ -155,7 +155,7 @@ export default function NewCollectionPage() {
                       type="checkbox"
                       checked={formData.is_open}
                       onChange={(e) => handleInputChange('is_open', e.target.checked)}
-                      className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                      className="w-4 h-4 text-orange-700 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
                     />
                   </div>
                   <div className="ml-3 text-sm">
@@ -174,7 +174,7 @@ export default function NewCollectionPage() {
                       type="checkbox"
                       checked={formData.is_moderated}
                       onChange={(e) => handleInputChange('is_moderated', e.target.checked)}
-                      className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                      className="w-4 h-4 text-orange-700 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
                     />
                   </div>
                   <div className="ml-3 text-sm">
@@ -193,7 +193,7 @@ export default function NewCollectionPage() {
                       type="checkbox"
                       checked={formData.is_anonymous}
                       onChange={(e) => handleInputChange('is_anonymous', e.target.checked)}
-                      className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                      className="w-4 h-4 text-orange-700 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
                     />
                   </div>
                   <div className="ml-3 text-sm">
@@ -212,7 +212,7 @@ export default function NewCollectionPage() {
                       type="checkbox"
                       checked={formData.is_unrevealed}
                       onChange={(e) => handleInputChange('is_unrevealed', e.target.checked)}
-                      className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
+                      className="w-4 h-4 text-orange-700 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
                     />
                   </div>
                   <div className="ml-3 text-sm">
@@ -260,7 +260,7 @@ export default function NewCollectionPage() {
         <div className="space-y-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-start">
-              <Info className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+              <Info className="w-5 h-5 text-blue-700 mt-0.5 mr-3 flex-shrink-0" />
               <div>
                 <h4 className="text-sm font-medium text-blue-900 mb-2">Collection Guidelines</h4>
                 <ul className="text-xs text-blue-800 space-y-1">

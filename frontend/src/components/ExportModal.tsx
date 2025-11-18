@@ -188,7 +188,7 @@ export default function ExportModal({ workId, workTitle, authToken, onClose, onE
                       id={key}
                       checked={options[key as keyof ExportOptions] as boolean}
                       onChange={(e) => handleOptionChange(key as keyof ExportOptions, e.target.checked)}
-                      className="mt-1 w-4 h-4 text-orange-600 border-slate-300 rounded focus:ring-orange-500"
+                      className="mt-1 w-4 h-4 text-orange-700 border-slate-300 rounded focus:ring-orange-500"
                     />
                     <div className="flex-1">
                       <label htmlFor={key} className="text-sm font-medium text-slate-700 cursor-pointer">
