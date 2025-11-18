@@ -93,19 +93,28 @@ func (suite *AuthServiceTestSuite) TearDownSuite() {
 }
 
 func (suite *AuthServiceTestSuite) cleanupTestData() {
-	tables := []string{
-		"refresh_tokens",
-		"user_sessions",
-		"password_reset_tokens",
-		"email_verification_tokens",
-		"security_events",
-		"user_roles",
-		"users",
+	// Skip cleanup if db is nil
+	if suite.db == nil {
+		return
 	}
 
-	for _, table := range tables {
-		suite.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE created_at > NOW() - INTERVAL '1 day'", table))
-	}
+	// Delete test users by email domain to avoid conflicts
+	testEmailDomain := "@nuclear-ao3.test"
+	pattern := "%" + testEmailDomain
+
+	// First delete from dependent tables (in reverse order of foreign key dependencies)
+	suite.db.Exec("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	suite.db.Exec("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	suite.db.Exec("DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	suite.db.Exec("DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	suite.db.Exec("DELETE FROM security_events WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	suite.db.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+
+	// Finally delete the test users themselves
+	suite.db.Exec("DELETE FROM users WHERE email LIKE $1", pattern)
+
+	// Clear the testUsers map
+	suite.testUsers = make(map[string]*models.User)
 }
 
 func (suite *AuthServiceTestSuite) createTestUsers() {
@@ -153,7 +162,22 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 
 			// Add additional roles
 			for _, role := range u.roles[1:] { // Skip first role (user) as it's auto-assigned
-				suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2)", response.User.ID, role)
+				suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", response.User.ID, role)
+			}
+		} else {
+			// If registration failed with conflict, try to fetch existing user
+			if w.Code == http.StatusConflict {
+				var existingUser models.User
+				err := suite.db.QueryRow("SELECT id, username, email, display_name FROM users WHERE email = $1", u.email).
+					Scan(&existingUser.ID, &existingUser.Username, &existingUser.Email, &existingUser.DisplayName)
+				if err == nil {
+					suite.testUsers[u.username] = &existingUser
+					fmt.Printf("Reusing existing test user: %s (%s)\n", u.username, u.email)
+				} else {
+					fmt.Printf("Failed to fetch existing user %s: %v\n", u.email, err)
+				}
+			} else {
+				fmt.Printf("Registration failed for %s with status %d: %s\n", u.username, w.Code, w.Body.String())
 			}
 		}
 	}
