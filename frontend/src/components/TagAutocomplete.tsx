@@ -232,7 +232,7 @@ const TagAutocomplete = React.memo(function TagAutocomplete({
   }, [])
 
   return (
-    <section className="relative" role="combobox" aria-label="Tag search and autocomplete">
+    <section className="relative" aria-label="Tag search and autocomplete">
       {/* Live Region for Announcements */}
       <div
         id={liveRegionId}
