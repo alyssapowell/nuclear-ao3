@@ -5,7 +5,9 @@ module.exports = {
         'http://localhost:3000',
         'http://localhost:3000/search',
         'http://localhost:3000/works',
-        'http://localhost:3000/works/1',
+        // Note: Work detail page requires valid UUID, not numeric ID
+        // Add a real work UUID here when available for testing
+        // Example: 'http://localhost:3000/works/550e8400-e29b-41d4-a716-446655440000',
       ],
       settings: {
         chromeFlags: '--no-sandbox',
