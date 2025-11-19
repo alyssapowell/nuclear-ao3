@@ -68,10 +68,14 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 	suite.router = setupRouter(suite.service)
 
 	// Clean up any existing test data from previous runs
+	// Do this BEFORE initializing testUsers map
+	suite.testUsers = make(map[string]*models.User)
 	suite.cleanupTestData()
 
+	// Small delay to ensure cleanup completes
+	time.Sleep(100 * time.Millisecond)
+
 	// Create test users
-	suite.testUsers = make(map[string]*models.User)
 	suite.createTestUsers()
 }
 
@@ -153,35 +157,29 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 
 		suite.router.ServeHTTP(w, req)
 
-		if w.Code == http.StatusCreated {
-			var response models.AuthResponse
-			json.Unmarshal(w.Body.Bytes(), &response)
-			suite.testUsers[u.username] = response.User
+		if w.Code != http.StatusCreated {
+			// Registration failed - this is a real problem since we cleaned up first
+			fmt.Printf("❌ Failed to create test user %s (status %d): %s\n", u.username, w.Code, w.Body.String())
+			suite.T().Fatalf("Failed to create required test user: %s", u.username)
+		}
 
-			// Set verification status and add additional roles
-			if u.verified {
-				suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
-			}
+		var response models.AuthResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		if err != nil {
+			suite.T().Fatalf("Failed to unmarshal registration response for %s: %v", u.username, err)
+		}
 
-			// Add additional roles
-			for _, role := range u.roles[1:] { // Skip first role (user) as it's auto-assigned
-				suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", response.User.ID, role)
-			}
-		} else {
-			// If registration failed with conflict, try to fetch existing user
-			if w.Code == http.StatusConflict {
-				var existingUser models.User
-				err := suite.db.QueryRow("SELECT id, username, email, display_name FROM users WHERE email = $1", u.email).
-					Scan(&existingUser.ID, &existingUser.Username, &existingUser.Email, &existingUser.DisplayName)
-				if err == nil {
-					suite.testUsers[u.username] = &existingUser
-					fmt.Printf("Reusing existing test user: %s (%s)\n", u.username, u.email)
-				} else {
-					fmt.Printf("Failed to fetch existing user %s: %v\n", u.email, err)
-				}
-			} else {
-				fmt.Printf("Registration failed for %s with status %d: %s\n", u.username, w.Code, w.Body.String())
-			}
+		suite.testUsers[u.username] = response.User
+		fmt.Printf("✓ Created test user: %s (%s)\n", u.username, u.email)
+
+		// Set verification status and add additional roles
+		if u.verified {
+			suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
+		}
+
+		// Add additional roles
+		for _, role := range u.roles[1:] { // Skip first role (user) as it's auto-assigned
+			suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", response.User.ID, role)
 		}
 	}
 }
