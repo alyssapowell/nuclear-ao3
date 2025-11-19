@@ -80,20 +80,16 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 }
 
 func (suite *AuthServiceTestSuite) SetupTest() {
-	// Clear Redis cache only (don't delete users between tests)
+	// Clear Redis cache only (reuse database users across tests)
 	suite.redis.FlushDB(context.Background())
-
-	// Only create test users if they don't exist
-	if len(suite.testUsers) == 0 {
-		suite.createTestUsers()
-	}
 }
 
 func (suite *AuthServiceTestSuite) TearDownTest() {
-	suite.cleanupTestData()
+	// Don't clean up between tests - reuse users for speed
 }
 
 func (suite *AuthServiceTestSuite) TearDownSuite() {
+	// Clean up only at the very end
 	suite.cleanupTestData()
 	suite.db.Close()
 	suite.redis.Close()
@@ -161,7 +157,10 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 }
 
 func (suite *AuthServiceTestSuite) createTestUsers() {
-	// Create test users with known passwords
+	// Create test users with unique identifiers to avoid conflicts
+	// Use timestamp to ensure uniqueness across test runs
+	timestamp := time.Now().UnixNano()
+
 	users := []struct {
 		username string
 		email    string
@@ -169,10 +168,10 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 		roles    []string
 		verified bool
 	}{
-		{"testuser", "test@nuclear-ao3.test", "password123", []string{"user"}, true},
-		{"testadmin", "admin@nuclear-ao3.test", "admin123", []string{"user", "admin"}, true},
-		{"testwrangler", "wrangler@nuclear-ao3.test", "wrangler123", []string{"user", "tag_wrangler"}, true},
-		{"unverified", "unverified@nuclear-ao3.test", "password123", []string{"user"}, false},
+		{fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
+		{fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
+		{fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
+		{fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
 	}
 
 	for _, u := range users {
