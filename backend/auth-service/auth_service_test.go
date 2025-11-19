@@ -106,51 +106,52 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 		return
 	}
 
-	// Delete test users by email domain to avoid conflicts
-	testEmailDomain := "@nuclear-ao3.test"
-	pattern := "%" + testEmailDomain
+	// Delete test users by email domain
+	testEmailDomain := "%@nuclear-ao3.test"
 
-	fmt.Printf("🧹 Cleaning up test users with pattern: %s\n", pattern)
+	fmt.Printf("🧹 Cleaning up test users matching: %s\n", testEmailDomain)
 
-	// First delete from dependent tables (in reverse order of foreign key dependencies)
-	result, _ := suite.db.Exec("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d refresh_tokens\n", rows)
+	// Check if any test users exist first
+	var count int
+	err := suite.db.QueryRow("SELECT COUNT(*) FROM users WHERE email LIKE $1", testEmailDomain).Scan(&count)
+	if err != nil {
+		fmt.Printf("❌ Error checking for test users: %v\n", err)
+		return
+	}
+	fmt.Printf("   Found %d existing test users\n", count)
+
+	if count == 0 {
+		fmt.Println("   ✓ No cleanup needed")
+		return
 	}
 
-	result, _ = suite.db.Exec("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d user_sessions\n", rows)
+	// Delete in correct order to handle foreign keys
+	tables := []string{
+		"refresh_tokens",
+		"user_sessions",
+		"password_reset_tokens",
+		"email_verification_tokens",
+		"security_events",
+		"user_roles",
 	}
 
-	result, _ = suite.db.Exec("DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d password_reset_tokens\n", rows)
+	for _, table := range tables {
+		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", table)
+		result, err := suite.db.Exec(query, testEmailDomain)
+		if err != nil {
+			fmt.Printf("   ⚠️  Error deleting from %s: %v\n", table, err)
+		} else if rows, _ := result.RowsAffected(); rows > 0 {
+			fmt.Printf("   Deleted %d rows from %s\n", rows, table)
+		}
 	}
 
-	result, _ = suite.db.Exec("DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d email_verification_tokens\n", rows)
-	}
-
-	result, _ = suite.db.Exec("DELETE FROM security_events WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d security_events\n", rows)
-	}
-
-	result, _ = suite.db.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d user_roles\n", rows)
-	}
-
-	// Finally delete the test users themselves
-	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1", pattern)
+	// Delete the users
+	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1", testEmailDomain)
 	if err != nil {
 		fmt.Printf("❌ Error deleting test users: %v\n", err)
-	} else if rows, _ := result.RowsAffected(); rows > 0 {
-		fmt.Printf("   Deleted %d test users\n", rows)
 	} else {
-		fmt.Println("   No test users found to delete")
+		rows, _ := result.RowsAffected()
+		fmt.Printf("   ✓ Deleted %d test users\n", rows)
 	}
 
 	// Clear the testUsers map
