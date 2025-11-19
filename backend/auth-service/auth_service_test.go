@@ -102,6 +102,7 @@ func (suite *AuthServiceTestSuite) TearDownSuite() {
 func (suite *AuthServiceTestSuite) cleanupTestData() {
 	// Skip cleanup if db is nil
 	if suite.db == nil {
+		fmt.Println("⚠️  Skipping cleanup: database not initialized")
 		return
 	}
 
@@ -109,16 +110,48 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 	testEmailDomain := "@nuclear-ao3.test"
 	pattern := "%" + testEmailDomain
 
+	fmt.Printf("🧹 Cleaning up test users with pattern: %s\n", pattern)
+
 	// First delete from dependent tables (in reverse order of foreign key dependencies)
-	suite.db.Exec("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	suite.db.Exec("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	suite.db.Exec("DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	suite.db.Exec("DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	suite.db.Exec("DELETE FROM security_events WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
-	suite.db.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	result, _ := suite.db.Exec("DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d refresh_tokens\n", rows)
+	}
+
+	result, _ = suite.db.Exec("DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d user_sessions\n", rows)
+	}
+
+	result, _ = suite.db.Exec("DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d password_reset_tokens\n", rows)
+	}
+
+	result, _ = suite.db.Exec("DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d email_verification_tokens\n", rows)
+	}
+
+	result, _ = suite.db.Exec("DELETE FROM security_events WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d security_events\n", rows)
+	}
+
+	result, _ = suite.db.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1)", pattern)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d user_roles\n", rows)
+	}
 
 	// Finally delete the test users themselves
-	suite.db.Exec("DELETE FROM users WHERE email LIKE $1", pattern)
+	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1", pattern)
+	if err != nil {
+		fmt.Printf("❌ Error deleting test users: %v\n", err)
+	} else if rows, _ := result.RowsAffected(); rows > 0 {
+		fmt.Printf("   Deleted %d test users\n", rows)
+	} else {
+		fmt.Println("   No test users found to delete")
+	}
 
 	// Clear the testUsers map
 	suite.testUsers = make(map[string]*models.User)
