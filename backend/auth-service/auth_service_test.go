@@ -67,19 +67,22 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 	suite.router = setupRouter(suite.service)
 
+	// Clean up any existing test data from previous runs
+	suite.cleanupTestData()
+
 	// Create test users
 	suite.testUsers = make(map[string]*models.User)
+	suite.createTestUsers()
 }
 
 func (suite *AuthServiceTestSuite) SetupTest() {
-	// Clear test data
-	suite.cleanupTestData()
-
-	// Clear Redis cache
+	// Clear Redis cache only (don't delete users between tests)
 	suite.redis.FlushDB(context.Background())
 
-	// Create fresh test users for each test
-	suite.createTestUsers()
+	// Only create test users if they don't exist
+	if len(suite.testUsers) == 0 {
+		suite.createTestUsers()
+	}
 }
 
 func (suite *AuthServiceTestSuite) TearDownTest() {
