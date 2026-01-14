@@ -53,7 +53,8 @@
     "test:production": "playwright test --ignore-patterns='**/demo*.spec.ts'",
     "update-attributions": "node scripts/update-attributions.js",
     "clean:demos": "rm -rf src/app/demos",
-    "prebuild": "npm run clean:demos && npm run update-attributions"
+    "prebuild": "npm run clean:demos && npm run update-attributions",
+    "postinstall": "npx update-browserslist-db@latest"
   },
   "dependencies": {
     "@apollo/client": "^3.11.8",
@@ -82,6 +83,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@playwright/test": "^1.55.1",
+    "baseline-browser-mapping": "^1.0.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",

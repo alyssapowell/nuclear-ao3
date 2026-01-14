@@ -156,7 +156,8 @@ jobs:
             
             # Build and start services
             echo "🏗️ Building and starting Nuclear AO3..."
-            docker-compose build --parallel
+            # Build sequentially to avoid memory exhaustion
+            docker-compose build
             docker-compose up -d
             
             # Wait for services to be healthy
