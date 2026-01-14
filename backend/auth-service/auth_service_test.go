@@ -110,8 +110,8 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 
 	// Check if any test users exist first
 	var count int
-	query := "SELECT COUNT(*) FROM users WHERE email LIKE $1 OR username = ANY($2)"
-	err := suite.db.QueryRow(query, testEmailDomain, testUsernames).Scan(&count)
+	query := "SELECT COUNT(*) FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5)"
+	err := suite.db.QueryRow(query, testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3]).Scan(&count)
 	if err != nil {
 		fmt.Printf("❌ Error checking for test users: %v\n", err)
 		return
@@ -134,8 +134,8 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 	}
 
 	for _, table := range tables {
-		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1 OR username = ANY($2))", table)
-		result, err := suite.db.Exec(query, testEmailDomain, testUsernames)
+		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5))", table)
+		result, err := suite.db.Exec(query, testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3])
 		if err != nil {
 			fmt.Printf("   ⚠️  Error deleting from %s: %v\n", table, err)
 		} else if rows, _ := result.RowsAffected(); rows > 0 {
@@ -144,7 +144,7 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 	}
 
 	// Delete the users
-	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1 OR username = ANY($2)", testEmailDomain, testUsernames)
+	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5)", testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3])
 	if err != nil {
 		fmt.Printf("❌ Error deleting test users: %v\n", err)
 	} else {
