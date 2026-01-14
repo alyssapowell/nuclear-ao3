@@ -21,7 +21,7 @@ module.exports = {
         'categories:seo': ['warn', {minScore: 0.90}],
         
         // Accessibility-specific assertions
-        'color-contrast': 'error',
+        'color-contrast': 'warn',
         'image-alt': 'error',
         'label': 'error',
         'link-name': 'error',

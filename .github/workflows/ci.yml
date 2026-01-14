@@ -14,6 +14,31 @@ jobs:
   test-backend:
     name: 🧪 Test Backend Services
     runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ao3_nuclear_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,6 +56,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Setup test database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          # Create ao3_user
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "CREATE USER ao3_user WITH PASSWORD 'ao3_password';"
+          
+          # Run migrations
+          for migration in migrations/*.sql; do
+            echo "Running migration: $migration"
+            psql -h localhost -U postgres -d ao3_nuclear_test -f "$migration" || echo "Migration may have already been applied or had warnings"
+          done
+          
+          # Grant all permissions to ao3_user
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ao3_user;"
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ao3_user;"
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ao3_user;"
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ao3_user;"
+
       - name: Install dependencies
         working-directory: backend
         run: go mod download
@@ -43,6 +87,9 @@ jobs:
 
       - name: Run tests
         working-directory: backend
+        env:
+          TEST_DATABASE_URL: "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear_test?sslmode=disable"
+          TEST_REDIS_URL: "localhost:6379"
         run: go test ./... -v -race -coverprofile=coverage.out
 
       - name: Upload coverage

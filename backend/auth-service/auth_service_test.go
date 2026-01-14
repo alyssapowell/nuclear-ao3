@@ -67,32 +67,63 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 	suite.router = setupRouter(suite.service)
 
-	// Create test users
+	// Clean up any existing test data from previous runs
+	// Do this BEFORE initializing testUsers map
 	suite.testUsers = make(map[string]*models.User)
-}
-
-func (suite *AuthServiceTestSuite) SetupTest() {
-	// Clear test data
 	suite.cleanupTestData()
 
-	// Clear Redis cache
-	suite.redis.FlushDB(context.Background())
+	// Small delay to ensure cleanup completes
+	time.Sleep(100 * time.Millisecond)
 
-	// Create fresh test users for each test
+	// Create test users
 	suite.createTestUsers()
 }
 
+func (suite *AuthServiceTestSuite) SetupTest() {
+	// Clear Redis cache only (reuse database users across tests)
+	suite.redis.FlushDB(context.Background())
+}
+
 func (suite *AuthServiceTestSuite) TearDownTest() {
-	suite.cleanupTestData()
+	// Don't clean up between tests - reuse users for speed
 }
 
 func (suite *AuthServiceTestSuite) TearDownSuite() {
+	// Clean up only at the very end
 	suite.cleanupTestData()
 	suite.db.Close()
 	suite.redis.Close()
 }
 
 func (suite *AuthServiceTestSuite) cleanupTestData() {
+	// Skip cleanup if db is nil
+	if suite.db == nil {
+		fmt.Println("⚠️  Skipping cleanup: database not initialized")
+		return
+	}
+
+	// Delete test users by email domain OR username pattern
+	testEmailDomain := "%@nuclear-ao3.test"
+	testUsernames := []string{"testuser", "testadmin", "testwrangler", "unverified"}
+
+	fmt.Printf("🧹 Cleaning up test users matching email: %s or usernames: %v\n", testEmailDomain, testUsernames)
+
+	// Check if any test users exist first
+	var count int
+	query := "SELECT COUNT(*) FROM users WHERE email LIKE $1 OR username = ANY($2)"
+	err := suite.db.QueryRow(query, testEmailDomain, testUsernames).Scan(&count)
+	if err != nil {
+		fmt.Printf("❌ Error checking for test users: %v\n", err)
+		return
+	}
+	fmt.Printf("   Found %d existing test users\n", count)
+
+	if count == 0 {
+		fmt.Println("   ✓ No cleanup needed")
+		return
+	}
+
+	// Delete in correct order to handle foreign keys
 	tables := []string{
 		"refresh_tokens",
 		"user_sessions",
@@ -100,16 +131,36 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 		"email_verification_tokens",
 		"security_events",
 		"user_roles",
-		"users",
 	}
 
 	for _, table := range tables {
-		suite.db.Exec(fmt.Sprintf("DELETE FROM %s WHERE created_at > NOW() - INTERVAL '1 day'", table))
+		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1 OR username = ANY($2))", table)
+		result, err := suite.db.Exec(query, testEmailDomain, testUsernames)
+		if err != nil {
+			fmt.Printf("   ⚠️  Error deleting from %s: %v\n", table, err)
+		} else if rows, _ := result.RowsAffected(); rows > 0 {
+			fmt.Printf("   Deleted %d rows from %s\n", rows, table)
+		}
 	}
+
+	// Delete the users
+	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1 OR username = ANY($2)", testEmailDomain, testUsernames)
+	if err != nil {
+		fmt.Printf("❌ Error deleting test users: %v\n", err)
+	} else {
+		rows, _ := result.RowsAffected()
+		fmt.Printf("   ✓ Deleted %d test users\n", rows)
+	}
+
+	// Clear the testUsers map
+	suite.testUsers = make(map[string]*models.User)
 }
 
 func (suite *AuthServiceTestSuite) createTestUsers() {
-	// Create test users with known passwords
+	// Create test users with unique identifiers to avoid conflicts
+	// Use timestamp to ensure uniqueness across test runs
+	timestamp := time.Now().UnixNano()
+
 	users := []struct {
 		username string
 		email    string
@@ -117,10 +168,10 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 		roles    []string
 		verified bool
 	}{
-		{"testuser", "test@nuclear-ao3.test", "password123", []string{"user"}, true},
-		{"testadmin", "admin@nuclear-ao3.test", "admin123", []string{"user", "admin"}, true},
-		{"testwrangler", "wrangler@nuclear-ao3.test", "wrangler123", []string{"user", "tag_wrangler"}, true},
-		{"unverified", "unverified@nuclear-ao3.test", "password123", []string{"user"}, false},
+		{fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
+		{fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
+		{fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
+		{fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
 	}
 
 	for _, u := range users {
@@ -141,20 +192,29 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 
 		suite.router.ServeHTTP(w, req)
 
-		if w.Code == http.StatusCreated {
-			var response models.AuthResponse
-			json.Unmarshal(w.Body.Bytes(), &response)
-			suite.testUsers[u.username] = response.User
+		if w.Code != http.StatusCreated {
+			// Registration failed - this is a real problem since we cleaned up first
+			fmt.Printf("❌ Failed to create test user %s (status %d): %s\n", u.username, w.Code, w.Body.String())
+			suite.T().Fatalf("Failed to create required test user: %s", u.username)
+		}
 
-			// Set verification status and add additional roles
-			if u.verified {
-				suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
-			}
+		var response models.AuthResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		if err != nil {
+			suite.T().Fatalf("Failed to unmarshal registration response for %s: %v", u.username, err)
+		}
 
-			// Add additional roles
-			for _, role := range u.roles[1:] { // Skip first role (user) as it's auto-assigned
-				suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2)", response.User.ID, role)
-			}
+		suite.testUsers[u.username] = response.User
+		fmt.Printf("✓ Created test user: %s (%s)\n", u.username, u.email)
+
+		// Set verification status and add additional roles
+		if u.verified {
+			suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
+		}
+
+		// Add additional roles
+		for _, role := range u.roles[1:] { // Skip first role (user) as it's auto-assigned
+			suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING", response.User.ID, role)
 		}
 	}
 }
