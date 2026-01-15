@@ -163,16 +163,17 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 	timestamp := time.Now().UnixNano()
 
 	users := []struct {
-		username string
-		email    string
-		password string
-		roles    []string
-		verified bool
+		baseUsername string
+		username     string
+		email        string
+		password     string
+		roles        []string
+		verified     bool
 	}{
-		{fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
-		{fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
-		{fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
-		{fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
+		{"testuser", fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
+		{"testadmin", fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
+		{"testwrangler", fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
+		{"unverified", fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
 	}
 
 	for _, u := range users {
@@ -206,6 +207,8 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 		}
 
 		suite.testUsers[u.username] = response.User
+		// Also store with base username for test access
+		suite.testUsers[u.baseUsername] = response.User
 		fmt.Printf("✓ Created test user: %s (%s)\n", u.username, u.email)
 
 		// Set verification status and add additional roles
