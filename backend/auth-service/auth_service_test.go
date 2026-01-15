@@ -131,6 +131,7 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 		"email_verification_tokens",
 		"security_events",
 		"user_roles",
+		"user_statistics",
 	}
 
 	for _, table := range tables {
