@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"os"
 	"testing"
 	"time"
 
@@ -16,7 +17,13 @@ type TestDBConfig struct {
 
 // SetupTestDB creates a database connection for testing
 func SetupTestDB(t *testing.T) *TestDBConfig {
-	db, err := sql.Open("postgres", "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear?sslmode=disable")
+	// Use TEST_DATABASE_URL if set, otherwise fall back to default
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear_test?sslmode=disable"
+	}
+
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
