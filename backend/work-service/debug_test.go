@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -9,8 +10,11 @@ import (
 )
 
 func TestDatabaseConnection(t *testing.T) {
-	// Test database connection
-	dbURL := "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable"
+	// Test database connection - require env var to be set
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Fatal("TEST_DATABASE_URL environment variable must be set for tests")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	assert.NoError(t, err)
 	defer db.Close()

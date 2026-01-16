@@ -17,10 +17,10 @@ type TestDBConfig struct {
 
 // SetupTestDB creates a database connection for testing
 func SetupTestDB(t *testing.T) *TestDBConfig {
-	// Use TEST_DATABASE_URL if set, otherwise fall back to default
+	// Require TEST_DATABASE_URL to be set - never hardcode credentials
 	dbURL := os.Getenv("TEST_DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear_test?sslmode=disable"
+		t.Fatal("TEST_DATABASE_URL environment variable must be set for tests")
 	}
 
 	db, err := sql.Open("postgres", dbURL)
