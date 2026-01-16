@@ -1,4 +1,4 @@
-name: Deploy to Hetzner
+name: Redeploy Everything (Full Stack)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
         description: 'Environment'
         required: true
         type: choice
-        options: 
+        options:
           - staging
           - production
         default: staging
@@ -18,7 +18,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy Nuclear AO3 to ${{ github.event.inputs.environment }}
+    name: Full deployment to ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
     
     steps:
@@ -156,7 +156,8 @@ jobs:
             
             # Build and start services
             echo "🏗️ Building and starting Nuclear AO3..."
-            docker-compose build --parallel
+            # Build sequentially to avoid memory exhaustion
+            docker-compose build
             docker-compose up -d
             
             # Wait for services to be healthy

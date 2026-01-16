@@ -53,7 +53,8 @@
     "test:production": "playwright test --ignore-patterns='**/demo*.spec.ts'",
     "update-attributions": "node scripts/update-attributions.js",
     "clean:demos": "rm -rf src/app/demos",
-    "prebuild": "npm run clean:demos && npm run update-attributions"
+    "prebuild": "npm run clean:demos && npm run update-attributions",
+    "postinstall": "npx update-browserslist-db@latest"
   },
   "dependencies": {
     "@apollo/client": "^3.11.8",

@@ -221,31 +221,31 @@ jobs:
       - name: Test docker-compose build
         run: |
           echo "🐳 Testing docker-compose build..."
-          docker-compose build --parallel
+          docker compose build --parallel
 
       - name: Test docker-compose startup
         run: |
           echo "🧪 Testing docker-compose startup..."
           # Start infrastructure services first
-          docker-compose up -d postgres redis elasticsearch
-          
+          docker compose up -d postgres redis elasticsearch
+
           # Wait for databases to be ready
           echo "⏳ Waiting for databases..."
           sleep 30
-          
+
           # Check database connectivity
-          docker-compose exec -T postgres pg_isready -U ao3_user -d ao3_nuclear || echo "PostgreSQL startup in progress"
-          
+          docker compose exec -T postgres pg_isready -U ao3_user -d ao3_nuclear || echo "PostgreSQL startup in progress"
+
           # Start application services
-          docker-compose up -d
-          
+          docker compose up -d
+
           # Wait for all services
           sleep 60
-          
+
           # Check service health
           echo "🔍 Checking service health..."
-          docker-compose ps
-          
+          docker compose ps
+
           # Test API Gateway health (may fail, but good to try)
           curl -f http://localhost:8080/health || echo "API Gateway health check (expected to fail in CI)"
 
@@ -253,12 +253,12 @@ jobs:
         if: always()
         run: |
           echo "📋 Service logs:"
-          docker-compose logs --tail=20
+          docker compose logs --tail=20
 
       - name: Cleanup
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
           docker system prune -f
 
   # Security checks
@@ -308,7 +308,7 @@ jobs:
       - name: Start services
         run: |
           echo "🚀 Starting Nuclear AO3 for integration testing..."
-          docker-compose up -d
+          docker compose up -d
           
           # Wait for services to be ready
           echo "⏳ Waiting for services to start..."
@@ -336,7 +336,7 @@ jobs:
           
           if [ $counter -ge $timeout ]; then
             echo "❌ Services failed to become healthy"
-            docker-compose logs
+            docker compose logs
             exit 1
           fi
 
@@ -363,10 +363,10 @@ jobs:
           echo "🗄️ Testing database connectivity..."
           
           # Test PostgreSQL
-          docker-compose exec -T postgres psql -U ao3_user -d ao3_nuclear -c "SELECT version();" || echo "PostgreSQL test failed"
+          docker compose exec -T postgres psql -U ao3_user -d ao3_nuclear -c "SELECT version();" || echo "PostgreSQL test failed"
           
           # Test Redis
-          docker-compose exec -T redis redis-cli ping || echo "Redis test failed"
+          docker compose exec -T redis redis-cli ping || echo "Redis test failed"
           
           # Test Elasticsearch
           curl -f http://localhost:9200/_cluster/health || echo "Elasticsearch test failed"
@@ -375,7 +375,7 @@ jobs:
         if: always()
         run: |
           echo "🧹 Cleaning up integration test..."
-          docker-compose down -v
+          docker compose down -v
           docker system prune -f
 
   # Summary check (required status check)

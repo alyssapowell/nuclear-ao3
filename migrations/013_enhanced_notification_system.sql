@@ -239,15 +239,12 @@ CREATE OR REPLACE FUNCTION extract_mentions(content TEXT)
 RETURNS TABLE(username TEXT, position_start INTEGER, position_end INTEGER) AS $$
 BEGIN
     RETURN QUERY
-    SELECT 
+    SELECT
         TRIM(LEADING '@' FROM match[1]) as username,
-        match_start::INTEGER as position_start,
-        (match_start + LENGTH(match[0]) - 1)::INTEGER as position_end
-    FROM (
-        SELECT 
-            regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'gi') as match,
-            strpos(content, regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'gi')[1]) as match_start
-    ) matches;
+        (strpos(content, match[0]))::INTEGER as position_start,
+        (strpos(content, match[0]) + LENGTH(match[0]) - 1)::INTEGER as position_end
+    FROM
+        regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'gi') as match;
 END;
 $$ LANGUAGE plpgsql;
 

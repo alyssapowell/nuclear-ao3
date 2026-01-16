@@ -110,8 +110,8 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 
 	// Check if any test users exist first
 	var count int
-	query := "SELECT COUNT(*) FROM users WHERE email LIKE $1 OR username = ANY($2)"
-	err := suite.db.QueryRow(query, testEmailDomain, testUsernames).Scan(&count)
+	query := "SELECT COUNT(*) FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5)"
+	err := suite.db.QueryRow(query, testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3]).Scan(&count)
 	if err != nil {
 		fmt.Printf("❌ Error checking for test users: %v\n", err)
 		return
@@ -131,11 +131,12 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 		"email_verification_tokens",
 		"security_events",
 		"user_roles",
+		"user_statistics",
 	}
 
 	for _, table := range tables {
-		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1 OR username = ANY($2))", table)
-		result, err := suite.db.Exec(query, testEmailDomain, testUsernames)
+		query := fmt.Sprintf("DELETE FROM %s WHERE user_id IN (SELECT id FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5))", table)
+		result, err := suite.db.Exec(query, testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3])
 		if err != nil {
 			fmt.Printf("   ⚠️  Error deleting from %s: %v\n", table, err)
 		} else if rows, _ := result.RowsAffected(); rows > 0 {
@@ -144,7 +145,7 @@ func (suite *AuthServiceTestSuite) cleanupTestData() {
 	}
 
 	// Delete the users
-	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1 OR username = ANY($2)", testEmailDomain, testUsernames)
+	result, err := suite.db.Exec("DELETE FROM users WHERE email LIKE $1 OR username IN ($2, $3, $4, $5)", testEmailDomain, testUsernames[0], testUsernames[1], testUsernames[2], testUsernames[3])
 	if err != nil {
 		fmt.Printf("❌ Error deleting test users: %v\n", err)
 	} else {
@@ -162,16 +163,17 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 	timestamp := time.Now().UnixNano()
 
 	users := []struct {
-		username string
-		email    string
-		password string
-		roles    []string
-		verified bool
+		baseUsername string
+		username     string
+		email        string
+		password     string
+		roles        []string
+		verified     bool
 	}{
-		{fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
-		{fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
-		{fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
-		{fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
+		{"testuser", fmt.Sprintf("testuser_%d", timestamp), fmt.Sprintf("test_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, true},
+		{"testadmin", fmt.Sprintf("testadmin_%d", timestamp), fmt.Sprintf("admin_%d@nuclear-ao3.test", timestamp), "admin123", []string{"user", "admin"}, true},
+		{"testwrangler", fmt.Sprintf("testwrangler_%d", timestamp), fmt.Sprintf("wrangler_%d@nuclear-ao3.test", timestamp), "wrangler123", []string{"user", "tag_wrangler"}, true},
+		{"unverified", fmt.Sprintf("unverified_%d", timestamp), fmt.Sprintf("unverified_%d@nuclear-ao3.test", timestamp), "password123", []string{"user"}, false},
 	}
 
 	for _, u := range users {
@@ -205,6 +207,8 @@ func (suite *AuthServiceTestSuite) createTestUsers() {
 		}
 
 		suite.testUsers[u.username] = response.User
+		// Also store with base username for test access
+		suite.testUsers[u.baseUsername] = response.User
 		fmt.Printf("✓ Created test user: %s (%s)\n", u.username, u.email)
 
 		// Set verification status and add additional roles
