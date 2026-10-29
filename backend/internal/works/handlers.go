@@ -32,9 +32,8 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	log.Printf("DEBUG: user_id from context: %v, exists: %v", userID, exists)
 	if !exists {
-		// For development, use a default user ID if not set by middleware
-		userID = "672471fe-daa0-422d-8eea-4f9e4d1f285c" // testuser ID
-		log.Printf("Warning: Using default user ID for development: %v", userID)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
 	}
 	log.Printf("DEBUG: Final user_id to use: %v", userID)
 
@@ -1158,26 +1157,17 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 		return
 	}
 
-	// TODO: Re-enable permission check after debugging
-	// Check if user can view this work
-	// userID, hasUser := c.Get("user_id")
-	// var userUUID *uuid.UUID
-	// if hasUser {
-	// 	userVal := userID.(uuid.UUID)
-	// 	userUUID = &userVal
-	// }
-
-	// var canView bool
-	// err = ws.db.QueryRow("SELECT can_user_view_work($1, $2)", workID, userUUID).Scan(&canView)
-	// if err != nil {
-	// 	log.Printf("Error checking work permissions for %s: %v", workID, err)
-	// 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Permission check failed"})
-	// 	return
-	// }
-	// if !canView {
-	// 	c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
-	// 	return
-	// }
+	// Only people allowed to see the work may read its chapters.
+	var userUUID *uuid.UUID
+	if id, ok := c.Get("user_uuid"); ok {
+		v := id.(uuid.UUID)
+		userUUID = &v
+	}
+	var canView bool
+	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", workID, userUUID).Scan(&canView); err != nil || !canView {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
+		return
+	}
 
 	log.Printf("About to query chapters for work %s", workID)
 	rows, err := ws.db.Query(`
@@ -1191,8 +1181,13 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 			CASE WHEN is_draft THEN 'draft' ELSE 'posted' END as status, 
 			published_at, created_at, updated_at
 		FROM chapters 
-		WHERE work_id = $1 
-		ORDER BY chapter_number`, workID)
+		WHERE work_id = $1
+			AND (NOT is_draft OR EXISTS (
+				SELECT 1 FROM works w WHERE w.id = chapters.work_id AND w.user_id = $2
+				UNION ALL
+				SELECT 1 FROM creatorships cr JOIN pseuds p ON p.id = cr.pseud_id
+				WHERE cr.creation_id = chapters.work_id AND cr.creation_type = 'Work' AND p.user_id = $2))
+		ORDER BY chapter_number`, workID, userUUID)
 	if err != nil {
 		log.Printf("Failed to fetch chapters for work %s: %v", workID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chapters", "details": err.Error()})
@@ -1260,7 +1255,12 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 			content, word_count, CASE WHEN is_draft THEN 'draft' ELSE 'posted' END as status, 
 			published_at, created_at, updated_at
 		FROM chapters 
-		WHERE work_id = $1 AND chapter_number = $2`, workID, chapterNumber).Scan(
+		WHERE work_id = $1 AND chapter_number = $2
+			AND (NOT is_draft OR EXISTS (
+				SELECT 1 FROM works w WHERE w.id = chapters.work_id AND w.user_id = $3
+				UNION ALL
+				SELECT 1 FROM creatorships cr JOIN pseuds p ON p.id = cr.pseud_id
+				WHERE cr.creation_id = chapters.work_id AND cr.creation_type = 'Work' AND p.user_id = $3))`, workID, chapterNumber, userUUID).Scan(
 		&chapter.ID, &chapter.WorkID, &chapter.Number, &chapter.Title, &chapter.Summary,
 		&chapter.Notes, &chapter.EndNotes, &chapter.Content, &chapter.WordCount,
 		&chapter.Status, &publishedAt, &chapter.CreatedAt, &chapter.UpdatedAt)
@@ -5233,7 +5233,7 @@ func (ws *WorkService) BlockUser(c *gin.Context) {
 		return
 	}
 
-	blockerID, exists := c.Get("user_id")
+	blockerID, exists := c.Get("user_uuid")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
@@ -5318,7 +5318,7 @@ func (ws *WorkService) ReportComment(c *gin.Context) {
 	}
 
 	// Get reporter info
-	reporterID, hasUser := c.Get("user_id")
+	reporterID, hasUser := c.Get("user_uuid")
 	var reporterUUID *uuid.UUID
 	if hasUser {
 		reporterVal := reporterID.(uuid.UUID)
@@ -5362,7 +5362,7 @@ func (ws *WorkService) ReportWork(c *gin.Context) {
 	}
 
 	// Get reporter info
-	reporterID, hasUser := c.Get("user_id")
+	reporterID, hasUser := c.Get("user_uuid")
 	var reporterUUID *uuid.UUID
 	if hasUser {
 		reporterVal := reporterID.(uuid.UUID)
@@ -5397,7 +5397,7 @@ func (ws *WorkService) MuteUser(c *gin.Context) {
 		return
 	}
 
-	muterID, exists := c.Get("user_id")
+	muterID, exists := c.Get("user_uuid")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return

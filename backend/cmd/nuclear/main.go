@@ -81,8 +81,14 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	r := gin.New()
+	// Only these proxies (Caddy, on the private Docker network) may tell us
+	// the visitor's real IP via X-Forwarded-For.
+	if err := r.SetTrustedProxies(strings.Split(platform.Env("TRUSTED_PROXIES",
+		"127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"), ",")); err != nil {
+		log.Fatalf("startup: TRUSTED_PROXIES: %v", err)
+	}
 	r.Use(gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
-		auth.RateLimitMiddleware(deps.Redis(0)))
+		authSvc.RateLimitMiddleware())
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
 		works:  worksSvc,

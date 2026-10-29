@@ -135,16 +135,25 @@ These were fixed by merging the backend into one program with one login check (`
 6. ~~Every service port was published to the host.~~ **Fixed:** one app container, published on localhost only; Caddy is the public entrance. Metrics are on a separate private port.
 7. ~~The guest-comment auth exemption matched any POST ending in `/comments`.~~ **Removed:** guest comments go through optional login like the rest of the public routes.
 8. ~~CORS reflected any origin, with credentials, when `GIN_MODE` was unset.~~ **Fixed:** there is an explicit allowlist (`CORS_ORIGINS`).
+9. ~~The chapter list skipped its visibility check~~ ("TODO: re-enable after debugging"), so anyone could read restricted works and draft chapters. **Fixed:** the check is back, and draft chapters are shown only to the work's authors.
+10. ~~Posting a work with no login used a hard-coded "testuser" account.~~ **Fixed:** it returns 401.
+11. ~~The rate limiter believed client headers~~ like `X-Client-Admin: true` (up to 500x the normal limit) and the raw `X-Forwarded-For`. **Fixed:** limits are per verified user or per IP, and the IP is trusted only from Caddy.
+12. ~~Any token signed by the archive counted as a login~~, including OIDC ID tokens issued to third-party apps. **Fixed:** only tokens with the archive's own audience and issuer are accepted. `golang-jwt` was upgraded to 5.2.2 (CVE-2025-30204).
+13. ~~The OAuth authorize step redirected to an unchecked `redirect_uri`~~ on errors, an open redirect. **Fixed:** errors before the redirect URI is verified return JSON.
 
 ### Still open
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
 - **The works service logs SQL details and other debug output** at startup and on every request.
-- **Token scope is not checked yet.** OAuth tokens issued to third-party apps are signed with the same key as login tokens, and it hasn't been verified whether one can be used as a full login. To check.
+- **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
+- **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.
 - If a Hetzner deployment from the old `deploy-*` workflows is live, it is still running the old, vulnerable code until it's redeployed.
 
 ## Setup and maintenance problems (found 2026-10-29)
 
 - **Migrations don't apply cleanly to an empty database.** `010`, `012`, `013`, `016`, `019` and `020` all error (duplicate tables, a syntax error, an unbuildable foreign key, a subquery in an index). Docker's Postgres setup stops at the first error, so a brand-new install probably can't create its database at all. There is no migration tool; files only run once, on first container start.
-- **Posting a work fails on a fresh database.** The retention trigger from `016` reads `NEW.author_id`, which doesn't exist on `works`.
+- **Posting works, chapters and comments fails on a fresh database.** The retention trigger from `016` reads `NEW.author_id` or `NEW.user_id`, which those tables don't have.
+- **Posting a work doesn't create its first chapter**, even when `chapter_content` is sent.
+- **Reading a single chapter always returns 400.** The route is `/chapters/:chapter_id`, but the handler reads `chapter_number`.
+- **Block, mute and report crashed on every request** (500) because of a type mismatch; fixed 2026-10-29.
 - **121 of 428 frontend unit tests already fail on `main`.** These are pre-existing; the merge didn't add any (compared test by test).

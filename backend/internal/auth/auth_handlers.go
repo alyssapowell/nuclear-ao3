@@ -46,7 +46,7 @@ func (as *AuthService) Register(c *gin.Context) {
 	}
 
 	// Generate tokens
-	accessToken, err := as.jwt.GenerateToken(userID, "nuclear-ao3", []string{"user"}, 30*24*time.Hour) // 30 days
+	accessToken, err := as.jwt.GenerateToken(userID, LoginAudience, []string{"user"}, 30*24*time.Hour) // 30 days
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
 		return
@@ -117,7 +117,7 @@ func (as *AuthService) Login(c *gin.Context) {
 	}
 
 	// Generate access token
-	accessToken, err := as.jwt.GenerateToken(user.ID, "nuclear-ao3", []string{"user"}, 30*24*time.Hour) // 30 days
+	accessToken, err := as.jwt.GenerateToken(user.ID, LoginAudience, []string{"user"}, 30*24*time.Hour) // 30 days
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
 		return
@@ -165,7 +165,7 @@ func (as *AuthService) RefreshToken(c *gin.Context) {
 	}
 
 	// Generate new access token (shorter TTL since it can be refreshed)
-	accessToken, err := as.jwt.GenerateToken(userID, "nuclear-ao3", []string{"user"}, 15*time.Minute)
+	accessToken, err := as.jwt.GenerateToken(userID, LoginAudience, []string{"user"}, 15*time.Minute)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
 		return

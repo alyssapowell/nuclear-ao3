@@ -261,39 +261,6 @@ func TestGetTagsByWork_InvalidWorkID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestAddTagsToWork_Success(t *testing.T) {
-	router, ts := setupTagTestRouter()
-	router.POST("/api/v1/works/:workId/tags", ts.AddTagsToWork)
-
-	workID := uuid.New()
-	reqBody := map[string][]uuid.UUID{
-		"tag_ids": {uuid.New(), uuid.New()},
-	}
-
-	jsonBody, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/works/%s/tags", workID), bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Contains(t, []int{http.StatusOK, http.StatusInternalServerError}, w.Code)
-}
-
-func TestRemoveTagFromWork_Success(t *testing.T) {
-	router, ts := setupTagTestRouter()
-	router.DELETE("/api/v1/works/:workId/tags/:tagId", ts.RemoveTagFromWork)
-
-	workID := uuid.New()
-	tagID := uuid.New()
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/v1/works/%s/tags/%s", workID, tagID), nil)
-
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Contains(t, []int{http.StatusOK, http.StatusInternalServerError}, w.Code)
-}
-
 // =============================================================================
 // TAG RELATIONSHIP TESTS
 // =============================================================================

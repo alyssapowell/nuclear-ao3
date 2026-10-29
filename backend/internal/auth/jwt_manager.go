@@ -140,14 +140,20 @@ func (jm *JWTManager) GenerateToken(userID uuid.UUID, audience string, scopes []
 	return token.SignedString(jm.privateKey)
 }
 
-// ValidateToken validates and parses a JWT token
+// LoginAudience is the audience of tokens issued when a user logs in to the
+// archive itself. OAuth ID tokens carry the third-party app's ID instead.
+const LoginAudience = "nuclear-ao3"
+
+// ValidateToken checks that tokenString is a valid login token for this
+// archive. Tokens issued to third-party apps (such as OIDC ID tokens, which
+// are signed with the same key) are rejected because their audience differs.
 func (jm *JWTManager) ValidateToken(tokenString string) (*jwt.RegisteredClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return jm.publicKey, nil
-	})
+	}, jwt.WithAudience(LoginAudience), jwt.WithIssuer(jm.issuer), jwt.WithExpirationRequired())
 
 	if err != nil {
 		return nil, err

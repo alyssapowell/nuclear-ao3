@@ -236,19 +236,19 @@ func (as *AuthService) RegisterClient(c *gin.Context) {
 func (as *AuthService) Authorize(c *gin.Context) {
 	var req models.AuthorizeRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		as.redirectWithError(c, req.RedirectURI, req.State, "invalid_request", "Invalid authorization request")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "Invalid authorization request"})
 		return
 	}
 
 	// Validate client
 	client, err := as.getClientByID(req.ClientID)
 	if err != nil {
-		as.redirectWithError(c, req.RedirectURI, req.State, "invalid_client", "Invalid client")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client"})
 		return
 	}
 
 	if !client.IsActive {
-		as.redirectWithError(c, req.RedirectURI, req.State, "invalid_client", "Client is disabled")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Client is disabled"})
 		return
 	}
 

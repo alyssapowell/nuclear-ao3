@@ -130,68 +130,19 @@ func (h *RateLimitHeaders) ToHeaders() map[string]string {
 	}
 }
 
-func ExtractOAuthInfo(r *http.Request) *ClientRateLimitInfo {
-	info := &ClientRateLimitInfo{
-		Tier: RateLimitTierAnonymous,
-	}
-
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return info
-	}
-
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return info
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if token == "" {
-		return info
-	}
-
-	if clientID := r.Header.Get("X-Client-ID"); clientID != "" {
-		info.ClientID = clientID
-	}
-
-	if userID := r.Header.Get("X-User-ID"); userID != "" {
-		info.UserID = userID
-	}
-
-	if scopes := r.Header.Get("X-OAuth-Scopes"); scopes != "" {
-		info.Scopes = strings.Split(scopes, ",")
-	}
-
-	if isFirstParty := r.Header.Get("X-Client-First-Party"); isFirstParty == "true" {
-		info.IsFirstParty = true
-	}
-
-	if isTrusted := r.Header.Get("X-Client-Trusted"); isTrusted == "true" {
-		info.IsTrusted = true
-	}
-
-	if isAdmin := r.Header.Get("X-Client-Admin"); isAdmin == "true" {
-		info.IsAdmin = true
-	}
-
-	return info
-}
-
-func GetClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if ips := strings.Split(xff, ","); len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
+// rateLimitInfo works out who is making a request, for rate limiting. It
+// trusts only a verified login token: logged-in users get their own bucket,
+// everyone else is limited per IP. Client-supplied headers such as
+// X-Client-Admin are ignored.
+func (as *AuthService) rateLimitInfo(r *http.Request) *ClientRateLimitInfo {
+	info := &ClientRateLimitInfo{Tier: RateLimitTierAnonymous}
+	if token := extractBearerToken(r.Header.Get("Authorization")); token != "" {
+		if userID, err := as.ValidateUserToken(token); err == nil {
+			info.UserID = userID.String()
+			info.ClientID = "user:" + info.UserID
 		}
 	}
-
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		return realIP
-	}
-
-	ip := r.RemoteAddr
-	if colonIndex := strings.LastIndex(ip, ":"); colonIndex != -1 {
-		ip = ip[:colonIndex]
-	}
-	return ip
+	return info
 }
 
 func (rlm *RateLimitManager) CheckRateLimit(clientInfo *ClientRateLimitInfo, clientIP string) (*RateLimitHeaders, error) {
@@ -318,79 +269,35 @@ func JWTAuthMiddleware(authService *AuthService) gin.HandlerFunc {
 	}
 }
 
-// RequireRoleMiddleware checks if user has required role
-func RequireRoleMiddleware(requiredRole string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		_, exists := c.Get("user_id")
-		if !exists {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":             "unauthorized",
-				"error_description": "User authentication required",
-			})
-			c.Abort()
-			return
-		}
-
-		// TODO: Check user roles from database
-		// For now, just allow admin users for testing
-		if requiredRole == "admin" {
-			// In a real implementation, you'd query the database for user roles
-			c.Next()
-			return
-		}
-
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":             "insufficient_permissions",
-			"error_description": fmt.Sprintf("Role '%s' required", requiredRole),
-		})
-		c.Abort()
-	}
-}
-
-// RateLimitMiddleware implements OAuth-aware rate limiting using the DRY helper
-func RateLimitMiddleware(redis *redis.Client) gin.HandlerFunc {
-	// Create our DRY rate limit manager
+// RateLimitMiddleware limits how fast each user (or, for anonymous
+// visitors, each IP) can make requests. The IP comes from gin's ClientIP,
+// which only believes X-Forwarded-For from trusted proxies (see main).
+func (as *AuthService) RateLimitMiddleware() gin.HandlerFunc {
 	rateLimitManager := &RateLimitManager{
-		redisClient: redis,
-		serviceName: "auth-service",
+		redisClient: as.redis,
+		serviceName: "app",
 	}
 
 	return func(c *gin.Context) {
 		if gin.Mode() == gin.TestMode {
-			// Skip rate limiting in test mode
 			c.Next()
 			return
 		}
 
-		// Extract OAuth information from request headers
-		clientInfo := ExtractOAuthInfo(c.Request)
-		clientIP := GetClientIP(c.Request)
-
-		// Check rate limit using DRY helper
-		headers, err := rateLimitManager.CheckRateLimit(clientInfo, clientIP)
+		headers, err := rateLimitManager.CheckRateLimit(as.rateLimitInfo(c.Request), c.ClientIP())
+		for key, value := range headers.ToHeaders() {
+			c.Header(key, value)
+		}
 		if err != nil {
-			// Add rate limit headers even on error
-			for key, value := range headers.ToHeaders() {
-				c.Header(key, value)
-			}
-
-			// Return 429 Too Many Requests with OAuth-aware messaging
-			c.JSON(http.StatusTooManyRequests, gin.H{
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":             "rate_limit_exceeded",
 				"error_description": "Too many requests. Please try again later.",
 				"limit":             headers.Limit,
 				"reset":             headers.Reset,
 				"tier":              headers.Tier,
 			})
-			c.Abort()
 			return
 		}
-
-		// Add rate limit headers to response
-		for key, value := range headers.ToHeaders() {
-			c.Header(key, value)
-		}
-
 		c.Next()
 	}
 }
