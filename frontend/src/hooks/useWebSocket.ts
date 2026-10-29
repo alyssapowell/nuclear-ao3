@@ -72,18 +72,14 @@ export const useWebSocket = ({
 
     try {
       // Add authentication to WebSocket URL
+      // The server works out who you are from the token.
       const token = getAuthToken();
-      const userId = getUserId();
-      
-      // Don't connect if we don't have a valid token and user ID
-      if (!token || !userId) {
-        console.log('Skipping WebSocket connection - no valid auth token or user ID');
+      if (!token || !url) {
         return;
       }
-      
+
       const wsUrl = new URL(url);
       wsUrl.searchParams.set('token', token);
-      wsUrl.searchParams.set('user_id', userId);
       
       ws.current = new WebSocket(wsUrl.toString());
 

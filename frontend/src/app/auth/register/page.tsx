@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation } from '@apollo/client';
-import { REGISTER } from '@/lib/graphql';
+import { register as registerRequest } from '@/lib/api';
 
 interface RegisterForm {
   username: string;
@@ -24,7 +23,6 @@ function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [registerMutation] = useMutation(REGISTER);
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -59,32 +57,24 @@ function RegisterContent() {
       setLoading(true);
       setError('');
 
-      const { data } = await registerMutation({
-        variables: {
-          input: {
-            username: form.username,
-            email: form.email,
-            password: form.password
-          }
-        }
-      });
+      const result = await registerRequest(form.username, form.email, form.password);
 
-      if (data?.auth?.register?.errors?.length > 0) {
-        setError(data.auth.register.errors[0].message);
+      if (result.error) {
+        setError(result.error);
         return;
       }
 
-      if (data?.auth?.register?.token) {
+      if (result.token) {
         // Store the token
-        localStorage.setItem('auth_token', data.auth.register.token);
+        localStorage.setItem('auth_token', result.token);
         
         // Store user data for navigation
-        if (data.auth.register.user) {
-          localStorage.setItem('user', JSON.stringify(data.auth.register.user));
+        if (result.user) {
+          localStorage.setItem('user', JSON.stringify(result.user));
         }
         
         // Also set as cookie for middleware
-        document.cookie = `auth_token=${data.auth.register.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        document.cookie = `auth_token=${result.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
 
         // Trigger auth state change event for navigation
         window.dispatchEvent(new Event('authChange'));

@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { MockedProvider } from '@apollo/client/testing';
 import SearchPage from '@/app/search/page';
 
 // Mock Next.js navigation

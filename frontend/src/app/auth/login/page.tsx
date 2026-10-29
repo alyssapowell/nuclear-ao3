@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation } from '@apollo/client';
-import { LOGIN } from '@/lib/graphql';
+import { login as loginRequest } from '@/lib/api';
 
 interface LoginForm {
   email: string;
@@ -17,7 +16,6 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [loginMutation] = useMutation(LOGIN);
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -42,31 +40,24 @@ function LoginContent() {
       setLoading(true);
       setError('');
 
-      const { data } = await loginMutation({
-        variables: {
-          input: {
-            email: form.email,
-            password: form.password
-          }
-        }
-      });
+      const result = await loginRequest(form.email, form.password);
 
-      if (data?.auth?.login?.errors?.length > 0) {
-        setError(data.auth.login.errors[0].message);
+      if (result.error) {
+        setError(result.error);
         return;
       }
 
-      if (data?.auth?.login?.token) {
+      if (result.token) {
         // Store the token
-        localStorage.setItem('auth_token', data.auth.login.token);
+        localStorage.setItem('auth_token', result.token);
         
         // Store user data for navigation
-        if (data.auth.login.user) {
-          localStorage.setItem('user', JSON.stringify(data.auth.login.user));
+        if (result.user) {
+          localStorage.setItem('user', JSON.stringify(result.user));
         }
         
         // Also set as cookie for middleware
-        document.cookie = `auth_token=${data.auth.login.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        document.cookie = `auth_token=${result.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
 
         // Trigger auth state change event for navigation
         window.dispatchEvent(new Event('authChange'));

@@ -91,7 +91,7 @@ export default function ExportModal({ workId, workTitle, authToken, onClose, onE
         formData.append('cover_image', selectedCoverImage);
       }
 
-      const response = await fetch('http://localhost:8086/api/v1/export', {
+      const response = await fetch('/api/v1/export', {
         method: 'POST',
         headers: {
           'Authorization': authToken ? `Bearer ${authToken}` : '',

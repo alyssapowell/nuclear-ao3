@@ -56,7 +56,6 @@
     "prebuild": "npm run clean:demos && npm run update-attributions"
   },
   "dependencies": {
-    "@apollo/client": "^3.11.8",
     "@axe-core/playwright": "^4.10.2",
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
@@ -69,7 +68,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "graphql": "^16.11.0",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.544.0",
     "next": "^15.5.4",

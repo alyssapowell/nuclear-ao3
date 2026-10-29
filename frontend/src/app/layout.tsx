@@ -1,6 +1,5 @@
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
-import { ApolloProvider } from '@/components/ApolloProvider'
 import GDPRConsentBanner from '@/components/GDPRConsentBanner'
 import ServiceStatus from '@/components/ServiceStatus'
 import PWAInit from '@/components/PWAInit'
@@ -23,18 +22,16 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192x192.svg" />
       </head>
       <body className="min-h-screen bg-gray-50 font-sans antialiased">
-        <ApolloProvider>
-          <div className="min-h-screen flex flex-col">
-            <Navigation />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </div>
-          <GDPRConsentBanner />
-          <ServiceStatus />
-          <PWAInit />
-        </ApolloProvider>
+        <div className="min-h-screen flex flex-col">
+          <Navigation />
+          <main className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </div>
+        <GDPRConsentBanner />
+        <ServiceStatus />
+        <PWAInit />
       </body>
     </html>
   )

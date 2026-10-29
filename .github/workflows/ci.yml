@@ -129,48 +129,17 @@ jobs:
         working-directory: frontend
         run: npm test || echo "⚠️ Frontend tests completed"
 
-  # Test Docker builds for all services
-  test-docker-builds:
-    name: 🐳 Test Docker Builds
+  # Build the backend image
+  test-docker-build:
+    name: 🐳 Test Backend Docker Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [auth-service, work-service, tag-service, search-service, notification-service, export-service, api-gateway]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Test Docker build for ${{ matrix.service }}
-        run: |
-          echo "🐳 Testing Docker build for ${{ matrix.service }}..."
-          docker build -t nuclear-ao3/${{ matrix.service }}:test \
-            --build-arg SERVICE=${{ matrix.service }} \
-            -f backend/${{ matrix.service }}/Dockerfile \
-            backend/
+      - name: Build backend image
+        run: docker build -t nuclear-ao3/app:test backend
 
-      - name: Test container startup
-        run: |
-          echo "🧪 Testing container startup for ${{ matrix.service }}..."
-          # Create a test network
-          docker network create nuclear-ao3-test || true
-          
-          # Start container in background (will fail without dependencies, but should start)
-          docker run -d \
-            --name test-${{ matrix.service }} \
-            --network nuclear-ao3-test \
-            -e DATABASE_URL=postgres://test:test@localhost:5432/test \
-            -e REDIS_URL=redis://localhost:6379 \
-            -e JWT_SECRET=test-secret \
-            nuclear-ao3/${{ matrix.service }}:test || echo "Container startup expected to fail without dependencies"
-          
-          # Check if binary exists and is executable
-          docker run --rm nuclear-ao3/${{ matrix.service }}:test ls -la /root/ || true
-          
-          # Cleanup
-          docker stop test-${{ matrix.service }} || true
-          docker rm test-${{ matrix.service }} || true
-
-  # Test Frontend Docker build
   test-frontend-docker:
     name: 🐳 Test Frontend Docker Build
     runs-on: ubuntu-latest
@@ -247,7 +216,7 @@ jobs:
           docker-compose ps
           
           # Test API Gateway health (may fail, but good to try)
-          curl -f http://localhost:8080/health || echo "API Gateway health check (expected to fail in CI)"
+          curl -f http://localhost:8088/health || echo "App health check failed"
 
       - name: Show service logs
         if: always()
@@ -294,7 +263,7 @@ jobs:
   integration-test:
     name: 🔗 Integration Test
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, test-docker-builds]
+    needs: [test-backend, test-frontend, test-docker-build]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -382,7 +351,7 @@ jobs:
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, test-docker-builds, test-frontend-docker, test-docker-compose, security, integration-test]
+    needs: [test-backend, test-frontend, test-docker-build, test-frontend-docker, test-docker-compose, security, integration-test]
     if: always()
     steps:
       - name: Check CI results
@@ -390,7 +359,7 @@ jobs:
           echo "📊 CI Results Summary:"
           echo "Backend Tests: ${{ needs.test-backend.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
-          echo "Docker Builds: ${{ needs.test-docker-builds.result }}"
+          echo "Docker Builds: ${{ needs.test-docker-build.result }}"
           echo "Frontend Docker: ${{ needs.test-frontend-docker.result }}"
           echo "Docker Compose: ${{ needs.test-docker-compose.result }}"
           echo "Security: ${{ needs.security.result }}"
@@ -398,7 +367,7 @@ jobs:
           
           if [ "${{ needs.test-backend.result }}" = "success" ] && 
              [ "${{ needs.test-frontend.result }}" = "success" ] &&
-             [ "${{ needs.test-docker-builds.result }}" = "success" ] &&
+             [ "${{ needs.test-docker-build.result }}" = "success" ] &&
              [ "${{ needs.test-frontend-docker.result }}" = "success" ] &&
              [ "${{ needs.test-docker-compose.result }}" = "success" ] &&
              [ "${{ needs.security.result }}" = "success" ] &&

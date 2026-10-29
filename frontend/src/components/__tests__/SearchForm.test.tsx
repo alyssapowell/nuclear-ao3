@@ -1,134 +1,48 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { MockedProvider } from '@apollo/client/testing';
 import SearchForm from '../SearchForm';
-import { ENHANCED_SEARCH_WORKS } from '@/lib/graphql';
+import { searchWorks } from '@/lib/api';
 
 // Mock debounced search
 jest.mock('lodash.debounce', () => jest.fn((fn) => fn));
 
+// SearchForm calls the REST API through lib/api; tests control what it returns.
+jest.mock('@/lib/api', () => ({ searchWorks: jest.fn() }));
+const mockedSearchWorks = searchWorks as jest.MockedFunction<typeof searchWorks>;
+
 const mockOnResults = jest.fn();
 const mockOnRecommendations = jest.fn();
 
-const mockSearchWorksMocks = [
-  {
-    request: {
-      query: ENHANCED_SEARCH_WORKS,
-      variables: {
-        query: 'Harry Potter',
-        filters: {
-          author: undefined,
-          relationships: [],
-          characters: [],
-          freeformTags: [],
-          fandoms: [],
-          rating: undefined,
-          wordCountMin: undefined,
-          wordCountMax: undefined,
-          language: undefined,
-          completionStatus: undefined,
-          blockedTags: [],
-          hideIncomplete: false,
-          hideCrossovers: false,
-          minKudos: undefined,
-          minComments: undefined,
-          minBookmarks: undefined,
-        },
-        analysis: {
-          enableSmartSuggestions: true,
-          excludePoorlyTagged: false,
-        },
-      },
+const mockSearchWorksMocks = {
+  total: 1,
+  works: [
+    {
+      id: '1',
+      title: 'Harry Potter and the Test Story',
+      author: 'Test Author',
+      summary: 'A test story',
+      word_count: 1000,
+      chapter_count: 1,
+      rating: 'Teen And Up Audiences',
+      language: 'English',
     },
-    result: {
-      data: {
-        search: {
-          enhancedWorks: {
-            total: 1,
-            works: [
-              {
-                id: '1',
-                title: 'Harry Potter and the Test Story',
-                authors: [{ id: '1', username: 'Test Author' }],
-                summary: 'A test story',
-                wordCount: 1000,
-                chapterCount: 1,
-                maxChapters: 1,
-                isComplete: true,
-                rating: 'Teen And Up Audiences',
-                warnings: [],
-                categories: [],
-                language: 'English',
-                publishedAt: '2023-01-01',
-                updatedAt: '2023-01-01',
-                relationships: [],
-                characters: [],
-                freeformTags: [],
-                fandoms: [],
-                kudosCount: 10,
-                bookmarkCount: 5,
-                hitCount: 100,
-                commentCount: 3,
-                tagQuality: {
-                  score: 0.9,
-                  missingSuggestions: [],
-                  missingCharacters: [],
-                  inconsistencies: [],
-                },
-              },
-            ],
-            analytics: null,
-            smartSuggestions: {
-              characterSuggestions: [
-                {
-                  tag: 'Harry Potter',
-                  confidence: 0.85,
-                  reasons: ['Detected from title'],
-                },
-              ],
-              relationshipExpansions: [],
-              crossTaggingOpportunities: [],
-            },
-          },
-        },
-      },
-    },
-  },
-];
+  ],
+};
 
 const defaultProps = {
   onResults: mockOnResults,
   onRecommendations: mockOnRecommendations,
 };
 
-// Default empty mock for rendering without search
-const defaultMocks = [
-  {
-    request: {
-      query: ENHANCED_SEARCH_WORKS,
-    },
-    result: {
-      data: {
-        search: {
-          enhancedWorks: {
-            total: 0,
-            works: [],
-            analytics: null,
-            smartSuggestions: null
-          }
-        }
-      },
-    },
-  },
-];
+// Default empty response for rendering without search
+const defaultMocks = { total: 0, works: [] };
 
-const renderSearchForm = (props = {}, mocks = defaultMocks) => {
-  return render(
-    <MockedProvider mocks={mocks} addTypename={false}>
-      <SearchForm {...defaultProps} {...props} />
-    </MockedProvider>
+const renderSearchForm = (props = {}, response: object | Error = defaultMocks) => {
+  mockedSearchWorks.mockImplementation(() =>
+    response instanceof Error ? Promise.reject(response) : Promise.resolve(response as any)
   );
+  return render(<SearchForm {...defaultProps} {...props} />);
 };
 
 describe('SearchForm - Accessibility-First Implementation', () => {
@@ -326,15 +240,7 @@ describe('SearchForm - Accessibility-First Implementation', () => {
 
     it('announces search errors to screen readers', async () => {
       const user = userEvent.setup();
-      const errorMocks = [
-        {
-          request: {
-            query: ENHANCED_SEARCH_WORKS,
-            variables: expect.any(Object),
-          },
-          error: new Error('Search failed'),
-        },
-      ];
+      const errorMocks = new Error('Search failed');
 
       renderSearchForm({}, errorMocks);
 
@@ -395,14 +301,6 @@ describe('SearchForm - Accessibility-First Implementation', () => {
         ]);
       });
 
-      await waitFor(() => {
-        expect(mockOnRecommendations).toHaveBeenCalledWith([
-          expect.objectContaining({
-            type: 'missing_character',
-            title: 'Missing Character Tags',
-          }),
-        ]);
-      });
     });
 
     it.skip('applies advanced filters correctly', async () => {

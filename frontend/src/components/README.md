@@ -16,8 +16,6 @@ This directory contains reusable React components for the Nuclear AO3 frontend a
 ### Navigation.tsx
 Main navigation component for the application.
 
-### ApolloProvider.tsx
-GraphQL Apollo Client provider for the application.
 
 ## Comment System Components
 

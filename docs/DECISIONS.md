@@ -33,6 +33,13 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - Login checking was reimplemented per service, and in most of them it doesn't actually check anything (see the security findings in [FEATURES.md](FEATURES.md)).
 - One binary means one auth check, one log stream and one thing to restart.
 
+**What changed for API callers:**
+- Everything is on one origin under `/api/v1`, plus `/ws` and `/health`.
+- `GET /api/v1/admin/statistics` (tags) is now `/api/v1/admin/tag-statistics`. The works one keeps the old path; the two used to collide.
+- Notification `/preferences` and `/rules` are now `/notification-preferences` and `/notification-rules`. The test and process-event endpoints moved under `/api/v1/admin/notifications/`.
+- `GET /api/v1/exports/user/:user_id` is now `GET /api/v1/my/exports`.
+- GraphQL (`/graphql`) is gone; the three frontend screens that used it (login, register, search) use REST.
+
 **Cost:** Areas can't be scaled independently. At AO3's size that's fine: run more copies of the one binary behind Caddy.
 
 ## 2026-10-29: Vite + React instead of Next.js

@@ -2,8 +2,7 @@
 
 import React, { useState, useRef, useId, useCallback, useMemo } from 'react';
 import { Search, Filter, X, AlertCircle, Loader2 } from 'lucide-react';
-import { useLazyQuery } from '@apollo/client';
-import { ENHANCED_SEARCH_WORKS } from '@/lib/graphql';
+import { searchWorks } from '@/lib/api';
 import TagAutocomplete from './TagAutocomplete';
 import { SmartRecommendation } from './SmartRecommendations';
 // Temporarily disable render profiler to fix loading issues
@@ -223,86 +222,60 @@ const SearchForm = React.memo(function SearchForm({
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const firstAdvancedFieldRef = useRef<HTMLInputElement>(null);
 
-  // GraphQL query hook
-  const [executeSearch, { loading, data: searchData, error: searchGraphQLError }] = useLazyQuery(ENHANCED_SEARCH_WORKS, {
-    fetchPolicy: 'network-only',
-    onCompleted: (data) => {
-      if (data?.search?.enhancedWorks) {
-        const works = data.search.enhancedWorks.works || [];
-        const smartSuggestions = data.search.enhancedWorks.smartSuggestions;
-        
-        // Map GraphQL response to component format
-        const normalizedWorks = works.map((work: any) => ({
-          id: work.id,
-          title: work.title,
-          author: work.authors?.[0]?.username || 'Anonymous',
-          summary: work.summary,
-          word_count: work.wordCount,
-          chapter_count: work.chapterCount,
-          max_chapters: work.maxChapters,
-          rating: work.rating,
-          status: work.isComplete ? 'complete' : 'in_progress',
-          language: work.language,
-          published_date: work.publishedAt,
-          updated_date: work.updatedAt,
-          relationships: work.relationships || [],
-          characters: work.characters || [],
-          freeform_tags: work.freeformTags || [],
-          fandoms: work.fandoms || [],
-          kudos_count: work.kudosCount,
-          bookmark_count: work.bookmarkCount,
-          hit_count: work.hitCount,
-          comment_count: work.commentCount,
-          tag_quality_score: work.tagQuality?.score,
-          missing_tag_suggestions: work.tagQuality?.missingSuggestions,
-        }));
-        
-        onResults(normalizedWorks);
-        setAnnounceResults(`Search completed. Found ${normalizedWorks.length} results.`);
-        setSearchError('');
-        
-        // Handle smart suggestions if callback provided
-        if (smartSuggestions && onRecommendations) {
-          const recommendations: SmartRecommendation[] = [];
-          
-          // Character suggestions
-          if (smartSuggestions.characterSuggestions?.length > 0) {
-            recommendations.push({
-              type: 'missing_character',
-              title: 'Missing Character Tags',
-              description: 'We detected potential missing character tags based on your search',
-              suggestions: smartSuggestions.characterSuggestions.map((s: any) => s.tag),
-              confidence_score: smartSuggestions.characterSuggestions[0]?.confidence || 0.8,
-              category: 'character',
-            });
-          }
-          
-          // Relationship expansions
-          if (smartSuggestions.relationshipExpansions?.length > 0) {
-            const suggestions = smartSuggestions.relationshipExpansions
-              .flatMap((exp: any) => exp.suggested.map((s: any) => s.name));
-            if (suggestions.length > 0) {
-              recommendations.push({
-                type: 'missing_relationship',
-                title: 'Relationship Expansion',
-                description: 'Detected relationships that could be expanded',
-                suggestions,
-                confidence_score: 0.75,
-                category: 'relationship',
-              });
-            }
-          }
-          
-          onRecommendations(recommendations);
-        }
-      }
-    },
-    onError: (error) => {
-      console.error('GraphQL Search error:', error);
-      setSearchError(error.message || 'Search failed. Please try again.');
+  // Runs the search against the REST API (lib/api.ts searchWorks).
+  const [loading, setLoading] = useState(false);
+  const executeSearch = useCallback(async (f: SearchFilters) => {
+    setLoading(true);
+    try {
+      const data: any = await searchWorks(f.title || '', {
+        fandoms: f.fandoms,
+        characters: f.characters,
+        relationships: f.relationships,
+        tags: f.freeformTags,
+        rating: f.rating ? [f.rating] : undefined,
+        language: f.language ? [f.language] : undefined,
+        wordCountMin: f.wordCountMin,
+        wordCountMax: f.wordCountMax,
+        status: f.status,
+      });
+      const works = data?.works || data?.results || [];
+
+      // The API returns snake_case fields; accept camelCase too.
+      const normalizedWorks = works.map((work: any) => ({
+        id: work.id ?? work.work_id,
+        title: work.title,
+        author: work.author ?? work.username ?? work.author_names?.[0] ?? work.authors?.[0]?.username ?? 'Anonymous',
+        summary: work.summary,
+        word_count: work.word_count ?? work.wordCount,
+        chapter_count: work.chapter_count ?? work.chapterCount,
+        max_chapters: work.max_chapters ?? work.maxChapters,
+        rating: work.rating,
+        status: work.status ?? work.completion_status ?? (work.is_complete ? 'complete' : 'in_progress'),
+        language: work.language,
+        published_date: work.published_date ?? work.published_at ?? work.created_at,
+        updated_date: work.updated_date ?? work.updated_at,
+        relationships: work.relationships || [],
+        characters: work.characters || [],
+        freeform_tags: work.freeform_tags ?? work.additional_tags ?? [],
+        fandoms: work.fandoms || [],
+        kudos_count: work.kudos_count ?? work.kudos,
+        bookmark_count: work.bookmark_count ?? work.bookmarks,
+        hit_count: work.hit_count ?? work.hits,
+        comment_count: work.comment_count ?? work.comments,
+      }));
+
+      onResults(normalizedWorks);
+      setAnnounceResults(`Search completed. Found ${normalizedWorks.length} results.`);
+      setSearchError('');
+    } catch (error: any) {
+      console.error('Search error:', error);
+      setSearchError(error?.message || 'Search failed. Please try again.');
       setAnnounceResults('Search failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  });
+  }, [onResults]);
+
 
   const handleSearch = useCallback((e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -320,34 +293,8 @@ const SearchForm = React.memo(function SearchForm({
     setSearchError('');
     setAnnounceResults('Searching...');
     
-    // Execute GraphQL query
-    executeSearch({
-      variables: {
-        query: filters.title || '',
-        filters: {
-          author: filters.author,
-          relationships: filters.relationships,
-          characters: filters.characters,
-          freeformTags: filters.freeformTags,
-          fandoms: filters.fandoms,
-          rating: filters.rating,
-          wordCountMin: filters.wordCountMin,
-          wordCountMax: filters.wordCountMax,
-          language: filters.language,
-          completionStatus: filters.status,
-          blockedTags: filters.blockedTags,
-          hideIncomplete: filters.hideIncomplete,
-          hideCrossovers: filters.hideCrossovers,
-          minKudos: filters.minKudos,
-          minComments: filters.minComments,
-          minBookmarks: filters.minBookmarks,
-        },
-        analysis: {
-          enableSmartSuggestions: filters.enableSmartSuggestions,
-          excludePoorlyTagged: filters.excludePoorlyTagged,
-        }
-      }
-    });
+    executeSearch(filters);
+
   }, [filters, executeSearch]);
 
   const addTag = useCallback((tagField: string, tag: string) => {

@@ -20,19 +20,15 @@
         -Server
     }
 
-    # Health check endpoint
+    # Backend: health check, API, and live notifications
     handle /health {
-        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+        reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
-
-    # GraphQL API endpoint
-    handle /graphql {
-        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
-    }
-
-    # REST API endpoints - route through API Gateway
     handle /api/* {
-        reverse_proxy {$API_GATEWAY_HOST:api-gateway}:{$API_GATEWAY_PORT:8080}
+        reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
+    }
+    handle /ws {
+        reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
 
     # Static assets and frontend

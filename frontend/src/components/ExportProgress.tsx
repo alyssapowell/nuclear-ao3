@@ -22,6 +22,15 @@ interface ExportStatus {
   ttl_seconds: number;
 }
 
+function authHeaders(): HeadersInit {
+  try {
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function ExportProgress({ exportId, onComplete, onClose }: ExportProgressProps) {
   const [exportStatus, setExportStatus] = useState<ExportStatus | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -29,7 +38,7 @@ export default function ExportProgress({ exportId, onComplete, onClose }: Export
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const response = await fetch(`http://localhost:8086/api/v1/export/${exportId}`);
+        const response = await fetch(`/api/v1/export/${exportId}`, { headers: authHeaders() });
         if (response.ok) {
           const status = await response.json();
           setExportStatus(status);
@@ -96,13 +105,14 @@ export default function ExportProgress({ exportId, onComplete, onClose }: Export
 
   const handleRefreshTTL = async () => {
     try {
-      const response = await fetch(`http://localhost:8086/api/v1/export/${exportId}/refresh`, {
+      const response = await fetch(`/api/v1/export/${exportId}/refresh`, {
         method: 'POST',
+        headers: authHeaders(),
       });
       
       if (response.ok) {
         // Refresh the export status to get updated TTL
-        const statusResponse = await fetch(`http://localhost:8086/api/v1/export/${exportId}`);
+        const statusResponse = await fetch(`/api/v1/export/${exportId}`, { headers: authHeaders() });
         if (statusResponse.ok) {
           const updatedStatus = await statusResponse.json();
           setExportStatus(updatedStatus);

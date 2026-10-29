@@ -17,7 +17,8 @@ Status key:
 
 - **Register, log in, log out, password reset, email verification**
   - Intent: standard accounts that work without JavaScript tricks or third-party login.
-  - Status: Works (auth service).
+  - Status: Works (verified 2026-10-29 against a local database: register, log in, authenticated requests).
+  - Welcome emails were **never sent** before the merge: registration posted to a `/api/events` route that didn't exist. They are now sent directly (seen in logs; not yet verified against a real mail server).
 - **Sessions and security log**: see and revoke your active sessions, and see recent security events.
   - Intent _(inferred)_: let users notice and stop account takeover themselves.
   - Status: Unverified.
@@ -35,7 +36,7 @@ Status key:
   - Intent: a migration from AO3 must not break the many existing links to works.
   - Status: the database column exists; the importer that would fill it does not (see Migration).
 - **Kudos, comments (including guest comments), comment moderation**
-  - Status: Unverified. Note that the auth exemption for guest comments matches *any* POST whose path ends in `/comments` (see Security).
+  - Status: Unverified. Comment notifications **never worked** before the merge (the call to the notification service had no login token); they are now sent in-process.
 - **Bookmarks, series, collections**
   - Status: Unverified.
 - **Pseuds, gifting, orphaning, co-authors**: the core AO3 authorship features.
@@ -53,7 +54,7 @@ Status key:
   - Status: Unverified.
 - **Tag wrangling**: work queue, canonical tags, synonyms, parent tags, merges, reports.
   - Intent: the volunteer tag-wrangler workflow that AO3 depends on.
-  - Status: **Broken (security)**. Login and role checks in the tag service are empty placeholders, so anyone can wrangle, ban tags or add wranglers.
+  - Status: Unverified. Until 2026-10-29 the login and role checks here were empty placeholders; they are real now (verified: anonymous gets 401, a normal user 403, an admin 200).
 - **Tag prominence**: authors mark which tags are central to a work and which are minor.
   - Intent: cut down "tag spam" so filtering by tag returns works that are actually about it.
   - Status: Unverified.
@@ -70,22 +71,22 @@ Status key:
   - Intent _(inferred)_: help wranglers and admins see what readers can't find.
   - Status: Unverified. **Revisit: needed at launch?**
 - **Index management**: rebuild, optimize, index or delete individual records.
-  - Status: **Broken (security)**. There is no real auth check, so anyone can rebuild or delete the index.
+  - Status: Admin-only (fixed 2026-10-29; it used to be open to anyone).
 
 ## Notifications and subscriptions
 
 - **In-app notifications, unread count, live updates over WebSocket**
-  - Status: **Broken**. The frontend calls port 8004, but the service runs on 8087. Its auth also accepts any bearer token plus an `X-User-ID` header, so anyone can read anyone's notifications.
+  - Status: Unverified. Fixed 2026-10-29: the frontend called the wrong port, and auth accepted any token plus an `X-User-ID` header. Known issue: the WebSocket client list isn't protected by a lock, so simultaneous connections can race.
 - **Notification preferences and rules; email notifications**
   - Status: Unverified.
 - **Subscriptions** to works, authors and series.
-  - Status: implemented **twice**, once in the work service and once in the notification service. One copy needs to go.
+  - Status: Unverified. There used to be two copies; the notification-service copy was removed and the works copy (the one the frontend uses) stays.
 
 ## Export / download
 
 - **Download works as EPUB and other formats**
   - Intent: readers can keep a copy, which is core to AO3's archival mission.
-  - Status: **Stub**. `processExport` is a TODO. The API accepts requests but never produces a file, and it has no auth.
+  - Status: **Stub**. `processExport` is a TODO. The API accepts requests but never produces a file. It now requires login, and the requester comes from the token instead of the request body.
 
 ## Privacy and safety
 
@@ -111,23 +112,39 @@ Status key:
   - Intent: give OTW a credible path to move over.
   - Status: **Stub**. `tools/ao3-importer/` contains only a README. This is the single most important missing piece for adoption.
 
+## Search on the frontend
+
+- **"Smart suggestions"** (missing-tag recommendations) came only from the GraphQL gateway and were dropped with it. Search itself still works through the REST API. **Revisit: rebuild on Postgres search, or drop?**
+- **Crossover detection** calls `/api/v1/tags/universe-families`, which no backend has ever served, so it always falls back.
+
 ## Out of scope for this repo (for now)
 
 - **Digital Asset Ownership Framework** (`DIGITAL_ASSET_OWNERSHIP.md`, `docs/ownership/`): a blockchain-agnostic creator-rights protocol. **Revisit: move to its own repo?**
 
 ---
 
-## Security findings (found 2026-10-29)
+## Security findings (found and fixed 2026-10-29)
 
-These are about the current code. The single-binary merge (see [DECISIONS.md](DECISIONS.md)) replaces all of them with one real auth check.
+These were fixed by merging the backend into one program with one login check (`backend/internal/platform`). Each was checked against a running server.
 
-1. **The work service trusts a client-supplied `X-User-ID` header**, and the gateway passes a client's `X-User-ID` straight through (`api-gateway/proxy.go`). Anyone can act as any user.
-2. **Tag and search services have no-op `JWTAuthMiddleware` and `RequireRoleMiddleware`.** All of their "protected" and admin routes are public.
-3. **The notification service accepts any bearer token** plus an `X-User-ID` header.
-4. **The export service has no auth.**
-5. **Every service port is published to the host** in `docker-compose.yml`, so the gateway can be bypassed entirely.
-6. **The work service logs `DATABASE_URL`, including the password**, at startup.
-7. **The guest-comment auth exemption** matches any POST path ending in `/comments`.
-8. **Grafana uses admin/admin and `:latest` images**; Prometheus is published on 9090.
+1. ~~The work service trusted a client-supplied `X-User-ID` header~~, and the gateway passed it straight through, so anyone could act as any user. **Fixed:** identity comes only from a verified token; forged headers get 401.
+2. ~~Tag and search had no-op login and role checks.~~ **Fixed:** wrangler and admin routes check `user_roles`.
+3. ~~**Every** "admin only" check let any logged-in user through~~; even auth's was a TODO. **Fixed:** the same real role check is used everywhere.
+4. ~~The notification service accepted any bearer token~~, and its WebSocket took `user_id` from the URL. **Fixed.**
+5. ~~The export service had no auth~~ and took the user ID from the request body. **Fixed.**
+6. ~~Every service port was published to the host.~~ **Fixed:** one app container, published on localhost only; Caddy is the public entrance. Metrics are on a separate private port.
+7. ~~The guest-comment auth exemption matched any POST ending in `/comments`.~~ **Removed:** guest comments go through optional login like the rest of the public routes.
+8. ~~CORS reflected any origin, with credentials, when `GIN_MODE` was unset.~~ **Fixed:** there is an explicit allowlist (`CORS_ORIGINS`).
 
-If a Hetzner deployment from the `deploy-*` workflows is live, it is exposed to all of the above.
+### Still open
+
+- **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
+- **The works service logs SQL details and other debug output** at startup and on every request.
+- **Token scope is not checked yet.** OAuth tokens issued to third-party apps are signed with the same key as login tokens, and it hasn't been verified whether one can be used as a full login. To check.
+- If a Hetzner deployment from the old `deploy-*` workflows is live, it is still running the old, vulnerable code until it's redeployed.
+
+## Setup and maintenance problems (found 2026-10-29)
+
+- **Migrations don't apply cleanly to an empty database.** `010`, `012`, `013`, `016`, `019` and `020` all error (duplicate tables, a syntax error, an unbuildable foreign key, a subquery in an index). Docker's Postgres setup stops at the first error, so a brand-new install probably can't create its database at all. There is no migration tool; files only run once, on first container start.
+- **Posting a work fails on a fresh database.** The retention trigger from `016` reads `NEW.author_id`, which doesn't exist on `works`.
+- **121 of 428 frontend unit tests already fail on `main`.** These are pre-existing; the merge didn't add any (compared test by test).

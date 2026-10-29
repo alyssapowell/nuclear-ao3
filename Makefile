@@ -70,7 +70,7 @@ service-status: ## Check status of all services
 	@echo "🔍 Service Status:"
 	@docker-compose ps
 	@echo "\n🏥 Health Check:"
-	@curl -s http://localhost:8080/health | jq '.' 2>/dev/null || echo "API Gateway not ready"
+	@curl -s http://localhost:8088/health | jq '.' 2>/dev/null || echo "Backend not ready"
 
 logs: ## Show logs for all services
 	@docker-compose logs -f
@@ -86,7 +86,7 @@ dev-setup: ## Complete development environment setup
 	@cd frontend && npm install
 	@echo "✅ Development environment ready!"
 	@echo "🌐 Frontend: http://localhost:3000"
-	@echo "🔌 API Gateway: http://localhost:8080"
+	@echo "🔌 API: http://localhost:8088"
 	@echo "📊 Grafana: http://localhost:3002"
 
 frontend-dev: ## Start frontend development server
@@ -100,11 +100,11 @@ test: ## Run all tests
 
 test-api: ## Test API endpoints with sample data
 	@echo "🔌 Testing API endpoints..."
-	@curl -s "http://localhost:8080/health" | jq '.'
+	@curl -s "http://localhost:8088/health" | jq '.'
 	@echo "\n📚 Sample works:"
-	@curl -s "http://localhost:8080/api/v1/works/?limit=3" | jq '.works | length'
+	@curl -s "http://localhost:8088/api/v1/works/?limit=3" | jq '.works | length'
 	@echo "\n🔍 Search test:"
-	@curl -s "http://localhost:8080/api/v1/search?q=Harry&limit=5" | jq '.' || echo "Search service not ready"
+	@curl -s "http://localhost:8088/api/v1/search?q=Harry&limit=5" | jq '.' || echo "Search service not ready"
 
 # Build and Deployment
 build: ## Build all services
@@ -173,16 +173,16 @@ examples: ## Show example API calls
 	@echo "📖 Example API Calls:"
 	@echo ""
 	@echo "Health Check:"
-	@echo "curl http://localhost:8080/health"
+	@echo "curl http://localhost:8088/health"
 	@echo ""
 	@echo "List Works:"
-	@echo "curl 'http://localhost:8080/api/v1/works/?limit=10'"
+	@echo "curl 'http://localhost:8088/api/v1/works/?limit=10'"
 	@echo ""
 	@echo "Search Works:"
-	@echo "curl 'http://localhost:8080/api/v1/search?q=Agatha&limit=5'"
+	@echo "curl 'http://localhost:8088/api/v1/search?q=Agatha&limit=5'"
 	@echo ""
 	@echo "Filter by Fandom:"
-	@echo "curl 'http://localhost:8080/api/v1/works/?fandom=Harry%20Potter&limit=10'"
+	@echo "curl 'http://localhost:8088/api/v1/works/?fandom=Harry%20Potter&limit=10'"
 
 # CI/CD Helpers
 ci-test: ## Run tests suitable for CI environment

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Notification } from '../components/notifications/NotificationBell';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_NOTIFICATION_API_URL || 'http://localhost:8004/api/v1';
+const API_BASE_URL = '/api/v1';
 
 interface UseNotificationsReturn {
   notifications: Notification[];
@@ -35,7 +35,6 @@ export const useNotifications = (): UseNotificationsReturn => {
     
     return {
       'Authorization': `Bearer ${token}`,
-      'X-User-ID': userId,
       'Content-Type': 'application/json',
     };
   };
@@ -147,7 +146,7 @@ export const useNotifications = (): UseNotificationsReturn => {
         }
       };
 
-      const response = await fetch(`${API_BASE_URL}/test-notification`, {
+      const response = await fetch(`${API_BASE_URL}/admin/notifications/test`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(testEvent),

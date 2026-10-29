@@ -2726,3 +2726,51 @@ export async function getUserDashboard(authToken?: string) {
     throw error;
   }
 }
+// =============================================================================
+// AUTHENTICATION
+// =============================================================================
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface AuthResult {
+  token?: string;
+  user?: AuthUser;
+  error?: string;
+}
+
+const AUTH_ERRORS: Record<string, string> = {
+  invalid_credentials: 'Incorrect email or password.',
+  invalid_request: 'Please check the form and try again.',
+};
+
+async function authRequest(path: string, body: object): Promise<AuthResult> {
+  const response = await fetch(`${API_GATEWAY_URL}/api/v1/auth/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = data.error as string | undefined;
+    return { error: (code && AUTH_ERRORS[code]) || data.error_description || data.message || 'Something went wrong. Please try again.' };
+  }
+  return { token: data.access_token, user: data.user };
+}
+
+export function login(email: string, password: string): Promise<AuthResult> {
+  return authRequest('login', { email, password });
+}
+
+export function register(username: string, email: string, password: string): Promise<AuthResult> {
+  return authRequest('register', {
+    username,
+    email,
+    password,
+    confirm_password: password,
+    accept_tos: true,
+  });
+}

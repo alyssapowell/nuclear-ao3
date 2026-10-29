@@ -1,5 +1,7 @@
 # Nuclear AO3: The Modern Fanfiction Platform
 
+> **This project is being simplified.** The backend is now a single Go program (`backend/cmd/nuclear`) instead of six services and a gateway. Parts of this README still describe the old layout. For what exists and why, read [docs/FEATURES.md](docs/FEATURES.md) and [docs/DECISIONS.md](docs/DECISIONS.md).
+
 **A modern fanfiction platform built with contemporary web technologies and microservices architecture.**
 
 ## ♿ **Accessibility-First Design**
@@ -60,13 +62,7 @@ make service-status
 
 **Service Endpoints:**
 
-- **API Gateway**: http://localhost:8080 - Unified API endpoint
-- **Auth Service**: http://localhost:8081 - OAuth2/OIDC authentication
-- **Work Service**: http://localhost:8082 - Fanfiction management  
-- **Tag Service**: http://localhost:8083 - Tag system
-- **Search Service**: http://localhost:8084 - Elasticsearch search
-- **Notification Service**: http://localhost:8085 - User notifications and messaging
-- **Export Service**: http://localhost:8086 - Data export functionality
+- **API**: http://localhost:8088 - the whole backend (one program: accounts, works, tags, search, notifications, exports)
 - **Database**: localhost:5432 - PostgreSQL 
 - **Cache**: localhost:6379 - Redis
 - **Search Engine**: http://localhost:9200 - Elasticsearch

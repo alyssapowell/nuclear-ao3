@@ -55,12 +55,12 @@ jobs:
             
             # Stop only application services (preserve databases)
             echo '🛑 Stopping application services...'
-            docker-compose stop frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy || true
+            docker-compose stop frontend app caddy || true
             
             # Build and start application services
             echo '🏗️ Building and starting application services...'
-            docker-compose build --parallel frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
-            docker-compose up -d frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
+            docker-compose build --parallel frontend app caddy
+            docker-compose up -d frontend app caddy
             
             # Wait for services to be ready
             echo '⏳ Waiting for application services to be ready...'
@@ -73,12 +73,12 @@ jobs:
             while [ \$attempt -lt \$max_attempts ]; do
               echo '⏳ Health check attempt \$((attempt + 1))/\$max_attempts...'
               if curl -v http://localhost:8088/health 2>&1; then
-                echo '✅ API Gateway is healthy!'
+                echo '✅ App is healthy!'
                 break
               else
                 echo '❌ Health check failed, checking what'\''s listening...'
                 netstat -tlnp | grep :8088 || echo 'Nothing listening on 8088'
-                docker-compose logs api-gateway --tail 5
+                docker-compose logs app --tail 5
                 sleep 15
                 attempt=\$((attempt + 1))
               fi
@@ -94,7 +94,7 @@ jobs:
             
             # Show final status
             echo '📊 Final application deployment status:'
-            docker-compose ps frontend api-gateway auth-service work-service tag-service search-service notification-service export-service caddy
+            docker-compose ps frontend app caddy
             
             echo '✅ Nuclear AO3 application deployment complete!'
           "

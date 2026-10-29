@@ -34,7 +34,7 @@ export default function RespectfulExportButton({
     setShowQuickMenu(false);
     
     try {
-      const response = await fetch('http://localhost:8086/api/v1/export', {
+      const response = await fetch('/api/v1/export', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

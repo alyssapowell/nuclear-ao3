@@ -8,7 +8,6 @@
 import { render, screen, act } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import { ReactElement } from 'react';
-import { MockedProvider } from '@apollo/client/testing';
 
 // Mock Next.js router
 jest.mock('next/navigation', () => ({
@@ -69,9 +68,9 @@ describe('Route Health Checks', () => {
       const HomePage = await testPageComponent(() => import('../app/page'));
       
       render(
-        <MockedProvider mocks={[]} addTypename={false}>
+        <>
           <HomePage />
-        </MockedProvider>
+        </>
       );
       
       // Should not throw any errors during render
@@ -82,9 +81,9 @@ describe('Route Health Checks', () => {
       const LoginPage = await testPageComponent(() => import('../app/auth/login/page'));
       
       render(
-        <MockedProvider mocks={[]} addTypename={false}>
+        <>
           <LoginPage />
-        </MockedProvider>
+        </>
       );
       
       // Should render without crashing - check document
@@ -95,9 +94,9 @@ describe('Route Health Checks', () => {
       const RegisterPage = await testPageComponent(() => import('../app/auth/register/page'));
       
       render(
-        <MockedProvider mocks={[]} addTypename={false}>
+        <>
           <RegisterPage />
-        </MockedProvider>
+        </>
       );
       
       // Should render registration form
@@ -113,9 +112,9 @@ describe('Route Health Checks', () => {
       const SearchPage = await testPageComponent(() => import('../app/search/page'));
       
       render(
-        <MockedProvider mocks={[]} addTypename={false}>
+        <>
           <SearchPage />
-        </MockedProvider>
+        </>
       );
       
       // Should not crash during render

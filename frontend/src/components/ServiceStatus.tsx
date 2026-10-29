@@ -44,40 +44,32 @@ export default function ServiceStatus() {
         // Parse the health data into our service status format
         const services: ServiceStatus[] = [];
         
-        // Add API Gateway itself
+        // The server reports one line per dependency, e.g.
+        // { "status": "OK", "checks": { "database": "ok", "redis": "ok" } }
         services.push({
-          name: 'API Gateway',
+          name: 'Archive',
           url: GATEWAY_HEALTH_URL,
-          status: healthData.gateway === 'healthy' ? 'online' : 'offline',
+          status: 'online',
           responseTime,
           lastChecked,
-          error: healthData.gateway !== 'healthy' ? 'Service degraded' : undefined
+        });
+        Object.entries(healthData.checks || {}).forEach(([name, result]) => {
+          const ok = result === 'ok';
+          services.push({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            url: GATEWAY_HEALTH_URL,
+            status: ok ? 'online' : 'offline',
+            responseTime,
+            lastChecked,
+            error: ok ? undefined : String(result),
+          });
         });
 
-        // Add individual services from health data
-        if (healthData.services) {
-          Object.entries(healthData.services).forEach(([serviceName, serviceData]) => {
-            const serviceInfo = serviceData as string;
-            const isHealthy = serviceInfo.includes('healthy');
-            const match = serviceInfo.match(/\(([^)]+)\)/);
-            const serviceResponseTime = match ? parseFloat(match[1]) : undefined;
-            
-            services.push({
-              name: serviceName.replace('-service', '').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-              url: `/health`, // All go through gateway
-              status: isHealthy ? 'online' : 'offline',
-              responseTime: serviceResponseTime || responseTime,
-              lastChecked,
-              error: !isHealthy ? 'Service unhealthy' : undefined
-            });
-          });
-        }
-        
         setServiceStatuses(services);
       } else {
         setGatewayStatus('offline');
         setServiceStatuses([{
-          name: 'API Gateway',
+          name: 'Archive',
           url: GATEWAY_HEALTH_URL,
           status: 'offline',
           responseTime,
@@ -89,7 +81,7 @@ export default function ServiceStatus() {
       const responseTime = Date.now() - startTime;
       setGatewayStatus('offline');
       setServiceStatuses([{
-        name: 'API Gateway',
+        name: 'Archive',
         url: GATEWAY_HEALTH_URL,
         status: 'offline',
         responseTime,
