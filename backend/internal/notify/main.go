@@ -42,8 +42,8 @@ func (ns *NotificationServiceExtended) GetUnreadCount(ctx context.Context, userI
 	return ns.notificationRepo.GetUnreadCount(ctx, userID)
 }
 
-func (ns *NotificationServiceExtended) DeleteNotification(ctx context.Context, notificationID uuid.UUID) error {
-	return ns.notificationRepo.DeleteNotification(ctx, notificationID)
+func (ns *NotificationServiceExtended) DeleteNotification(ctx context.Context, notificationID, userID uuid.UUID) error {
+	return ns.notificationRepo.DeleteNotification(ctx, notificationID, userID)
 }
 
 func (ns *NotificationServiceExtended) GetUserPreferences(ctx context.Context, userID uuid.UUID) (*models.NotificationPreferences, error) {

@@ -278,7 +278,7 @@ func (m *MockNotificationRepository) UpdateNotification(ctx context.Context, not
 	return nil
 }
 
-func (m *MockNotificationRepository) DeleteNotification(ctx context.Context, id uuid.UUID) error {
+func (m *MockNotificationRepository) DeleteNotification(ctx context.Context, id, userID uuid.UUID) error {
 	return nil
 }
 

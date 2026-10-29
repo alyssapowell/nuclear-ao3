@@ -2,7 +2,9 @@ package notify
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -194,7 +196,11 @@ func (s *NotificationService) deleteNotification(c *gin.Context) {
 		return
 	}
 
-	err = s.notificationSvc.DeleteNotification(context.Background(), notificationUUID)
+	err = s.notificationSvc.DeleteNotification(context.Background(), notificationUUID, uuid.MustParse(userID.(string)))
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "notification not found"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete notification"})
 		return

@@ -474,7 +474,8 @@ type NotificationRepository interface {
 	CreateNotification(ctx context.Context, notification *models.NotificationItem) error
 	GetNotification(ctx context.Context, id uuid.UUID) (*models.NotificationItem, error)
 	UpdateNotification(ctx context.Context, notification *models.NotificationItem) error
-	DeleteNotification(ctx context.Context, id uuid.UUID) error
+	// DeleteNotification deletes the notification only if it belongs to userID.
+	DeleteNotification(ctx context.Context, id, userID uuid.UUID) error
 	GetUserNotifications(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.NotificationItem, error)
 	GetUnreadCount(ctx context.Context, userID uuid.UUID) (int, error)
 	GetNotificationsForBatch(ctx context.Context, userID uuid.UUID, frequency models.NotificationFrequency) ([]*models.NotificationItem, error)

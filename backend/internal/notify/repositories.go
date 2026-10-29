@@ -260,10 +260,15 @@ func (r *NotificationRepositoryImpl) UpdateNotification(ctx context.Context, not
 	return err
 }
 
-func (r *NotificationRepositoryImpl) DeleteNotification(ctx context.Context, id uuid.UUID) error {
-	query := `DELETE FROM notification_items WHERE id = $1`
-	_, err := r.db.ExecContext(ctx, query, id)
-	return err
+func (r *NotificationRepositoryImpl) DeleteNotification(ctx context.Context, id, userID uuid.UUID) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM notification_items WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *NotificationRepositoryImpl) GetUserNotifications(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.NotificationItem, error) {

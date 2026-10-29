@@ -141,6 +141,9 @@ These were fixed by merging the backend into one program with one login check (`
 12. ~~Any token signed by the archive counted as a login~~, including OIDC ID tokens issued to third-party apps. **Fixed:** only tokens with the archive's own audience and issuer are accepted. `golang-jwt` was upgraded to 5.2.2 (CVE-2025-30204).
 13. ~~The OAuth authorize step redirected to an unchecked `redirect_uri`~~ on errors, an open redirect. **Fixed:** errors before the redirect URI is verified return JSON.
 
+14. ~~Any logged-in user could delete anyone's notification~~ by ID. **Fixed:** the delete only matches the owner's rows, and returns 404 otherwise.
+15. ~~An OAuth consent request wasn't tied to the user who saw it~~, so another user could approve it. **Fixed:** the consent records its user, is checked on approval, and can be used only once.
+
 ### Still open
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
@@ -152,6 +155,7 @@ These were fixed by merging the backend into one program with one login check (`
 ## Setup and maintenance problems (found 2026-10-29)
 
 - **Migrations don't apply cleanly to an empty database.** `010`, `012`, `013`, `016`, `019` and `020` all error (duplicate tables, a syntax error, an unbuildable foreign key, a subquery in an index). Docker's Postgres setup stops at the first error, so a brand-new install probably can't create its database at all. There is no migration tool; files only run once, on first container start.
+- **Notifications don't work at all on a fresh database.** Migration `013` fails, so the `notification_items` table is never created.
 - **Posting works, chapters and comments fails on a fresh database.** The retention trigger from `016` reads `NEW.author_id` or `NEW.user_id`, which those tables don't have.
 - **Posting a work doesn't create its first chapter**, even when `chapter_content` is sent.
 - **Reading a single chapter always returns 400.** The route is `/chapters/:chapter_id`, but the handler reads `chapter_number`.

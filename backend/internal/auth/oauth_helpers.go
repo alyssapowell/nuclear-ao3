@@ -166,9 +166,16 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 		}
 	}
 
-	// Store consent request
+	// Store the consent request, tied to the user who is looking at it, so a
+	// consent ID can't be approved by anyone else.
+	viewer := as.getAuthenticatedUser(c)
+	if viewer == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
 	consentID := uuid.New().String()
 	consentData := map[string]interface{}{
+		"user_id":            viewer.String(),
 		"client":             client,
 		"scopes":             scopes,
 		"scope_descriptions": scopeDescriptions,
@@ -207,6 +214,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 	}
 
 	var consentData struct {
+		UserID           string                  `json:"user_id"`
 		Client           *models.OAuthClient     `json:"client"`
 		Scopes           []string                `json:"scopes"`
 		AuthorizeRequest models.AuthorizeRequest `json:"authorize_request"`
@@ -225,6 +233,12 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
+	if consentData.UserID != userID.String() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "This consent request belongs to another user"})
+		return
+	}
+	// Each consent request can be answered once.
+	as.redis.Del(context.Background(), fmt.Sprintf("consent:%s", consentID))
 
 	if !approved {
 		// User denied consent

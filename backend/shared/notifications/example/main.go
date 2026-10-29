@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"nuclear-ao3/shared/messaging"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
@@ -390,7 +391,10 @@ func (r *InMemoryNotificationRepo) UpdateNotification(ctx context.Context, notif
 	return nil
 }
 
-func (r *InMemoryNotificationRepo) DeleteNotification(ctx context.Context, id uuid.UUID) error {
+func (r *InMemoryNotificationRepo) DeleteNotification(ctx context.Context, id, userID uuid.UUID) error {
+	if n, ok := r.notifications[id]; !ok || n.UserID != userID {
+		return nil
+	}
 	delete(r.notifications, id)
 	return nil
 }
