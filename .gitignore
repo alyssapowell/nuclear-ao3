@@ -162,3 +162,16 @@ ao3-jira-export.csv
 **/server.log
 **/dev.log
 *.pid
+# Build outputs and generated artifacts (never commit)
+backend/**/*-test
+backend/**/*-binary
+backend/**/*-enhanced
+backend/**/*-with-dashboard
+backend/example
+backend/shared/messaging/example/test-messaging
+backend/work-service/test-main
+frontend/src/data/massive-ao3-dataset.json
+tools/*-data.json
+frontend/playwright-report*/
+frontend/test-results*.json
+frontend/accessibility-validation-results.json
