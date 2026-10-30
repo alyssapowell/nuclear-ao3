@@ -8,6 +8,14 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-29: Anyone can create new tags when posting, including fandoms
+
+**Decision:** When a work is posted with a tag that doesn't exist yet, of any type including fandom, the tag is created unwrangled. Wranglers decide later whether it becomes canonical or a synonym.
+
+**Why:** That's how AO3 works. The old code limited new fandoms to admins, but AO3 has no such rule, and it would stop people from posting in new or small fandoms. The general rule here: match what AO3 does, and don't add restrictions it doesn't have.
+
+**Cost:** Wranglers get typo fandoms to clean up, just as they do on AO3.
+
 ## 2026-10-29: The app builds and upgrades its own database
 
 **Decision:** The schema lives in numbered SQL files in `backend/migrations/`, built into the app. On startup (or with `nuclear migrate`) the app applies the ones the database hasn't had, each in its own transaction, and records them in `schema_migrations`. A Postgres lock means only one copy migrates at a time. Sample data is a separate file that is never loaded automatically. There are no built-in accounts; `nuclear grant` makes the first admin.

@@ -326,10 +326,11 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		return
 	}
 
-	// Verify parent comment exists if provided
+	// A reply must be to a comment on the same work.
 	if req.ParentCommentID != nil {
 		var exists bool
-		err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM comments WHERE id = $1)", req.ParentCommentID).Scan(&exists)
+		err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM comments WHERE id = $1 AND work_id = $2)",
+			req.ParentCommentID, req.WorkID).Scan(&exists)
 		if err != nil || !exists {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Parent comment not found"})
 			return
@@ -409,7 +410,7 @@ func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDet
 			"parent_comment_id": comment.ParentCommentID,
 		},
 	}
-	event.Recipients = ws.commentRecipients(*comment.WorkID, comment.ParentCommentID)
+	event.Recipients = ws.commentRecipients(*comment.WorkID, comment.ParentCommentID, comment.AuthorUserID)
 	if err := ws.notificationService.ProcessEvent(context.Background(), event); err != nil {
 		log.Printf("Failed to process comment notification for work %s: %v", comment.WorkID, err)
 	}
@@ -756,13 +757,20 @@ func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uui
 }
 
 // commentRecipients are the people a new comment is for: the work's authors,
-// and for a reply, whoever wrote the comment being replied to.
-func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID *uuid.UUID) []uuid.UUID {
+// and for a reply, whoever wrote the comment being replied to (on the same
+// work). Anyone who has blocked the commenter is left out.
+func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID, commenterID *uuid.UUID) []uuid.UUID {
 	rows, err := ws.db.Query(`
-		SELECT DISTINCT p.user_id FROM creatorships c JOIN pseuds p ON p.id = c.pseud_id
-		WHERE c.creation_id = $1 AND c.creation_type = 'Work' AND c.approved
-		UNION
-		SELECT user_id FROM comments WHERE id = $2 AND user_id IS NOT NULL`, workID, parentID)
+		SELECT r.user_id FROM (
+			SELECT p.user_id FROM creatorships c JOIN pseuds p ON p.id = c.pseud_id
+			WHERE c.creation_id = $1 AND c.creation_type = 'Work' AND c.approved
+			UNION
+			SELECT user_id FROM comments WHERE id = $2 AND work_id = $1 AND user_id IS NOT NULL
+		) r
+		WHERE $3::uuid IS NULL OR NOT EXISTS (
+			SELECT 1 FROM user_blocks b
+			WHERE b.blocker_id = r.user_id AND b.blocked_id = $3 AND b.block_type IN ('full', 'comments'))`,
+		workID, parentID, commenterID)
 	if err != nil {
 		log.Printf("comment recipients for work %s: %v", workID, err)
 		return nil
