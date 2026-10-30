@@ -155,8 +155,11 @@ make performance-test
 # Access database directly
 docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear
 
-# Run migrations and add test data
-make db-reset
+# Apply database migrations (the app also does this on startup)
+make migrate
+
+# Load sample accounts and works (development only; password "password123")
+make seed
 
 # Add test data only
 make db-populate
@@ -192,7 +195,7 @@ nuclear-ao3/
 │   ├── search-service/        # Elasticsearch integration
 │   └── shared/                # Common models and middleware
 ├── frontend/                  # Next.js React application
-├── migrations/               # Database schema and data
+├── backend/migrations/       # Database schema, applied by the app itself
 ├── monitoring/               # Prometheus & Grafana config
 ├── docker-compose.yml        # Development environment
 ├── nginx.conf               # API gateway configuration

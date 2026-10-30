@@ -8,6 +8,14 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-29: The app builds and upgrades its own database
+
+**Decision:** The schema lives in numbered SQL files in `backend/migrations/`, built into the app. On startup (or with `nuclear migrate`) the app applies the ones the database hasn't had, each in its own transaction, and records them in `schema_migrations`. A Postgres lock means only one copy migrates at a time. Sample data is a separate file that is never loaded automatically. There are no built-in accounts; `nuclear grant` makes the first admin.
+
+**Why:** Before, Postgres ran the files once, on the very first start, and stopped at the first error. Six of them failed, so new installs couldn't set up a database at all, and nothing recorded which files had run. Upgrades had no path. A volunteer upgrading should only have to start the new version.
+
+**Cost:** Migrations must never be edited once released, only added. Existing files were edited in place this once, because none of them had ever applied cleanly anywhere. A database built the old way can't be upgraded automatically (see [RUNBOOK.md](RUNBOOK.md)).
+
 ## 2026-10-29: Monitoring ships ready to use
 
 **Decision:** Keep Prometheus, Grafana and Loki, but store their data sources, dashboards and alerts as files in the repo so they load automatically. There will be one "Is the archive OK?" dashboard, and every alert links to a runbook section that says what to do. Images are pinned, the admin password is generated, and the monitoring ports are bound to localhost.

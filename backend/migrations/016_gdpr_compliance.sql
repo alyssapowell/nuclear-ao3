@@ -41,6 +41,27 @@ CREATE TABLE data_retention_tracking (
     deletion_date TIMESTAMP
 );
 
+-- Work download jobs (backend/internal/export). This used to be created by the
+-- Go code at startup, which meant this migration ran before the table existed.
+CREATE TABLE IF NOT EXISTS export_status (
+    id VARCHAR(255) PRIMARY KEY,
+    work_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255),
+    format VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    progress INTEGER DEFAULT 0,
+    download_url TEXT,
+    error_message TEXT,
+    options TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    ttl_seconds BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_export_status_expires_at ON export_status(expires_at);
+CREATE INDEX IF NOT EXISTS idx_export_status_user_id ON export_status(user_id);
+CREATE INDEX IF NOT EXISTS idx_export_status_work_id ON export_status(work_id);
+
 -- Add GDPR fields to export status table
 ALTER TABLE export_status 
 ADD COLUMN data_controller VARCHAR(100) DEFAULT 'Nuclear AO3',
@@ -246,46 +267,8 @@ BEGIN
 END;
 $$;
 
--- Trigger for automatic data retention tracking
-CREATE OR REPLACE FUNCTION track_data_retention()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    -- Only track for tables with user data
-    IF TG_TABLE_NAME IN ('works', 'chapters', 'comments', 'bookmarks', 'export_status') THEN
-        INSERT INTO data_retention_tracking (
-            table_name, record_id, user_id, data_type,
-            retention_period_days, expires_at
-        ) VALUES (
-            TG_TABLE_NAME,
-            NEW.id,
-            COALESCE(NEW.user_id, NEW.author_id),
-            'user_content',
-            2555, -- 7 years default
-            CURRENT_TIMESTAMP + INTERVAL '7 years'
-        );
-    END IF;
-    
-    RETURN NEW;
-END;
-$$;
-
--- Set up triggers for automatic data retention tracking
-CREATE TRIGGER trigger_track_works_retention
-    AFTER INSERT ON works
-    FOR EACH ROW
-    EXECUTE FUNCTION track_data_retention();
-
-CREATE TRIGGER trigger_track_chapters_retention
-    AFTER INSERT ON chapters
-    FOR EACH ROW
-    EXECUTE FUNCTION track_data_retention();
-
-CREATE TRIGGER trigger_track_comments_retention
-    AFTER INSERT ON comments
-    FOR EACH ROW
-    EXECUTE FUNCTION track_data_retention();
+-- (An automatic 7-year retention trigger on works, chapters and comments was
+-- removed: it broke every insert, and AO3 does not expire users' works.)
 
 -- Add helpful comments
 COMMENT ON TABLE gdpr_audit_log IS 'Comprehensive audit trail for all GDPR-related actions and data processing activities';
@@ -297,6 +280,13 @@ COMMENT ON FUNCTION log_gdpr_action IS 'Centralized logging function for all GDP
 COMMENT ON FUNCTION update_user_consent IS 'Updates user consent preferences with full audit trail';
 COMMENT ON FUNCTION schedule_user_deletion IS 'Schedules user account and data deletion in compliance with GDPR';
 COMMENT ON FUNCTION cleanup_expired_gdpr_data IS 'Automated cleanup of expired GDPR data and exports';
+
+CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- Insert initial privacy policy version
 INSERT INTO system_settings (key, value, description) VALUES 

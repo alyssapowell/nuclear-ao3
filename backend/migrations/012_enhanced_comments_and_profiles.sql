@@ -31,7 +31,7 @@ ALTER TABLE users ADD CONSTRAINT comment_permissions_check
     CHECK (comment_permissions IN ('all', 'registered_users', 'friends', 'none'));
 
 -- User pseudonyms table (AO3 allows multiple pen names per user)
-CREATE TABLE user_pseudonyms (
+CREATE TABLE IF NOT EXISTS user_pseudonyms (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name CITEXT NOT NULL,
@@ -43,12 +43,12 @@ CREATE TABLE user_pseudonyms (
     UNIQUE(user_id, name)
 );
 
-CREATE INDEX idx_user_pseudonyms_user_id ON user_pseudonyms(user_id);
-CREATE INDEX idx_user_pseudonyms_name ON user_pseudonyms(name);
-CREATE INDEX idx_user_pseudonyms_default ON user_pseudonyms(user_id, is_default) WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_user_pseudonyms_user_id ON user_pseudonyms(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_pseudonyms_name ON user_pseudonyms(name);
+CREATE INDEX IF NOT EXISTS idx_user_pseudonyms_default ON user_pseudonyms(user_id, is_default) WHERE is_default = true;
 
 -- User friendships/relationships
-CREATE TABLE user_relationships (
+CREATE TABLE IF NOT EXISTS user_relationships (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     addressee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -61,23 +61,10 @@ CREATE TABLE user_relationships (
     UNIQUE(requester_id, addressee_id)
 );
 
-CREATE INDEX idx_user_relationships_requester ON user_relationships(requester_id, status);
-CREATE INDEX idx_user_relationships_addressee ON user_relationships(addressee_id, status);
+CREATE INDEX IF NOT EXISTS idx_user_relationships_requester ON user_relationships(requester_id, status);
+CREATE INDEX IF NOT EXISTS idx_user_relationships_addressee ON user_relationships(addressee_id, status);
 
--- User blocking system
-CREATE TABLE user_blocks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    blocker_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    blocked_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    reason TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    CONSTRAINT no_self_blocking CHECK (blocker_id != blocked_id),
-    UNIQUE(blocker_id, blocked_id)
-);
-
-CREATE INDEX idx_user_blocks_blocker ON user_blocks(blocker_id);
-CREATE INDEX idx_user_blocks_blocked ON user_blocks(blocked_id);
+-- user_blocks is created by 006_privacy_and_moderation.sql.
 
 -- =====================================================
 -- ENHANCED COMMENT SYSTEM
@@ -101,14 +88,14 @@ ALTER TABLE comments ADD CONSTRAINT comment_identity_check CHECK (
 );
 
 -- Create indexes for enhanced comments
-CREATE INDEX idx_comments_pseudonym ON comments(pseudonym_id) WHERE pseudonym_id IS NOT NULL;
-CREATE INDEX idx_comments_thread_level ON comments(work_id, thread_level, created_at) WHERE work_id IS NOT NULL;
-CREATE INDEX idx_comments_guest ON comments(guest_name, guest_email) WHERE guest_name IS NOT NULL;
-CREATE INDEX idx_comments_ip ON comments(ip_address);
-CREATE INDEX idx_comments_spam ON comments(is_spam) WHERE is_spam = true;
+CREATE INDEX IF NOT EXISTS idx_comments_pseudonym ON comments(pseudonym_id) WHERE pseudonym_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_comments_thread_level ON comments(work_id, thread_level, created_at) WHERE work_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_comments_guest ON comments(guest_name, guest_email) WHERE guest_name IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_comments_ip ON comments(ip_address);
+CREATE INDEX IF NOT EXISTS idx_comments_spam ON comments(is_spam) WHERE is_spam = true;
 
 -- Comment kudos table (users can kudos individual comments)
-CREATE TABLE comment_kudos (
+CREATE TABLE IF NOT EXISTS comment_kudos (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -123,13 +110,13 @@ CREATE TABLE comment_kudos (
     )
 );
 
-CREATE INDEX idx_comment_kudos_comment ON comment_kudos(comment_id);
-CREATE INDEX idx_comment_kudos_user ON comment_kudos(user_id, pseudonym_id) WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX idx_comment_kudos_unique_user ON comment_kudos(comment_id, user_id, pseudonym_id) WHERE user_id IS NOT NULL;
-CREATE UNIQUE INDEX idx_comment_kudos_unique_guest ON comment_kudos(comment_id, guest_session) WHERE guest_session IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_comment_kudos_comment ON comment_kudos(comment_id);
+CREATE INDEX IF NOT EXISTS idx_comment_kudos_user ON comment_kudos(user_id, pseudonym_id) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_kudos_unique_user ON comment_kudos(comment_id, user_id, pseudonym_id) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_comment_kudos_unique_guest ON comment_kudos(comment_id, guest_session) WHERE guest_session IS NOT NULL;
 
 -- Comment reports/flags
-CREATE TABLE comment_reports (
+CREATE TABLE IF NOT EXISTS comment_reports (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
     reporter_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -144,16 +131,16 @@ CREATE TABLE comment_reports (
     CONSTRAINT report_status_check CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed'))
 );
 
-CREATE INDEX idx_comment_reports_comment ON comment_reports(comment_id);
-CREATE INDEX idx_comment_reports_reporter ON comment_reports(reporter_id);
-CREATE INDEX idx_comment_reports_status ON comment_reports(status);
+CREATE INDEX IF NOT EXISTS idx_comment_reports_comment ON comment_reports(comment_id);
+CREATE INDEX IF NOT EXISTS idx_comment_reports_reporter ON comment_reports(reporter_id);
+CREATE INDEX IF NOT EXISTS idx_comment_reports_status ON comment_reports(status);
 
 -- =====================================================
 -- NOTIFICATIONS SYSTEM
 -- =====================================================
 
 -- User notifications table
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL,
@@ -172,16 +159,16 @@ CREATE TABLE notifications (
     ))
 );
 
-CREATE INDEX idx_notifications_user_id ON notifications(user_id, created_at DESC);
-CREATE INDEX idx_notifications_unread ON notifications(user_id, is_read) WHERE is_read = false;
-CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read) WHERE is_read = false;
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
 
 -- =====================================================
 -- USER STATISTICS AND ACTIVITY
 -- =====================================================
 
 -- User statistics table
-CREATE TABLE user_statistics (
+CREATE TABLE IF NOT EXISTS user_statistics (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     works_count INTEGER DEFAULT 0,
     series_count INTEGER DEFAULT 0,
@@ -196,7 +183,7 @@ CREATE TABLE user_statistics (
 );
 
 -- User activity log for tracking actions
-CREATE TABLE user_activity_log (
+CREATE TABLE IF NOT EXISTS user_activity_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     action VARCHAR(50) NOT NULL,
@@ -208,9 +195,9 @@ CREATE TABLE user_activity_log (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_user_activity_log_user_id ON user_activity_log(user_id, created_at DESC);
-CREATE INDEX idx_user_activity_log_action ON user_activity_log(action);
-CREATE INDEX idx_user_activity_log_entity ON user_activity_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_user_activity_log_user_id ON user_activity_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_user_activity_log_action ON user_activity_log(action);
+CREATE INDEX IF NOT EXISTS idx_user_activity_log_entity ON user_activity_log(entity_type, entity_id);
 
 -- =====================================================
 -- TRIGGERS AND FUNCTIONS FOR ENHANCED FEATURES
@@ -420,12 +407,12 @@ SELECT
     us.kudos_received_count,
     us.words_written,
     us.last_work_date,
-    ARRAY_AGG(DISTINCT up.name ORDER BY up.is_default DESC, up.name) FILTER (WHERE up.name IS NOT NULL) as pseudonyms,
+    (SELECT ARRAY_AGG(up.name ORDER BY up.is_default DESC, up.name)
+       FROM user_pseudonyms up WHERE up.user_id = u.id) as pseudonyms,
     COUNT(DISTINCT ur1.addressee_id) FILTER (WHERE ur1.status = 'accepted') as friends_count,
     COUNT(DISTINCT ur2.requester_id) FILTER (WHERE ur2.status = 'accepted') as friends_count_alt
 FROM users u
 LEFT JOIN user_statistics us ON u.id = us.user_id
-LEFT JOIN user_pseudonyms up ON u.id = up.user_id
 LEFT JOIN user_relationships ur1 ON u.id = ur1.requester_id
 LEFT JOIN user_relationships ur2 ON u.id = ur2.addressee_id
 GROUP BY u.id, us.works_count, us.series_count, us.bookmarks_count, us.comments_count, 
@@ -478,24 +465,6 @@ LEFT JOIN works w2 ON u.id = w2.user_id AND w2.is_draft = true
 LEFT JOIN bookmarks b ON u.id = b.user_id
 LEFT JOIN series s ON u.id = s.user_id
 GROUP BY u.id, u.username, u.display_name;
-
--- =====================================================
--- SAMPLE DATA FOR TESTING
--- =====================================================
-
--- Insert sample pseudonyms
-INSERT INTO user_pseudonyms (user_id, name, is_default, description) 
-SELECT 
-    id, 
-    username, 
-    true, 
-    'Default pseudonym'
-FROM users 
-WHERE id IN (
-    '123e4567-e89b-12d3-a456-426614174000',
-    '123e4567-e89b-12d3-a456-426614174001'
-)
-ON CONFLICT (user_id, name) DO NOTHING;
 
 -- Initialize user statistics for existing users
 INSERT INTO user_statistics (user_id, join_date)

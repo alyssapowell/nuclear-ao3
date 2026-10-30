@@ -79,7 +79,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 		protected.Use(d.RequireUser)
 		{
 			// Work management
-			protected.POST("/works", workService.CreateWorkEnhanced)                            // POST /api/v1/works
+			protected.POST("/works", workService.CreateWork)                                    // POST /api/v1/works
 			protected.PUT("/works/:work_id", workService.UpdateWork)                            // PUT /api/v1/works/123
 			protected.DELETE("/works/:work_id", workService.DeleteWork)                         // DELETE /api/v1/works/123
 			protected.POST("/works/:work_id/chapters", workService.CreateChapter)               // POST /api/v1/works/123/chapters

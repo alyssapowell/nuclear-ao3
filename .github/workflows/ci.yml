@@ -61,13 +61,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           # Create ao3_user
-          psql -h localhost -U postgres -d ao3_nuclear_test -c "CREATE USER ao3_user WITH PASSWORD 'ao3_password';"
-          
-          # Run migrations
-          for migration in migrations/*.sql; do
-            echo "Running migration: $migration"
-            psql -h localhost -U postgres -d ao3_nuclear_test -f "$migration" || echo "Migration may have already been applied or had warnings"
-          done
+          psql -h localhost -U postgres -d ao3_nuclear_test -c "CREATE USER ao3_user WITH PASSWORD 'ao3_password' CREATEDB;"
           
           # Grant all permissions to ao3_user
           psql -h localhost -U postgres -d ao3_nuclear_test -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ao3_user;"
@@ -78,6 +72,17 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: go mod download
+
+      - name: Apply migrations to an empty database
+        working-directory: backend
+        env:
+          DATABASE_URL: "postgres://postgres:postgres@localhost:5432/ao3_nuclear_test?sslmode=disable"
+        run: |
+          go run ./cmd/nuclear migrate
+          # A second run must find nothing to do.
+          go run ./cmd/nuclear migrate status | grep -qx "up to date"
+          # The dev seed must still load against the current schema.
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ao3_nuclear_test -v ON_ERROR_STOP=1 -1 -f migrations/dev/seed.sql
 
       - name: Run linting
         working-directory: backend

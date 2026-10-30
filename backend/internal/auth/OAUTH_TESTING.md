@@ -246,8 +246,8 @@ cat test_results_performance.log
 
 3. **Migration Issues**
    ```bash
-   # Run migrations manually
-   psql ao3_nuclear_test -f ../migrations/003_oauth2_tables.sql
+   # Apply all migrations (from the backend folder)
+   DATABASE_URL=postgres://localhost/ao3_nuclear_test?sslmode=disable go run ./cmd/nuclear migrate
    ```
 
 ### Verbose Testing

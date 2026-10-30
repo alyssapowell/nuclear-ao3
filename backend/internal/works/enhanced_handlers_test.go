@@ -64,9 +64,9 @@ func createMockWork() *models.Work {
 // ENHANCED WORK CREATION TESTS
 // =============================================================================
 
-func TestCreateWorkEnhanced_Success(t *testing.T) {
+func TestCreateWork_Success(t *testing.T) {
 	router, ws := setupTestRouter()
-	router.POST("/api/v1/works/enhanced", ws.CreateWorkEnhanced)
+	router.POST("/api/v1/works/enhanced", ws.CreateWork)
 
 	// Test data
 	reqBody := models.CreateWorkRequest{
@@ -101,37 +101,9 @@ func TestCreateWorkEnhanced_Success(t *testing.T) {
 	assert.Contains(t, []int{http.StatusCreated, http.StatusInternalServerError, http.StatusUnauthorized}, w.Code)
 }
 
-func TestCreateWorkEnhanced_TagProcessing(t *testing.T) {
-	// Test the tag processing logic
-	ws := &WorkService{}
-
-	// Test tag type inference
-	testCases := []struct {
-		tagName      string
-		expectedType string
-	}{
-		{"General Audiences", "rating"},
-		{"Graphic Depictions Of Violence", "warning"},
-		{"Test Character/Another Character", "relationship"},
-		{"Test Character & Another Character", "relationship"},
-		{"Test Character", "character"},
-		{"Fluff", "freeform"},
-		{"Angst", "freeform"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("InferTagType_%s", tc.tagName), func(t *testing.T) {
-			result := ws.inferTagType(tc.tagName)
-			assert.Equal(t, tc.expectedType, result,
-				"Tag '%s' should be inferred as type '%s', got '%s'",
-				tc.tagName, tc.expectedType, result)
-		})
-	}
-}
-
-func TestCreateWorkEnhanced_InvalidRequest(t *testing.T) {
+func TestCreateWork_InvalidRequest(t *testing.T) {
 	router, ws := setupTestRouter()
-	router.POST("/api/v1/works/enhanced", ws.CreateWorkEnhanced)
+	router.POST("/api/v1/works/enhanced", ws.CreateWork)
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest("POST", "/api/v1/works/enhanced", strings.NewReader("invalid json"))
@@ -143,9 +115,9 @@ func TestCreateWorkEnhanced_InvalidRequest(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestCreateWorkEnhanced_Unauthorized(t *testing.T) {
+func TestCreateWork_Unauthorized(t *testing.T) {
 	router, ws := setupTestRouter()
-	router.POST("/api/v1/works/enhanced", ws.CreateWorkEnhanced)
+	router.POST("/api/v1/works/enhanced", ws.CreateWork)
 
 	reqBody := models.CreateWorkRequest{
 		Title: "Test Work",
@@ -278,22 +250,6 @@ func TestSearchWorksAdvanced_ParameterValidation(t *testing.T) {
 // SERVICE INTEGRATION TESTS
 // =============================================================================
 
-func TestTagServiceCommunication(t *testing.T) {
-	// Test tag service client creation
-	client := NewTagServiceClient("http://tag-service:8083")
-	assert.NotNil(t, client)
-	assert.Equal(t, "http://tag-service:8083", client.baseURL)
-	assert.Equal(t, 5*time.Second, client.client.Timeout)
-}
-
-func TestSearchServiceCommunication(t *testing.T) {
-	// Test search service client creation
-	client := NewSearchServiceClient("http://search-service:8084")
-	assert.NotNil(t, client)
-	assert.Equal(t, "http://search-service:8084", client.baseURL)
-	assert.Equal(t, 5*time.Second, client.client.Timeout)
-}
-
 func TestSearchWorksViaService_MockResponse(t *testing.T) {
 	// Skip this test since it requires HTTP client mocking
 	t.Skip("Skipping test that requires HTTP client mocking")
@@ -321,37 +277,6 @@ func TestErrorHandling_ServiceUnavailable(t *testing.T) {
 // =============================================================================
 // PERFORMANCE TESTS
 // =============================================================================
-
-func TestPerformance_TagInference(t *testing.T) {
-	ws := &WorkService{}
-
-	// Test performance of tag type inference
-	testTags := []string{
-		"General Audiences",
-		"Teen And Up Audiences",
-		"Mature",
-		"Explicit",
-		"Graphic Depictions Of Violence",
-		"Harry Potter",
-		"Hermione Granger",
-		"Harry Potter/Draco Malfoy",
-		"Fluff",
-		"Angst",
-		"Hurt/Comfort",
-	}
-
-	start := time.Now()
-	for i := 0; i < 1000; i++ {
-		for _, tag := range testTags {
-			ws.inferTagType(tag)
-		}
-	}
-	duration := time.Since(start)
-
-	// Should be very fast - less than 10ms for 11,000 inferences
-	assert.Less(t, duration, 10*time.Millisecond,
-		"Tag type inference should be very fast, took %v", duration)
-}
 
 func TestPerformance_ValidateUploadedFile(t *testing.T) {
 	ws := &WorkService{}
@@ -402,62 +327,6 @@ func createTestWork(userID uuid.UUID) *models.Work {
 // =============================================================================
 // BENCHMARK TESTS
 // =============================================================================
-
-func BenchmarkCreateWorkEnhanced(b *testing.B) {
-	// Benchmark work creation with tag processing
-	ws := &WorkService{}
-
-	reqBody := models.CreateWorkRequest{
-		Title:         "Benchmark Test Work",
-		Summary:       "Testing work creation performance",
-		Fandoms:       []string{"Test Fandom", "Another Fandom"},
-		Characters:    []string{"Character 1", "Character 2", "Character 3"},
-		Relationships: []string{"Char1/Char2", "Char2/Char3"},
-		FreeformTags:  []string{"Tag1", "Tag2", "Tag3", "Tag4", "Tag5"},
-		Rating:        "General Audiences",
-		Category:      []string{"Gen"},
-		Warnings:      []string{"No Archive Warnings Apply"},
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// This would benchmark the work creation process
-		// For now, just test tag processing components
-
-		var allTags []string
-		allTags = append(allTags, reqBody.Fandoms...)
-		allTags = append(allTags, reqBody.Characters...)
-		allTags = append(allTags, reqBody.Relationships...)
-		allTags = append(allTags, reqBody.FreeformTags...)
-		allTags = append(allTags, reqBody.Category...)
-		allTags = append(allTags, reqBody.Warnings...)
-		allTags = append(allTags, reqBody.Rating)
-
-		for _, tag := range allTags {
-			if tag != "" {
-				ws.inferTagType(tag)
-			}
-		}
-	}
-}
-
-func BenchmarkTagTypeInference(b *testing.B) {
-	ws := &WorkService{}
-	testTags := []string{
-		"General Audiences",
-		"Harry Potter/Draco Malfoy",
-		"Hermione Granger",
-		"Fluff",
-		"Angst",
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for _, tag := range testTags {
-			ws.inferTagType(tag)
-		}
-	}
-}
 
 func BenchmarkFileValidation(b *testing.B) {
 	ws := &WorkService{}

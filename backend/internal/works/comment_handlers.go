@@ -3,10 +3,12 @@ package works
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -272,51 +274,56 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		}
 	}
 
-	// Validate the request
+	// Who is commenting: a logged-in user under one of their own pseuds, or a
+	// guest with a name.
+	var userID *uuid.UUID
+	var pseudonymID *uuid.UUID
+	if u := ws.getUserIDFromContext(c); u != nil {
+		userID = u
+		pid, err := ws.commentPseud(*u, req.PseudonymID)
+		if err == errNotYourPseud {
+			c.JSON(http.StatusForbidden, gin.H{"error": "That pseud isn't yours"})
+			return
+		}
+		if err != nil {
+			log.Printf("create comment: pseud: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+			return
+		}
+		pseudonymID = &pid
+		req.PseudonymID = &pid
+		req.GuestName, req.GuestEmail = nil, nil
+	} else if req.GuestName == nil || strings.TrimSpace(*req.GuestName) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Guest name is required for anonymous comments"})
+		return
+	}
+
 	if err := req.Validate(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid comment data"})
 		return
 	}
 
-	// Get user information from context
-	var userID *uuid.UUID
-	var pseudonymID *uuid.UUID
-
-	if userIDStr := c.GetString("user_id"); userIDStr != "" {
-		if parsedUserID, err := uuid.Parse(userIDStr); err == nil {
-			userID = &parsedUserID
-			// If user is authenticated, ensure they have a pseudonym
-			if req.PseudonymID == nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Pseudonym is required for authenticated users"})
-				return
-			}
-			pseudonymID = req.PseudonymID
-		}
-	}
-
-	// For guest comments, ensure guest name is provided
-	if userID == nil && req.GuestName == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Guest name is required for anonymous comments"})
-		return
-	}
-
-	// Verify the work or chapter exists
-	if req.WorkID != nil {
-		var exists bool
-		err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM works WHERE id = $1)", req.WorkID).Scan(&exists)
-		if err != nil || !exists {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
-			return
-		}
-	}
-
+	// A chapter comment belongs to that chapter's work.
 	if req.ChapterID != nil {
-		var exists bool
-		err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM chapters WHERE id = $1)", req.ChapterID).Scan(&exists)
-		if err != nil || !exists {
+		var chapterWork uuid.UUID
+		err := ws.db.QueryRow("SELECT work_id FROM chapters WHERE id = $1", req.ChapterID).Scan(&chapterWork)
+		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Chapter not found"})
 			return
 		}
+		if req.WorkID != nil && *req.WorkID != chapterWork {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chapter is not part of this work"})
+			return
+		}
+		req.WorkID = &chapterWork
+	}
+
+	// You can only comment on a work you're allowed to see (not a draft, not
+	// restricted when logged out, not from an author who blocked you).
+	var canView bool
+	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", req.WorkID, userID).Scan(&canView); err != nil || !canView {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		return
 	}
 
 	// Verify parent comment exists if provided
@@ -402,6 +409,7 @@ func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDet
 			"parent_comment_id": comment.ParentCommentID,
 		},
 	}
+	event.Recipients = ws.commentRecipients(*comment.WorkID, comment.ParentCommentID)
 	if err := ws.notificationService.ProcessEvent(context.Background(), event); err != nil {
 		log.Printf("Failed to process comment notification for work %s: %v", comment.WorkID, err)
 	}
@@ -717,4 +725,55 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 	}
 
 	return &comment, nil
+}
+
+var errNotYourPseud = errors.New("pseud belongs to someone else")
+
+// commentPseud returns the pseud a user comments under: the one they asked
+// for, if it's theirs, or else their default (created from their username if
+// they don't have one yet).
+func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
+	if requested != nil {
+		var owner uuid.UUID
+		err := ws.db.QueryRow("SELECT user_id FROM user_pseudonyms WHERE id = $1", *requested).Scan(&owner)
+		if err == sql.ErrNoRows || (err == nil && owner != userID) {
+			return uuid.Nil, errNotYourPseud
+		}
+		return *requested, err
+	}
+	var id uuid.UUID
+	err := ws.db.QueryRow(`SELECT id FROM user_pseudonyms WHERE user_id = $1
+		ORDER BY is_default DESC, created_at LIMIT 1`, userID).Scan(&id)
+	if err != sql.ErrNoRows {
+		return id, err
+	}
+	err = ws.db.QueryRow(`
+		INSERT INTO user_pseudonyms (user_id, name, is_default)
+		SELECT id, username, true FROM users WHERE id = $1
+		ON CONFLICT (user_id, name) DO UPDATE SET is_default = user_pseudonyms.is_default
+		RETURNING id`, userID).Scan(&id)
+	return id, err
+}
+
+// commentRecipients are the people a new comment is for: the work's authors,
+// and for a reply, whoever wrote the comment being replied to.
+func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID *uuid.UUID) []uuid.UUID {
+	rows, err := ws.db.Query(`
+		SELECT DISTINCT p.user_id FROM creatorships c JOIN pseuds p ON p.id = c.pseud_id
+		WHERE c.creation_id = $1 AND c.creation_type = 'Work' AND c.approved
+		UNION
+		SELECT user_id FROM comments WHERE id = $2 AND user_id IS NOT NULL`, workID, parentID)
+	if err != nil {
+		log.Printf("comment recipients for work %s: %v", workID, err)
+		return nil
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }

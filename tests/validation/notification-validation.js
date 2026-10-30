@@ -93,7 +93,7 @@ class NotificationSystemValidator {
     console.log('\n🗄️  Database Schema Validation\n');
 
     // Check migration file
-    const migrationPath = 'migrations/013_enhanced_notification_system.sql';
+    const migrationPath = 'backend/migrations/013_enhanced_notification_system.sql';
     if (fs.existsSync(migrationPath)) {
       this.logResult('Database migration file', 'success', '013_enhanced_notification_system.sql exists');
       
@@ -171,11 +171,11 @@ class NotificationSystemValidator {
       },
       {
         name: 'User preferences system',
-        check: () => fs.readFileSync('migrations/013_enhanced_notification_system.sql', 'utf8').includes('notification_preferences')
+        check: () => fs.readFileSync('backend/migrations/013_enhanced_notification_system.sql', 'utf8').includes('notification_preferences')
       },
       {
         name: 'Subscription management',
-        check: () => fs.readFileSync('migrations/013_enhanced_notification_system.sql', 'utf8').includes('subscriptions')
+        check: () => fs.readFileSync('backend/migrations/013_enhanced_notification_system.sql', 'utf8').includes('subscriptions')
       }
     ];
 

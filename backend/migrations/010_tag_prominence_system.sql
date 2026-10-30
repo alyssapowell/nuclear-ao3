@@ -57,13 +57,12 @@ CREATE TABLE tag_migration_batches (
 -- Tag prominence rules table (for consistent auto-assignment)
 CREATE TABLE tag_prominence_rules (
     id SERIAL PRIMARY KEY,
-    tag_name VARCHAR(255) NOT NULL,
+    tag_name CITEXT NOT NULL,
     tag_type VARCHAR(50) NOT NULL, -- 'relationship', 'character', 'fandom', etc.
     default_prominence VARCHAR(20) NOT NULL,
     min_word_threshold INTEGER DEFAULT 0,
     requires_manual_review BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (tag_name) REFERENCES tags(name),
     CONSTRAINT check_rule_prominence 
         CHECK (default_prominence IN ('primary', 'secondary', 'micro'))
 );

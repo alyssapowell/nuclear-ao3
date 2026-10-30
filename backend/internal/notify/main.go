@@ -76,9 +76,9 @@ func New(db *sql.DB) *NotificationService {
 		nil, // telemetry
 		&messaging.SimpleMessageValidator{},
 		messaging.NewSimpleRateLimiter(),
-		nil, // messageRepo - can be nil for basic functionality
-		nil, // attemptRepo - can be nil for basic functionality
-		nil, // preferenceService - can be nil for basic functionality
+		nil, // messageRepo: optional; without it sent messages aren't stored
+		nil, // attemptRepo: optional; without it delivery attempts aren't stored
+		nil, // preferenceService: optional; without it everyone gets default channels
 	)
 
 	subscriptionRepo := NewSubscriptionRepository(db)

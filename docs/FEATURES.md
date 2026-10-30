@@ -31,16 +31,23 @@ Status key:
 ## Works and reading
 
 - **Post, edit and delete works and chapters**, with a rich-text editor.
-  - Status: Unverified.
+  - Status: posting works (verified 2026-10-29 on a fresh database). A new work is saved as a draft with its first chapter, its tags and its author's pseud in one step. Only its authors can see it until they publish it (`PUT /works/:id` with `"status": "posted"`), which also publishes its chapters. Edit and delete: Unverified.
+  - Fixed 2026-10-29: posting never saved the first chapter; tags were sent to a `tag-service` address that no longer exists, so they were never linked; publishing sent a status the database rejects; readers kept seeing the cached draft after publishing.
 - **Legacy AO3 IDs**: works keep their original AO3 number, and old URLs redirect.
   - Intent: a migration from AO3 must not break the many existing links to works.
   - Status: the database column exists; the importer that would fill it does not (see Migration).
 - **Kudos, comments (including guest comments), comment moderation**
-  - Status: Unverified. Comment notifications **never worked** before the merge (the call to the notification service had no login token); they are now sent in-process.
+  - Status: kudos, comments and guest comments work (verified 2026-10-29). A work's authors are notified of every comment on it, and a commenter is notified of replies, whether or not they subscribed. Moderation: Unverified.
+  - Fixed 2026-10-29: a logged-in user could comment **as anyone else's pseud**; you could comment on works you aren't allowed to see; guest comments always failed; notification listing always returned an empty list; and delivering a notification **crashed the whole server**.
 - **Bookmarks, series, collections**
   - Status: Unverified.
 - **Pseuds, gifting, orphaning, co-authors**: the core AO3 authorship features.
   - Status: Unverified.
+  - Known problem: there are **two pseud tables**. `pseuds` is used for authorship (works, visibility); `user_pseudonyms` is used for comments and profiles. A user's default pseud is created in each on first use. They need merging into one.
+- **Authors are shown by pseud**: the public API identifies an author by pseud, not by account ID or username. Readers contact an author through the API (comments, or a relayed message), never by being given an email address.
+  - Status: **Broken** (found by reading the code). Work responses include `user_id` and the account username.
+- **Anonymous works** (as in AO3's anonymous collections and challenges): the author is hidden until revealed.
+  - Status: **Broken** (found by reading the code). The work API still returns the author's user ID and username when `is_anonymous` is true, and the search index stores the author IDs.
 - **Reader preferences**: font, size, theme, reading progress, and swipe navigation on mobile.
   - Intent: comfortable long-form reading on any device.
   - Status: frontend only; Unverified.
@@ -125,6 +132,15 @@ Status key:
 
 ## Security findings (found and fixed 2026-10-29)
 
+Found while fixing the database setup:
+
+- ~~Every install created an `admin` account with the password `password123`~~, plus three other accounts with that password. **Fixed:** sample accounts live in `backend/migrations/dev/seed.sql`, loaded only by `make seed`. The first admin is made with `nuclear grant <username> admin`.
+- ~~The built-in `orphan_account` also had the password `password123`~~, so anyone could log in as it and edit every orphaned work. **Fixed:** it has a password hash that can never match.
+- ~~Postgres (with its default password), Redis, mail and monitoring ports were published on every network interface~~, which on a server puts them on the internet (Docker bypasses the `ufw` firewall). **Fixed:** everything but Caddy is bound to `127.0.0.1`.
+- ~~Commenting as another user's pseud~~ (see Kudos and comments).
+
+Found while merging the services:
+
 These were fixed by merging the backend into one program with one login check (`backend/internal/platform`). Each was checked against a running server.
 
 1. ~~The work service trusted a client-supplied `X-User-ID` header~~, and the gateway passed it straight through, so anyone could act as any user. **Fixed:** identity comes only from a verified token; forged headers get 401.
@@ -154,10 +170,9 @@ These were fixed by merging the backend into one program with one login check (`
 
 ## Setup and maintenance problems (found 2026-10-29)
 
-- **Migrations don't apply cleanly to an empty database.** `010`, `012`, `013`, `016`, `019` and `020` all error (duplicate tables, a syntax error, an unbuildable foreign key, a subquery in an index). Docker's Postgres setup stops at the first error, so a brand-new install probably can't create its database at all. There is no migration tool; files only run once, on first container start.
-- **Notifications don't work at all on a fresh database.** Migration `013` fails, so the `notification_items` table is never created.
-- **Posting works, chapters and comments fails on a fresh database.** The retention trigger from `016` reads `NEW.author_id` or `NEW.user_id`, which those tables don't have.
-- **Posting a work doesn't create its first chapter**, even when `chapter_content` is sent.
+- ~~Migrations didn't apply to an empty database~~, and Postgres's first-start scripts stopped at the first error, so a new install couldn't create its database. **Fixed:** every migration applies to an empty database, and the app applies them itself on startup (`nuclear migrate`), one transaction per file, recording each in `schema_migrations`. CI checks this on every change. A database built by the old method is refused with a pointer to [RUNBOOK.md](RUNBOOK.md).
+- ~~The code used seven tables that no migration created~~ (notifications, subscriptions, notification and profile preferences, collection membership, hit history). **Fixed** in migration 022. A test now fails if the code queries a table that doesn't exist.
+- ~~Database triggers broke posting~~: a retention trigger read columns that don't exist, the chapter counter rejected every new draft, the tag summary joined on a missing column, and the user-stats trigger failed for guests. **Fixed** in migrations 016 and 023–026. The retention trigger was removed rather than fixed: it would have expired works after seven years, which AO3 doesn't do.
 - **Reading a single chapter always returns 400.** The route is `/chapters/:chapter_id`, but the handler reads `chapter_number`.
 - **Block, mute and report crashed on every request** (500) because of a type mismatch; fixed 2026-10-29.
 - **121 of 428 frontend unit tests already fail on `main`.** These are pre-existing; the merge didn't add any (compared test by test).

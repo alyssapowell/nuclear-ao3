@@ -82,7 +82,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000000',
     'orphan_account',
     'orphan@nuclear-ao3.internal', 
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/VLg7xGx8VYKuOCVla', -- Disabled password
+    '!', -- not a bcrypt hash, so no password can ever log in as this account
     'orphan_account',
     true,
     true

@@ -20,199 +20,6 @@ import (
 
 // Work CRUD operations
 
-func (ws *WorkService) CreateWork(c *gin.Context) {
-	log.Printf("DEBUG: Using REGULAR CreateWork handler (NO auto-indexing)")
-	var req models.CreateWorkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
-		return
-	}
-
-	// Get user ID from JWT token (would be set by auth middleware)
-	userID, exists := c.Get("user_id")
-	log.Printf("DEBUG: user_id from context: %v, exists: %v", userID, exists)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
-		return
-	}
-	log.Printf("DEBUG: Final user_id to use: %v", userID)
-
-	tx, err := ws.db.Begin()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
-		return
-	}
-	defer tx.Rollback()
-
-	// Create work
-	workID := uuid.New()
-	now := time.Now()
-
-	userUUID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Set defaults for required fields if not provided
-	language := req.Language
-	if language == "" {
-		language = "en"
-	}
-
-	rating := req.Rating
-	if rating == "" {
-		rating = "Not Rated"
-	}
-
-	work := &models.Work{
-		ID:                     workID,
-		Title:                  req.Title,
-		Summary:                req.Summary,
-		Notes:                  req.Notes,
-		UserID:                 userUUID,
-		SeriesID:               req.SeriesID,
-		Language:               language,
-		Rating:                 rating,
-		Category:               req.Category,
-		Warnings:               req.Warnings,
-		Fandoms:                req.Fandoms,
-		Characters:             req.Characters,
-		Relationships:          req.Relationships,
-		FreeformTags:           req.FreeformTags,
-		MaxChapters:            req.MaxChapters,
-		ChapterCount:           1,
-		IsComplete:             req.MaxChapters != nil && *req.MaxChapters == 1,
-		Status:                 "draft",
-		RestrictedToUsers:      false,  // Default to public
-		CommentPolicy:          "open", // Default to open comments
-		ModerateComments:       false,
-		DisableComments:        false,
-		IsAnonymous:            false, // Default to non-anonymous
-		InAnonCollection:       false,
-		InUnrevealedCollection: false,
-		CreatedAt:              now,
-		UpdatedAt:              now,
-	}
-
-	// Insert work with user_id (matching actual database schema)
-	query := `
-		INSERT INTO works (id, title, summary, notes, user_id, language, rating, 
-			warnings, fandoms, characters, relationships, freeform_tags, 
-			expected_chapters, chapter_count, is_complete, status, 
-			created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`
-
-	log.Printf("DEBUG: About to insert work with ChapterCount=%d, MaxChapters=%v", work.ChapterCount, work.MaxChapters)
-	_, err = tx.Exec(query,
-		work.ID, work.Title, work.Summary, work.Notes, work.UserID,
-		work.Language, work.Rating, pq.Array(work.Warnings),
-		pq.Array(work.Fandoms), pq.Array(work.Characters), pq.Array(work.Relationships),
-		pq.Array(work.FreeformTags), work.MaxChapters, work.ChapterCount,
-		work.IsComplete, work.Status, work.CreatedAt, work.UpdatedAt)
-	log.Printf("DEBUG: Work insert result - error: %v", err)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work", "details": err.Error()})
-		return
-	}
-
-	// Get user's default pseud or create one if none exists
-	var defaultPseudID uuid.UUID
-	err = tx.QueryRow(`
-		SELECT id FROM user_pseudonyms 
-		WHERE user_id = $1 AND is_default = true 
-		LIMIT 1`, userID).Scan(&defaultPseudID)
-
-	if err != nil {
-		// If no default pseud exists, get the username and create one
-		var username string
-		err = tx.QueryRow("SELECT username FROM users WHERE id = $1", userID).Scan(&username)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user info"})
-			return
-		}
-
-		// Create default pseud
-		defaultPseudID = uuid.New()
-		_, err = tx.Exec(`
-			INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at)
-			VALUES ($1, $2, $3, true, $4)`,
-			defaultPseudID, userID, username, now)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default pseud"})
-			return
-		}
-	}
-
-	// Note: Work authorship is established via user_id in works table
-	// Creatorship table doesn't exist in current schema
-
-	// Create first chapter
-	chapterID := uuid.New()
-	wordCount := countWords(req.ChapterContent)
-
-	chapter := &models.Chapter{
-		ID:        chapterID,
-		WorkID:    workID,
-		Number:    1,
-		Title:     req.ChapterTitle,
-		Summary:   req.ChapterSummary,
-		Notes:     req.ChapterNotes,
-		EndNotes:  req.ChapterEndNotes,
-		Content:   req.ChapterContent,
-		WordCount: wordCount,
-		Status:    "published", // Make chapter published so it gets counted by trigger
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	chapterQuery := `
-		INSERT INTO chapters (id, work_id, chapter_number, title, summary, notes, end_notes, 
-			content, word_count, is_draft, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
-
-	_, err = tx.Exec(chapterQuery,
-		chapter.ID, chapter.WorkID, chapter.Number, chapter.Title, chapter.Summary,
-		chapter.Notes, chapter.EndNotes, chapter.Content, chapter.WordCount,
-		chapter.Status == "draft", chapter.CreatedAt, chapter.UpdatedAt)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chapter", "details": err.Error()})
-		return
-	}
-
-	// Update work word count
-	_, err = tx.Exec("UPDATE works SET word_count = $1 WHERE id = $2", wordCount, workID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update word count"})
-		return
-	}
-
-	// Work statistics are automatically initialized by the sync_work_statistics trigger
-
-	if err = tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-		return
-	}
-
-	work.WordCount = wordCount
-
-	// Index work in search service asynchronously
-	go ws.indexWorkInSearch(workID, work)
-
-	// Trigger notification for new work
-	go func() {
-		ctx := context.Background()
-		// For new works, we might want to notify author subscribers
-		// The triggerWorkNotification function handles work-specific subscriptions,
-		// but we might also want author-level notifications here
-		ws.triggerWorkNotification(ctx, workID, models.EventNewWork, work.Title, "New work has been published")
-	}()
-
-	c.JSON(http.StatusCreated, gin.H{"work": work, "first_chapter": chapter})
-}
-
 func (ws *WorkService) GetWork(c *gin.Context) {
 	workIDParam := c.Param("work_id")
 	var workID uuid.UUID
@@ -495,17 +302,23 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 			argIndex++
 		}
 	}
+	posting := false
 	if req.Status != nil {
-		updates = append(updates, fmt.Sprintf("status = $%d", argIndex))
-		args = append(args, *req.Status)
-
-		// If publishing for first time, set published_at
-		if *req.Status == "posted" {
-			argIndex++
-			updates = append(updates, fmt.Sprintf("published_at = $%d", argIndex))
+		// The API says "draft"/"posted"; the database stores "draft"/"published"
+		// plus an is_draft flag, and both must agree.
+		switch *req.Status {
+		case "posted":
+			posting = true
+			updates = append(updates, "status = 'published'", "is_draft = false",
+				fmt.Sprintf("published_at = COALESCE(published_at, $%d)", argIndex))
 			args = append(args, time.Now())
+			argIndex++
+		case "draft":
+			updates = append(updates, "status = 'draft'", "is_draft = true")
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "status must be draft or posted"})
+			return
 		}
-		argIndex++
 	}
 	if req.RestrictedToUsers != nil {
 		updates = append(updates, fmt.Sprintf("restricted = $%d", argIndex))
@@ -563,15 +376,31 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 
 	query := fmt.Sprintf("UPDATE works SET %s WHERE id = $%d", strings.Join(updates, ", "), argIndex)
 
-	_, err = ws.db.Exec(query, args...)
+	tx, err := ws.db.Begin()
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(query, args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work", "details": err.Error()})
+		return
+	}
+	// Posting a draft work posts its draft chapters with it, as on AO3.
+	if posting {
+		if _, err = tx.Exec(`UPDATE chapters SET is_draft = false, published_at = COALESCE(published_at, NOW())
+			WHERE work_id = $1 AND is_draft`, workID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
 		return
 	}
 
 	// Clear cache
-	cacheKey := fmt.Sprintf("work:%s", workID)
-	ws.redis.Del(c.Request.Context(), cacheKey)
+	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	// Fetch updated work
 	work, err := ws.getWorkByID(workID)
@@ -658,8 +487,7 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 	}
 
 	// Clear cache
-	cacheKey := fmt.Sprintf("work:%s", workID)
-	ws.redis.Del(c.Request.Context(), cacheKey)
+	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	c.JSON(http.StatusOK, gin.H{"message": "Work deleted successfully"})
 }
@@ -1593,10 +1421,8 @@ func (ws *WorkService) UpdateChapter(c *gin.Context) {
 	}
 
 	// Clear cache
-	cacheKey := fmt.Sprintf("work:%s", workID)
-	ws.redis.Del(c.Request.Context(), cacheKey)
-	chapterCacheKey := fmt.Sprintf("chapter:%s", chapterID)
-	ws.redis.Del(c.Request.Context(), chapterCacheKey)
+	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
+	ws.cache.Delete(c.Request.Context(), fmt.Sprintf("chapter:%s", chapterID))
 
 	// Trigger notification for chapter update
 	go func() {
@@ -1743,10 +1569,8 @@ func (ws *WorkService) DeleteChapter(c *gin.Context) {
 	}
 
 	// Clear cache
-	cacheKey := fmt.Sprintf("work:%s", workID)
-	ws.redis.Del(c.Request.Context(), cacheKey)
-	chapterCacheKey := fmt.Sprintf("chapter:%s", chapterID)
-	ws.redis.Del(c.Request.Context(), chapterCacheKey)
+	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
+	ws.cache.Delete(c.Request.Context(), fmt.Sprintf("chapter:%s", chapterID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":                "Chapter deleted successfully",
@@ -2159,7 +1983,7 @@ func (ws *WorkService) GetStats(c *gin.Context) {
 	// Get collection count
 	err = ws.db.QueryRow(`
 		SELECT COUNT(*) FROM collection_items 
-		WHERE item_type = 'Work' AND item_id = $1`, workID).Scan(&stats.Collections)
+		WHERE work_id = $1`, workID).Scan(&stats.Collections)
 	if err != nil {
 		stats.Collections = 0 // Default to 0 if query fails
 	}
@@ -6107,7 +5931,7 @@ func (ws *WorkService) AdminDeleteWork(c *gin.Context) {
 	// Delete related data in correct order (respecting foreign key constraints)
 	// Only include tables that actually exist in the current schema
 	deletionOrder := []string{
-		"collection_works", // Remove from collections
+		"collection_items", // Remove from collections
 		"kudos",            // Remove kudos
 		"comments",         // Remove comments
 		"bookmarks",        // Remove bookmarks
@@ -6164,10 +5988,7 @@ func (ws *WorkService) AdminDeleteWork(c *gin.Context) {
 	}
 
 	// Clear any cached data (if Redis is available)
-	if ws.redis != nil {
-		cacheKey := fmt.Sprintf("work:%s", workID)
-		ws.redis.Del(c.Request.Context(), cacheKey)
-	}
+	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Work permanently deleted",

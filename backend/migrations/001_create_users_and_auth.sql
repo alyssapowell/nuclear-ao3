@@ -257,51 +257,7 @@ LEFT JOIN security_events se ON u.id = se.user_id
 WHERE u.is_active = true
 GROUP BY u.id, u.username, u.last_login_at;
 
--- =====================================================
--- SAMPLE DATA FOR DEVELOPMENT
--- =====================================================
-
--- Insert sample users (passwords are "password123" hashed with bcrypt cost 12)
-INSERT INTO users (id, username, email, password_hash, display_name, is_verified) VALUES
-    (
-        '123e4567-e89b-12d3-a456-426614174000',
-        'testuser',
-        'test@nuclear-ao3.com',
-        '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/VLg7xGx8VYKuOCVla', -- password123
-        'Test User',
-        true
-    ),
-    (
-        '123e4567-e89b-12d3-a456-426614174001',
-        'author2',
-        'author2@nuclear-ao3.com', 
-        '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/VLg7xGx8VYKuOCVla', -- password123
-        'Famous Author',
-        true
-    ),
-    (
-        '123e4567-e89b-12d3-a456-426614174002',
-        'tagwrangler',
-        'tags@nuclear-ao3.com',
-        '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/VLg7xGx8VYKuOCVla', -- password123  
-        'Tag Wrangler',
-        true
-    ),
-    (
-        '123e4567-e89b-12d3-a456-426614174003',
-        'admin',
-        'admin@nuclear-ao3.com',
-        '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/VLg7xGx8VYKuOCVla', -- password123
-        'Site Administrator', 
-        true
-    )
-ON CONFLICT (username) DO NOTHING;
-
--- Assign special roles (default 'user' role is auto-assigned via trigger)
-INSERT INTO user_roles (user_id, role, granted_by) VALUES
-    ('123e4567-e89b-12d3-a456-426614174002', 'tag_wrangler', '123e4567-e89b-12d3-a456-426614174003'),
-    ('123e4567-e89b-12d3-a456-426614174003', 'admin', '123e4567-e89b-12d3-a456-426614174003')
-ON CONFLICT (user_id, role) DO NOTHING;
+-- Sample data lives in migrations/dev/seed.sql, which is never run in production.
 
 -- =====================================================
 -- PERFORMANCE MONITORING

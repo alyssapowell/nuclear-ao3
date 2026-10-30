@@ -132,9 +132,10 @@ docker-compose up -d postgres redis elasticsearch
 # Wait for services to be ready
 sleep 30
 
-# Run database migrations
-docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -f /migrations/001_create_users_and_auth.sql
-# Continue with other migration files...
+# Database migrations run automatically when the app starts.
+# To run them by hand, or to check what's pending:
+docker-compose run --rm app nuclear migrate
+docker-compose run --rm app nuclear migrate status
 ```
 
 ### 3. Trigger GitHub Actions Deployment
@@ -324,7 +325,7 @@ make dev-test         # Run test suite
 make dev-logs         # View logs
 
 # Database
-make db-migrate       # Run migrations
+make migrate          # Run migrations
 make db-seed          # Seed test data
 make db-reset         # Reset database
 ```

@@ -34,7 +34,7 @@ SELECT
   mp.id,
   mt.id,
   'parent_child',
-  '123e4567-e89b-12d3-a456-426614174003'::uuid
+  NULL::uuid
 FROM marvel_parent mp, marvel_tags mt
 ON CONFLICT (parent_tag_id, child_tag_id) DO NOTHING;
 
@@ -56,7 +56,7 @@ SELECT
   hp.id,
   ht.id,
   'parent_child',
-  '123e4567-e89b-12d3-a456-426614174003'::uuid
+  NULL::uuid
 FROM hp_parent hp, hp_tags ht
 ON CONFLICT (parent_tag_id, child_tag_id) DO NOTHING;
 
@@ -82,7 +82,7 @@ SELECT
   dp.id,
   dt.id,
   'parent_child',
-  '123e4567-e89b-12d3-a456-426614174003'::uuid
+  NULL::uuid
 FROM dc_parent dp, dc_tags dt
 ON CONFLICT (parent_tag_id, child_tag_id) DO NOTHING;
 
@@ -104,7 +104,7 @@ SELECT
   sp.id,
   st.id,
   'parent_child',
-  '123e4567-e89b-12d3-a456-426614174003'::uuid
+  NULL::uuid
 FROM sw_parent sp, sw_tags st
 ON CONFLICT (parent_tag_id, child_tag_id) DO NOTHING;
 
@@ -126,23 +126,9 @@ SELECT
   sp.id,
   st.id,
   'parent_child',
-  '123e4567-e89b-12d3-a456-426614174003'::uuid
+  NULL::uuid
 FROM sherlock_parent sp, sherlock_tags st
 ON CONFLICT (parent_tag_id, child_tag_id) DO NOTHING;
 
--- Create indexes for efficient crossover detection queries
-CREATE INDEX IF NOT EXISTS idx_tag_relationships_universe_families 
-ON tag_relationships (parent_tag_id) 
-WHERE parent_tag_id IN (
-  SELECT id FROM tags WHERE name LIKE '%Universe Family'
-);
+CREATE INDEX IF NOT EXISTS idx_tag_relationships_parent ON tag_relationships (parent_tag_id);
 
--- Verify the relationships were created
-SELECT 
-  p.name as universe_family,
-  COUNT(tr.child_tag_id) as member_count
-FROM tags p
-JOIN tag_relationships tr ON p.id = tr.parent_tag_id
-WHERE p.type = 'meta' AND p.name LIKE '%Universe Family'
-GROUP BY p.id, p.name
-ORDER BY p.name;

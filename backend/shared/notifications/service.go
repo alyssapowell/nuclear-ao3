@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -61,6 +62,13 @@ func NewNotificationService(
 
 // ProcessEvent processes an incoming event and creates appropriate notifications
 func (ns *NotificationService) ProcessEvent(ctx context.Context, event *EventData) error {
+	// Events are usually processed in the background, where a panic would
+	// take the whole server down with it. A failed notification must not.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("PANIC while processing %s event for %s: %v\n%s", event.Type, event.SourceID, r, debug.Stack())
+		}
+	}()
 	log.Printf("Processing event: %s for %s", event.Type, event.SourceID)
 
 	// Handle special system events that don't need subscriptions
@@ -75,7 +83,32 @@ func (ns *NotificationService) ProcessEvent(ctx context.Context, event *EventDat
 		return fmt.Errorf("failed to find matching subscriptions: %w", err)
 	}
 
-	log.Printf("Found %d matching subscriptions", len(subscriptions))
+	// Direct recipients get the notification once, through a stand-in
+	// subscription, unless they also subscribed.
+	notified := map[uuid.UUID]bool{}
+	if event.ActorID != nil {
+		notified[*event.ActorID] = true
+	}
+	for _, sub := range subscriptions {
+		if sub.UserID != uuid.Nil {
+			notified[sub.UserID] = true
+		}
+	}
+	for _, userID := range event.Recipients {
+		if notified[userID] {
+			continue
+		}
+		notified[userID] = true
+		subscriptions = append(subscriptions, &models.Subscription{ID: uuid.New(), UserID: userID, IsActive: true})
+	}
+	// A subscriber who caused the event doesn't hear about it either.
+	kept := subscriptions[:0]
+	for _, sub := range subscriptions {
+		if event.ActorID == nil || sub.UserID != *event.ActorID {
+			kept = append(kept, sub)
+		}
+	}
+	subscriptions = kept
 
 	// Create notifications for each subscription
 	for _, subscription := range subscriptions {
@@ -449,6 +482,11 @@ type EventData struct {
 	ActorID     *uuid.UUID               `json:"actor_id,omitempty"`
 	ActorName   string                   `json:"actor_name"`
 	ExtraData   map[string]interface{}   `json:"extra_data,omitempty"`
+
+	// Recipients are told about the event whether or not they subscribed,
+	// e.g. a work's authors when someone comments on it. The actor is never
+	// notified about their own action.
+	Recipients []uuid.UUID `json:"recipients,omitempty"`
 
 	// Content metadata for filtering
 	AuthorIDs   []uuid.UUID `json:"author_ids,omitempty"`

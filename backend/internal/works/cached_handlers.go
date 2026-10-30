@@ -55,7 +55,7 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 
 	// Apply privacy filters (this needs to be done per-request)
 	userID := ws.getUserIDFromContext(c)
-	if !ws.canViewWork(&cachedWork, userID) {
+	if !ws.canViewWork(ctx, workID, userID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
@@ -360,23 +360,16 @@ func (ws *WorkService) getUserIDFromContext(c *gin.Context) *uuid.UUID {
 	return nil
 }
 
-func (ws *WorkService) canViewWork(work *models.Work, userID *uuid.UUID) bool {
-	// Check if work is in draft status
-	if work.Status == "draft" {
-		// Only the author can view their own drafts
-		if userID == nil || *userID != work.UserID {
-			return false
-		}
-	}
-
-	// Check other privacy settings
-	if work.RestrictedToUsers && userID == nil {
+// canViewWork asks the database, which knows about drafts, co-authors,
+// restricted works, blocks and mutes. The work itself may come from the
+// cache, but this check never does.
+func (ws *WorkService) canViewWork(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) bool {
+	var ok bool
+	if err := ws.db.QueryRowContext(ctx, "SELECT can_user_view_work($1, $2)", workID, userID).Scan(&ok); err != nil {
+		log.Printf("can_user_view_work(%s): %v", workID, err)
 		return false
 	}
-
-	// For now, allow all other access
-	// In real implementation, check additional privacy settings, collections, etc.
-	return true
+	return ok
 }
 
 // Cache invalidation helpers

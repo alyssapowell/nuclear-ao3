@@ -273,7 +273,7 @@ func (r *NotificationRepositoryImpl) DeleteNotification(ctx context.Context, id,
 
 func (r *NotificationRepositoryImpl) GetUserNotifications(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.NotificationItem, error) {
 	query := `
-		SELECT id, user_id, event, priority, source_id, source_type, title, message, action_url,
+		SELECT id, user_id, event, priority, source_id, source_type, title, description, action_url,
 		       actor_id, actor_name, extra_data, is_read, is_delivered, created_at, read_at, delivered_at
 		FROM notification_items WHERE user_id = $1 
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3

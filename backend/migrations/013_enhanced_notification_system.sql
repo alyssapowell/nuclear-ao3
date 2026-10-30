@@ -237,19 +237,13 @@ CREATE INDEX idx_notification_deliveries_channel ON notification_deliveries(chan
 -- Function to extract mentions from text content
 CREATE OR REPLACE FUNCTION extract_mentions(content TEXT)
 RETURNS TABLE(username TEXT, position_start INTEGER, position_end INTEGER) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        TRIM(LEADING '@' FROM match[1]) as username,
-        match_start::INTEGER as position_start,
-        (match_start + LENGTH(match[0]) - 1)::INTEGER as position_end
-    FROM (
-        SELECT 
-            regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'gi') as match,
-            strpos(content, regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'gi')[1]) as match_start
-    ) matches;
-END;
-$$ LANGUAGE plpgsql;
+    -- Positions are of the first occurrence of each @name.
+    SELECT
+        m[1],
+        strpos(content, '@' || m[1]),
+        strpos(content, '@' || m[1]) + length(m[1])
+    FROM regexp_matches(content, '@([a-zA-Z0-9_-]+)', 'g') AS m;
+$$ LANGUAGE sql IMMUTABLE;
 
 -- Function to create mention records
 CREATE OR REPLACE FUNCTION create_mentions(

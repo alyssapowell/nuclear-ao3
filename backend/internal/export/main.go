@@ -74,9 +74,8 @@ func (s *ExportService) Start() {
 	go s.startCleanupRoutine()
 }
 
-// New builds the export service and creates its table if needed.
+// New builds the export service. Its table comes from migration 016.
 func New(db *sql.DB) *ExportService {
-	createExportTable(db)
 	return &ExportService{db: db}
 }
 
@@ -94,34 +93,6 @@ func Mount(r *gin.Engine, service *ExportService, d *platform.Deps) {
 		v1.DELETE("/export/:id", service.CancelExport)
 		v1.GET("/my/exports", service.GetUserExports)
 		v1.POST("/admin/exports/cleanup", d.RequireRole("admin"), service.ManualCleanup)
-	}
-}
-
-func createExportTable(db *sql.DB) {
-	query := `
-	CREATE TABLE IF NOT EXISTS export_status (
-		id VARCHAR(255) PRIMARY KEY,
-		work_id VARCHAR(255) NOT NULL,
-		user_id VARCHAR(255),
-		format VARCHAR(10) NOT NULL,
-		status VARCHAR(20) NOT NULL DEFAULT 'pending',
-		progress INTEGER DEFAULT 0,
-		download_url TEXT,
-		error_message TEXT,
-		options TEXT,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		completed_at TIMESTAMP,
-		expires_at TIMESTAMP NOT NULL,
-		ttl_seconds BIGINT NOT NULL
-	);
-	
-	CREATE INDEX IF NOT EXISTS idx_export_status_expires_at ON export_status(expires_at);
-	CREATE INDEX IF NOT EXISTS idx_export_status_user_id ON export_status(user_id);
-	CREATE INDEX IF NOT EXISTS idx_export_status_work_id ON export_status(work_id);
-	`
-
-	if _, err := db.Exec(query); err != nil {
-		log.Fatal("Failed to create export table:", err)
 	}
 }
 

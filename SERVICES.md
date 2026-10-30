@@ -92,7 +92,7 @@ Services communicate via HTTP APIs. Future improvements could include:
 
 ### Database Schema
 - PostgreSQL with separate schemas per service concern
-- Migrations handled via `migrations/` directory
+- Migrations live in `backend/migrations/` and are applied by the app on startup (`nuclear migrate`)
 - Connection pooling and health checks
 
 ### Caching Strategy

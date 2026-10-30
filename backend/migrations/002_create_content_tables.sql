@@ -439,68 +439,7 @@ LEFT JOIN work_tags wt ON t.id = wt.tag_id
 LEFT JOIN works w ON wt.work_id = w.id AND w.is_draft = false
 GROUP BY t.id;
 
--- =====================================================
--- SAMPLE DATA
--- =====================================================
-
--- Insert sample tags
-INSERT INTO tags (name, type, is_canonical) VALUES
-    ('Harry Potter - J. K. Rowling', 'fandom', true),
-    ('Sherlock Holmes & Related Fandoms', 'fandom', true),
-    ('Marvel Cinematic Universe', 'fandom', true),
-    ('Hermione Granger', 'character', true),
-    ('Harry Potter', 'character', true),
-    ('Sherlock Holmes', 'character', true),
-    ('John Watson', 'character', true),
-    ('Harry Potter/Hermione Granger', 'relationship', true),
-    ('Sherlock Holmes/John Watson', 'relationship', true),
-    ('Alternate Universe', 'freeform', true),
-    ('Fluff', 'freeform', true),
-    ('Angst', 'freeform', true),
-    ('Hurt/Comfort', 'freeform', true),
-    ('Friends to Lovers', 'freeform', true),
-    ('Modern AU', 'freeform', true)
-ON CONFLICT (name) DO NOTHING;
-
--- Insert sample works
-INSERT INTO works (id, title, summary, user_id, rating, category, word_count, chapter_count, is_draft, published_at) VALUES
-    (
-        uuid_generate_v4(),
-        'The Brightest Witch of Her Age',
-        'Hermione Granger has always been the smartest witch in her year, but what happens when she discovers magic that goes beyond anything taught at Hogwarts?',
-        '123e4567-e89b-12d3-a456-426614174000',
-        'Teen And Up Audiences',
-        'F/M',
-        15420,
-        5,
-        false,
-        NOW() - INTERVAL '2 days'
-    ),
-    (
-        uuid_generate_v4(),
-        'Baker Street Mysteries',
-        'A collection of cases that never made it into Dr. Watson''s published accounts. Some things are too dangerous for the public to know.',
-        '123e4567-e89b-12d3-a456-426614174001',
-        'Mature',
-        'M/M',
-        32150,
-        12,
-        false,
-        NOW() - INTERVAL '1 week'
-    ),
-    (
-        uuid_generate_v4(),
-        'Coffee Shop Chronicles', 
-        'Tony Stark owns a coffee shop. Steve Rogers is a regular customer. Love brews slowly.',
-        '123e4567-e89b-12d3-a456-426614174000',
-        'General Audiences',
-        'M/M',
-        8720,
-        3,
-        false,
-        NOW() - INTERVAL '3 days'
-    )
-ON CONFLICT DO NOTHING;
+-- Sample data lives in migrations/dev/seed.sql, which is never run in production.
 
 COMMENT ON TABLE works IS 'Core fanfiction works with full metadata and statistics';
 COMMENT ON TABLE tags IS 'Hierarchical tag system with canonical forms and synonyms';

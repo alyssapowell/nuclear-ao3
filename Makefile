@@ -1,7 +1,7 @@
 # Nuclear AO3 Development Makefile
 # Provides convenient commands for database management, testing, and development
 
-.PHONY: help db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
+.PHONY: help migrate migrate-status seed grant db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
 
 # Default target
 help: ## Show this help message
@@ -14,7 +14,7 @@ db-status: ## Check database status and connection
 	@echo "🔍 Checking database status..."
 	@docker-compose ps postgres elasticsearch redis
 	@echo "\n📊 Database statistics:"
-	@docker exec ao3_postgres psql -U ao3_user -d ao3_nuclear -c "\
+	@docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -c "\
 		SELECT 'Users' as table, COUNT(*) as count FROM users \
 		UNION ALL SELECT 'Works', COUNT(*) FROM works \
 		UNION ALL SELECT 'Tags', COUNT(*) FROM tags \
@@ -34,6 +34,21 @@ db-start: ## Start database services only
 	@echo "⏳ Waiting for services to be healthy..."
 	@sleep 15
 	@make db-status
+
+migrate: ## Apply database migrations (the app also does this when it starts)
+	@docker-compose run --rm app nuclear migrate
+
+migrate-status: ## List migrations that haven't been applied yet
+	@docker-compose run --rm app nuclear migrate status
+
+seed: ## Load sample accounts and works for development (password: password123)
+	@docker-compose run --rm app nuclear migrate
+	@docker exec -i nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -v ON_ERROR_STOP=1 -1 < backend/migrations/dev/seed.sql
+	@echo "Sample data loaded. Log in as admin@example.org / password123"
+
+grant: ## Give an account a role: make grant USER=name ROLE=admin|moderator|tag_wrangler
+	@if [ -z "$(USER)" ] || [ -z "$(ROLE)" ]; then echo "usage: make grant USER=name ROLE=admin"; exit 1; fi
+	@docker-compose run --rm app nuclear grant $(USER) $(ROLE)
 
 db-populate: ## Populate databases with test data (requires clean DB)
 	@echo "📚 Populating databases with test data..."
@@ -131,13 +146,13 @@ clean-all: ## Complete cleanup including images and volumes
 backup-db: ## Backup PostgreSQL database
 	@echo "💾 Backing up PostgreSQL database..."
 	@mkdir -p backups
-	@docker exec ao3_postgres pg_dump -U ao3_user ao3_nuclear > backups/ao3_backup_$(shell date +%Y%m%d_%H%M%S).sql
+	@docker exec nuclear-ao3-postgres pg_dump -U ao3_user ao3_nuclear > backups/ao3_backup_$(shell date +%Y%m%d_%H%M%S).sql
 	@echo "✅ Backup saved to backups/ directory"
 
 restore-db: ## Restore PostgreSQL database (requires BACKUP_FILE variable)
 	@if [ -z "$(BACKUP_FILE)" ]; then echo "❌ Please specify BACKUP_FILE=filename"; exit 1; fi
 	@echo "📥 Restoring database from $(BACKUP_FILE)..."
-	@docker exec -i ao3_postgres psql -U ao3_user ao3_nuclear < $(BACKUP_FILE)
+	@docker exec -i nuclear-ao3-postgres psql -U ao3_user ao3_nuclear < $(BACKUP_FILE)
 	@echo "✅ Database restored"
 
 # Performance and Monitoring
@@ -155,7 +170,7 @@ performance-test: ## Run performance tests with large dataset
 # Quick Development Workflows
 quick-reset: ## Quick reset for development (keeps containers running)
 	@echo "🔄 Quick development reset..."
-	@docker exec ao3_postgres psql -U ao3_user -d ao3_nuclear -c "TRUNCATE TABLE work_tags, work_statistics, works, tags, users RESTART IDENTITY CASCADE;"
+	@docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -c "TRUNCATE TABLE work_tags, work_statistics, works, tags, users RESTART IDENTITY CASCADE;"
 	@curl -X DELETE http://localhost:9200/works 2>/dev/null || true
 	@make db-populate
 

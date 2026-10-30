@@ -137,12 +137,17 @@ func (s *NotificationService) getUserNotifications(c *gin.Context) {
 		}
 	}
 
-	// Temporary fix: Return empty notifications while debugging database schema issues
-	// Use userUUID to avoid unused variable error
-	_ = userUUID
-
+	items, err := s.notificationSvc.notificationRepo.GetUserNotifications(c.Request.Context(), userUUID, limit, offset)
+	if err != nil {
+		log.Printf("list notifications for %s: %v", userUUID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load notifications"})
+		return
+	}
+	if items == nil {
+		items = []*models.NotificationItem{}
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"notifications": []interface{}{}, // Empty array for now
+		"notifications": items,
 		"limit":         limit,
 		"offset":        offset,
 	})

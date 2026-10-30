@@ -74,13 +74,8 @@ setup_test_env() {
     export GIN_MODE="test"
     export BASE_URL="https://test.nuclear-ao3.com"
     
-    # Run database migrations if needed
-    if [ -f "../migrations/001_create_users_and_auth.sql" ]; then
-        print_status "Running database migrations..."
-        psql "$TEST_DATABASE_URL" -f "../migrations/001_create_users_and_auth.sql" 2>/dev/null || true
-        psql "$TEST_DATABASE_URL" -f "../migrations/002_create_content_tables.sql" 2>/dev/null || true
-        psql "$TEST_DATABASE_URL" -f "../migrations/003_oauth2_tables.sql" 2>/dev/null || true
-    fi
+    print_status "Running database migrations..."
+    (cd ../.. && DATABASE_URL="$TEST_DATABASE_URL" go run ./cmd/nuclear migrate)
     
     print_success "Test environment setup complete"
 }

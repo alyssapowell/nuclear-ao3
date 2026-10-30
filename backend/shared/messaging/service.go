@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -75,9 +76,12 @@ func (s *UniversalMessageService) SendMessage(ctx context.Context, msg *models.M
 	}
 	msg.UpdatedAt = now
 
-	// Store message
-	if err := s.messageRepo.CreateMessage(ctx, msg); err != nil {
-		return fmt.Errorf("failed to store message: %w", err)
+	// Store message (the store is optional; without it messages are sent but
+	// not kept)
+	if s.messageRepo != nil {
+		if err := s.messageRepo.CreateMessage(ctx, msg); err != nil {
+			return fmt.Errorf("failed to store message: %w", err)
+		}
 	}
 
 	// Process each recipient
@@ -103,7 +107,9 @@ func (s *UniversalMessageService) SendMessage(ctx context.Context, msg *models.M
 	}
 
 	msg.UpdatedAt = time.Now()
-	s.messageRepo.UpdateMessage(ctx, msg)
+	if s.messageRepo != nil {
+		s.messageRepo.UpdateMessage(ctx, msg)
+	}
 
 	// Return error if no recipients were processed successfully
 	if successCount == 0 {
@@ -122,7 +128,9 @@ func (s *UniversalMessageService) processRecipient(ctx context.Context, msg *mod
 	}
 
 	// Get user preferences if not already provided
-	if recipient.Preferences.UserID == uuid.Nil {
+	if recipient.Preferences.UserID == uuid.Nil && s.preferenceService == nil {
+		recipient.Preferences = models.DefaultUserNotificationSettings(recipient.UserID, "")
+	} else if recipient.Preferences.UserID == uuid.Nil {
 		userPrefs, err := s.preferenceService.GetUserPreferences(ctx, recipient.UserID.String())
 		if err != nil {
 			log.Printf("Failed to get user preferences for %s, using defaults: %v", recipient.UserID, err)
@@ -227,14 +235,18 @@ func (s *UniversalMessageService) sendThroughChannel(ctx context.Context, msg *m
 
 	// Deliver message
 	attempt, err := provider.DeliverMessage(ctx, msg, recipient)
-	if err != nil {
+	if err != nil && s.telemetry != nil {
 		s.telemetry.RecordError(channel, "delivery_error", err)
 	}
 
 	// Store delivery attempt
 	if attempt != nil {
-		s.attemptRepo.CreateDeliveryAttempt(ctx, attempt)
-		s.telemetry.RecordDeliveryAttempt(attempt)
+		if s.attemptRepo != nil {
+			s.attemptRepo.CreateDeliveryAttempt(ctx, attempt)
+		}
+		if s.telemetry != nil {
+			s.telemetry.RecordDeliveryAttempt(attempt)
+		}
 	}
 
 	return err
@@ -264,6 +276,9 @@ func (s *UniversalMessageService) ScheduleMessage(ctx context.Context, msg *mode
 		"scheduled":          true,
 	}
 
+	if s.messageRepo == nil {
+		return errNoStore
+	}
 	if err := s.messageRepo.CreateMessage(ctx, msg); err != nil {
 		return fmt.Errorf("failed to store scheduled message: %w", err)
 	}
@@ -277,6 +292,10 @@ func (s *UniversalMessageService) GetMessageStatus(ctx context.Context, messageI
 	_, err := uuid.Parse(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid message ID: %w", err)
+	}
+
+	if s.messageRepo == nil || s.attemptRepo == nil {
+		return nil, errNoStore
 	}
 
 	// Get message
@@ -344,6 +363,10 @@ func (s *UniversalMessageService) GetMessageStatus(ctx context.Context, messageI
 
 // RetryFailedDeliveries retries failed delivery attempts for a message
 func (s *UniversalMessageService) RetryFailedDeliveries(ctx context.Context, messageID string) error {
+	if s.messageRepo == nil || s.attemptRepo == nil {
+		return errNoStore
+	}
+
 	// Get failed attempts
 	attempts, err := s.attemptRepo.ListFailedAttempts(ctx, models.ChannelEmail, time.Now())
 	if err != nil {
@@ -392,8 +415,15 @@ func (s *UniversalMessageService) RetryFailedDeliveries(ctx context.Context, mes
 
 // GetMetrics returns aggregate metrics for message delivery
 func (s *UniversalMessageService) GetMetrics(ctx context.Context, start, end time.Time) (*models.MessageMetrics, error) {
+	if s.telemetry == nil {
+		return nil, errors.New("message telemetry is not configured")
+	}
 	return s.telemetry.GetMetrics(start, end)
 }
+
+// errNoStore is returned by features that need the optional message and
+// delivery-attempt stores when the service was built without them.
+var errNoStore = errors.New("message store is not configured")
 
 // GetAvailableChannels returns a list of available delivery channels
 func (s *UniversalMessageService) GetAvailableChannels(ctx context.Context) []models.DeliveryChannel {

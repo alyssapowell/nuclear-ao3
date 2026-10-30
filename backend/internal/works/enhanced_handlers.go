@@ -1,8 +1,6 @@
 package works
 
 import (
-	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -22,363 +20,179 @@ import (
 	"nuclear-ao3/shared/models"
 )
 
-// =============================================================================
-// ENHANCED WORK SERVICE - Tag Integration & Advanced Features
-// Integrates with Hecate Core Tag Service and Search Service
-// =============================================================================
-
-// TagService client for making requests to tag service
-type TagServiceClient struct {
-	baseURL string
-	client  *http.Client
-}
-
-func NewTagServiceClient(baseURL string) *TagServiceClient {
-	return &TagServiceClient{
-		baseURL: baseURL,
-		client:  &http.Client{Timeout: 5 * time.Second},
-	}
-}
-
-// SearchServiceClient for making requests to search service
-type SearchServiceClient struct {
-	baseURL string
-	client  *http.Client
-}
-
-func NewSearchServiceClient(baseURL string) *SearchServiceClient {
-	return &SearchServiceClient{
-		baseURL: baseURL,
-		client:  &http.Client{Timeout: 5 * time.Second},
-	}
-}
-
-// Enhanced CreateWork with tag integration
-func (ws *WorkService) CreateWorkEnhanced(c *gin.Context) {
-	log.Printf("DEBUG ENHANCED: ====== STARTING CreateWorkEnhanced ======")
-	log.Printf("DEBUG ENHANCED: Request method: %s, URL: %s", c.Request.Method, c.Request.URL.Path)
-
-	// Step 1: Parse JSON request
-	log.Printf("DEBUG ENHANCED: Step 1 - Parsing JSON request")
+// CreateWork posts a new work as a draft, together with its first chapter.
+//
+// Everything is written in one transaction: the work, the author's default
+// pseud (created on first use, named after the username), the creatorship
+// that links the pseud to the work, the first chapter, and the work's tags.
+// Tags that don't exist yet are created unwrangled, as on AO3. The work stays
+// a draft until it is updated with "status": "posted".
+func (ws *WorkService) CreateWork(c *gin.Context) {
 	var req models.CreateWorkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		log.Printf("DEBUG ENHANCED: ERROR - JSON binding failed: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
 		return
 	}
-	log.Printf("DEBUG ENHANCED: Step 1 SUCCESS - JSON parsed. Title: %s", req.Title)
-
-	// Step 2: Get user ID from context
-	log.Printf("DEBUG ENHANCED: Step 2 - Extracting user_id from context")
-	userID, exists := c.Get("user_id")
-	if !exists {
-		log.Printf("DEBUG ENHANCED: ERROR - No user_id found in context")
-		// Let's also check what IS in the context
-		log.Printf("DEBUG ENHANCED: Available context keys:")
-		for key, value := range c.Keys {
-			log.Printf("DEBUG ENHANCED: Context key: %s = %v", key, value)
-		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+	user := ws.getUserIDFromContext(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
-	log.Printf("DEBUG ENHANCED: Step 2 SUCCESS - Got user_id from context: %v (type: %T)", userID, userID)
+	userID := *user
 
-	// Step 3: Parse user ID to UUID
-	log.Printf("DEBUG ENHANCED: Step 3 - Converting user_id to UUID")
-	userIDStr, ok := userID.(string)
-	if !ok {
-		log.Printf("DEBUG ENHANCED: ERROR - user_id is not a string: %T", userID)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID type"})
-		return
-	}
-	log.Printf("DEBUG ENHANCED: Step 3a SUCCESS - user_id is string: %s", userIDStr)
-
-	userUUID, parseErr := uuid.Parse(userIDStr)
-	if parseErr != nil {
-		log.Printf("DEBUG ENHANCED: ERROR - Failed to parse user_id as UUID: %v", parseErr)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
-		return
-	}
-	log.Printf("DEBUG ENHANCED: Step 3 SUCCESS - Parsed user UUID: %s", userUUID)
-
-	// Step 4: Start database transaction
-	log.Printf("DEBUG ENHANCED: Step 4 - Starting database transaction")
 	tx, err := ws.db.Begin()
 	if err != nil {
-		log.Printf("DEBUG ENHANCED: ERROR - Failed to start transaction: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
 		return
 	}
 	defer tx.Rollback()
-	log.Printf("DEBUG ENHANCED: Step 4 SUCCESS - Transaction started")
 
-	// Step 5: Create work object
-	log.Printf("DEBUG ENHANCED: Step 5 - Creating work object")
-	workID := uuid.New()
 	now := time.Now()
-	log.Printf("DEBUG ENHANCED: Generated work ID: %s", workID)
-	log.Printf("DEBUG ENHANCED: Using user UUID: %s", userUUID)
-
+	wordCount := countWords(req.ChapterContent)
 	work := &models.Work{
-		ID:                     workID,
-		UserID:                 userUUID,
-		Title:                  req.Title,
-		Summary:                req.Summary,
-		Notes:                  req.Notes,
-		SeriesID:               req.SeriesID,
-		Language:               req.Language,
-		Rating:                 req.Rating,
-		Category:               req.Category,
-		Warnings:               req.Warnings,
-		Fandoms:                req.Fandoms,
-		Characters:             req.Characters,
-		Relationships:          req.Relationships,
-		FreeformTags:           req.FreeformTags,
-		MaxChapters:            req.MaxChapters,
-		ChapterCount:           1,
-		IsComplete:             req.MaxChapters != nil && *req.MaxChapters == 1,
-		Status:                 "draft",
-		RestrictedToUsers:      false,
-		CommentPolicy:          "open",
-		ModerateComments:       false,
-		DisableComments:        false,
-		IsAnonymous:            false,
-		InAnonCollection:       false,
-		InUnrevealedCollection: false,
-		CreatedAt:              now,
-		UpdatedAt:              now,
+		ID:            uuid.New(),
+		UserID:        userID,
+		Title:         req.Title,
+		Summary:       req.Summary,
+		Notes:         req.Notes,
+		SeriesID:      req.SeriesID,
+		Language:      req.Language,
+		Rating:        req.Rating,
+		Category:      req.Category,
+		Warnings:      req.Warnings,
+		Fandoms:       req.Fandoms,
+		Characters:    req.Characters,
+		Relationships: req.Relationships,
+		FreeformTags:  req.FreeformTags,
+		MaxChapters:   req.MaxChapters,
+		ChapterCount:  1,
+		WordCount:     wordCount,
+		IsComplete:    req.MaxChapters != nil && *req.MaxChapters == 1,
+		Status:        "draft",
+		CommentPolicy: "open",
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
-	log.Printf("DEBUG ENHANCED: Step 5 SUCCESS - Work object created with UserID: %s", work.UserID)
-
-	// Step 6: Insert work into database
-	log.Printf("DEBUG ENHANCED: Step 6 - Inserting work into database")
-	query := `
-		INSERT INTO works (id, user_id, title, summary, notes, language, rating, 
-			category, warnings, fandoms, characters, relationships, freeform_tags, 
-			max_chapters, chapter_count, is_complete, status, 
-			restricted, comment_policy, moderate_comments, disable_comments,
-			is_anonymous, in_anon_collection, in_unrevealed_collection,
-			created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`
-
-	log.Printf("DEBUG ENHANCED: About to execute SQL with these key values:")
-	log.Printf("DEBUG ENHANCED: $1 (id): %s", work.ID)
-	log.Printf("DEBUG ENHANCED: $2 (user_id): %s", work.UserID)
-	log.Printf("DEBUG ENHANCED: $3 (title): %s", work.Title)
-
-	_, err = tx.Exec(query,
-		work.ID, work.UserID, work.Title, work.Summary, work.Notes,
-		work.Language, work.Rating, pq.Array(work.Category), pq.Array(work.Warnings),
-		pq.Array(work.Fandoms), pq.Array(work.Characters), pq.Array(work.Relationships),
-		pq.Array(work.FreeformTags), work.MaxChapters, work.ChapterCount,
-		work.IsComplete, work.Status, work.RestrictedToUsers, work.CommentPolicy,
-		work.ModerateComments, work.DisableComments, work.IsAnonymous,
-		work.InAnonCollection, work.InUnrevealedCollection, work.CreatedAt, work.UpdatedAt)
-
-	if err != nil {
-		log.Printf("DEBUG ENHANCED: ERROR - SQL execution failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work", "details": err.Error()})
-		return
-	}
-	log.Printf("DEBUG ENHANCED: Step 6 SUCCESS - Work inserted into database")
-
-	// Create creatorship
-	var defaultPseudID uuid.UUID
-	err = tx.QueryRow(`
-		SELECT id FROM pseuds WHERE user_id = $1 AND is_default = true
-	`, userUUID).Scan(&defaultPseudID)
-
-	if err != nil {
-		// Create default pseud if it doesn't exist
-		defaultPseudID = uuid.New()
-		_, err = tx.Exec(`
-			INSERT INTO pseuds (id, user_id, name, is_default, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`, defaultPseudID, userUUID, "DefaultPseud", true, now, now)
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create pseud"})
-			return
-		}
-	}
-
-	// Create creatorship
-	log.Printf("DEBUG: Creating creatorship with workID=%s, defaultPseudID=%s", workID, defaultPseudID)
 	_, err = tx.Exec(`
-		INSERT INTO creatorships (id, creation_id, creation_type, pseud_id, created_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, uuid.New(), workID, "Work", defaultPseudID, now)
-
+		INSERT INTO works (id, user_id, title, summary, notes, language, rating,
+			category, warnings, fandoms, characters, relationships, freeform_tags,
+			max_chapters, chapter_count, word_count, is_complete, status, is_draft,
+			restricted, comment_policy, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+			'draft', true, false, 'open', $18, $18)`,
+		work.ID, userID, work.Title, work.Summary, work.Notes, work.Language, work.Rating,
+		pq.Array(work.Category), pq.Array(work.Warnings), pq.Array(work.Fandoms),
+		pq.Array(work.Characters), pq.Array(work.Relationships), pq.Array(work.FreeformTags),
+		work.MaxChapters, work.ChapterCount, wordCount, work.IsComplete, now)
 	if err != nil {
-		log.Printf("ERROR: Failed to create creatorship: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create creatorship", "details": err.Error()})
+		log.Printf("create work: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
 		return
 	}
 
-	// Step 7: Commit transaction
-	log.Printf("DEBUG ENHANCED: Step 7 - Committing transaction")
+	pseudID, err := defaultPseud(tx, userID)
+	if err != nil {
+		log.Printf("create work: pseud: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
+		return
+	}
+	if _, err = tx.Exec(`INSERT INTO creatorships (creation_id, creation_type, pseud_id) VALUES ($1, 'Work', $2)`,
+		work.ID, pseudID); err != nil {
+		log.Printf("create work: creatorship: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
+		return
+	}
+
+	chapter := &models.Chapter{
+		ID:        uuid.New(),
+		WorkID:    work.ID,
+		Number:    1,
+		Title:     req.ChapterTitle,
+		Summary:   req.ChapterSummary,
+		Notes:     req.ChapterNotes,
+		EndNotes:  req.ChapterEndNotes,
+		Content:   req.ChapterContent,
+		WordCount: wordCount,
+		Status:    "draft",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if _, err = tx.Exec(`
+		INSERT INTO chapters (id, work_id, chapter_number, title, summary, notes, end_notes,
+			content, word_count, is_draft, created_at, updated_at)
+		VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, true, $9, $9)`,
+		chapter.ID, work.ID, chapter.Title, chapter.Summary, chapter.Notes, chapter.EndNotes,
+		chapter.Content, wordCount, now); err != nil {
+		log.Printf("create work: chapter: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
+		return
+	}
+
+	if err := attachTags(tx, work.ID, userID, req); err != nil {
+		log.Printf("create work: tags: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
+		return
+	}
+
 	if err = tx.Commit(); err != nil {
-		log.Printf("DEBUG ENHANCED: ERROR - Failed to commit transaction: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
 		return
 	}
-	log.Printf("DEBUG ENHANCED: Step 7 SUCCESS - Transaction committed")
 
-	// Step 8: Async processing
-	log.Printf("DEBUG ENHANCED: Step 8 - Starting async processing")
-	go ws.processWorkTags(workID, req)
-	go ws.indexWorkInSearch(workID, work)
-
-	log.Printf("DEBUG ENHANCED: ====== SUCCESS - Work created with ID: %s ======", workID)
-	c.JSON(http.StatusCreated, gin.H{"work": work})
+	c.JSON(http.StatusCreated, gin.H{"work": work, "first_chapter": chapter})
 }
 
-// processWorkTags processes and creates tag relationships for a work
-func (ws *WorkService) processWorkTags(workID uuid.UUID, req models.CreateWorkRequest) {
-	ctx := context.Background()
-
-	// Collect all tag names from different categories
-	var allTagNames []string
-	allTagNames = append(allTagNames, req.Fandoms...)
-	allTagNames = append(allTagNames, req.Characters...)
-	allTagNames = append(allTagNames, req.Relationships...)
-	allTagNames = append(allTagNames, req.FreeformTags...)
-	allTagNames = append(allTagNames, req.Category...)
-	allTagNames = append(allTagNames, req.Warnings...)
-	allTagNames = append(allTagNames, req.Rating)
-
-	// Get or create tags
-	var tagIDs []uuid.UUID
-	for _, tagName := range allTagNames {
-		if tagName == "" {
-			continue
-		}
-
-		tagID, err := ws.getOrCreateTag(ctx, tagName)
-		if err == nil && tagID != uuid.Nil {
-			tagIDs = append(tagIDs, tagID)
-		}
+// defaultPseud returns the user's default pseud, creating one named after
+// their username if they don't have one yet.
+func defaultPseud(tx *sql.Tx, userID uuid.UUID) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default = true`, userID).Scan(&id)
+	if err != sql.ErrNoRows {
+		return id, err
 	}
-
-	// Create work-tag relationships via tag service
-	if len(tagIDs) > 0 {
-		ws.addTagsToWork(ctx, workID, tagIDs)
-	}
+	err = tx.QueryRow(`
+		INSERT INTO pseuds (user_id, name, is_default)
+		SELECT id, username, true FROM users WHERE id = $1
+		RETURNING id`, userID).Scan(&id)
+	return id, err
 }
 
-// getOrCreateTag gets an existing tag or creates a new one
-func (ws *WorkService) getOrCreateTag(ctx context.Context, tagName string) (uuid.UUID, error) {
-	// First try to find existing tag
-	tagClient := NewTagServiceClient("http://tag-service:8083")
-
-	// Search for existing tag
-	searchURL := fmt.Sprintf("%s/api/v1/tags?q=%s&limit=1", tagClient.baseURL, tagName)
-	resp, err := tagClient.client.Get(searchURL)
-	if err != nil {
-		return uuid.Nil, err
+// attachTags links the work to each tag in the request, creating tags that
+// don't exist yet. Each list in the request says what type its tags are.
+func attachTags(tx *sql.Tx, workID, userID uuid.UUID, req models.CreateWorkRequest) error {
+	byType := []struct {
+		tagType string
+		names   []string
+	}{
+		{"fandom", req.Fandoms},
+		{"character", req.Characters},
+		{"relationship", req.Relationships},
+		{"freeform", req.FreeformTags},
+		{"warning", req.Warnings},
+		{"category", req.Category},
 	}
-	defer resp.Body.Close()
-
-	var searchResult struct {
-		Tags []models.Tag `json:"tags"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&searchResult); err == nil && len(searchResult.Tags) > 0 {
-		// Found existing tag
-		return searchResult.Tags[0].ID, nil
-	}
-
-	// Create new tag - but prevent fandom creation from user forms
-	tagType := ws.inferTagType(tagName)
-
-	// Restrict fandom creation to admin-only operations
-	if tagType == "fandom" {
-		return uuid.Nil, fmt.Errorf("fandom tags can only be created by administrators")
-	}
-
-	createReq := models.CreateTagRequest{
-		Name:         tagName,
-		Type:         tagType,
-		IsFilterable: true,
-	}
-
-	reqBody, _ := json.Marshal(createReq)
-	createURL := fmt.Sprintf("%s/api/v1/tags", tagClient.baseURL)
-
-	resp, err = tagClient.client.Post(createURL, "application/json", bytes.NewBuffer(reqBody))
-	if err != nil {
-		return uuid.Nil, err
-	}
-	defer resp.Body.Close()
-
-	var createResult struct {
-		Tag models.Tag `json:"tag"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&createResult); err == nil {
-		return createResult.Tag.ID, nil
-	}
-
-	return uuid.Nil, fmt.Errorf("failed to create tag")
-}
-
-// inferTagType attempts to determine tag type from name
-func (ws *WorkService) inferTagType(tagName string) string {
-	lower := strings.ToLower(tagName)
-
-	// Rating tags
-	ratings := []string{"general audiences", "teen and up audiences", "mature", "explicit"}
-	for _, rating := range ratings {
-		if strings.Contains(lower, rating) {
-			return "rating"
-		}
-	}
-
-	// Warning tags
-	warnings := []string{"violence", "death", "underage", "rape", "graphic"}
-	for _, warning := range warnings {
-		if strings.Contains(lower, warning) {
-			return "warning"
-		}
-	}
-
-	// Relationship indicators
-	if strings.Contains(lower, "/") || strings.Contains(lower, "&") {
-		return "relationship"
-	}
-
-	// Character indicators (usually proper nouns with multiple words or obvious names)
-	words := strings.Fields(tagName)
-	if len(words) >= 2 && len(words) <= 3 && strings.Title(tagName) == tagName {
-		// Common freeform tags that might be title-cased
-		commonFreeform := []string{"fluff", "angst", "hurt", "comfort", "smut", "crack", "fix", "au", "pwp"}
-		for _, freeform := range commonFreeform {
-			if strings.Contains(lower, freeform) {
-				return "freeform"
+	for _, group := range byType {
+		for _, name := range group.names {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			var tagID uuid.UUID
+			// On conflict, the no-op update makes RETURNING give the existing id.
+			err := tx.QueryRow(`
+				INSERT INTO tags (name, type, created_by) VALUES ($1, $2, $3)
+				ON CONFLICT (name) DO UPDATE SET name = tags.name
+				RETURNING id`, name, group.tagType, userID).Scan(&tagID)
+			if err != nil {
+				return fmt.Errorf("tag %q: %w", name, err)
+			}
+			if _, err := tx.Exec(`INSERT INTO work_tags (work_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+				workID, tagID); err != nil {
+				return fmt.Errorf("tag %q: %w", name, err)
 			}
 		}
-		return "character"
 	}
-
-	// Default to freeform
-	return "freeform"
-}
-
-// addTagsToWork adds tags to a work via tag service
-func (ws *WorkService) addTagsToWork(ctx context.Context, workID uuid.UUID, tagIDs []uuid.UUID) {
-	tagClient := NewTagServiceClient("http://tag-service:8083")
-
-	reqBody := map[string][]uuid.UUID{
-		"tag_ids": tagIDs,
-	}
-
-	body, _ := json.Marshal(reqBody)
-	url := fmt.Sprintf("%s/api/v1/works/%s/tags", tagClient.baseURL, workID)
-
-	resp, err := tagClient.client.Post(url, "application/json", bytes.NewBuffer(body))
-	if err == nil {
-		resp.Body.Close()
-	}
+	return nil
 }
 
 // indexWorkInSearch indexes a work in the search service
@@ -403,7 +217,7 @@ func (ws *WorkService) indexWorkInSearch(workID uuid.UUID, work *models.Work) {
 		"completion_status": work.Status,
 		"published_date":    work.CreatedAt,
 		"updated_date":      work.UpdatedAt,
-		"author_ids":        []string{work.UserID.String()},
+		"author_ids":        authorIDs(work),
 		"author_names":      []string{}, // TODO: fetch author name if needed
 		"hits":              work.Hits,
 		"kudos":             work.Kudos,
@@ -423,6 +237,15 @@ func (ws *WorkService) indexWorkInSearch(workID uuid.UUID, work *models.Work) {
 		log.Printf("ERROR: Failed to index work %s: %v", workID, err)
 	}
 
+}
+
+// authorIDs is what the search index may know about a work's authors:
+// nothing, for anonymous works.
+func authorIDs(work *models.Work) []string {
+	if work.IsAnonymous || work.InAnonCollection {
+		return []string{}
+	}
+	return []string{work.UserID.String()}
 }
 
 // GetWorkWithTags retrieves a work with all its tags from tag service
@@ -465,26 +288,26 @@ func (ws *WorkService) GetWorkWithTags(c *gin.Context) {
 	go ws.incrementHits(workID)
 }
 
-// getWorkTags retrieves tags for a work from tag service
+// getWorkTags returns the tags attached to a work.
 func (ws *WorkService) getWorkTags(workID uuid.UUID) ([]models.Tag, error) {
-	tagClient := NewTagServiceClient("http://tag-service:8083")
-	url := fmt.Sprintf("%s/api/v1/works/%s/tags", tagClient.baseURL, workID)
-
-	resp, err := tagClient.client.Get(url)
+	rows, err := ws.db.Query(`
+		SELECT t.id, t.name, t.type, COALESCE(t.is_canonical, false)
+		FROM work_tags wt JOIN tags t ON t.id = wt.tag_id
+		WHERE wt.work_id = $1
+		ORDER BY t.type, t.name`, workID)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Tags []models.Tag `json:"tags"`
+	defer rows.Close()
+	var tags []models.Tag
+	for rows.Next() {
+		var t models.Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Type, &t.IsCanonical); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
 	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Tags, nil
+	return tags, rows.Err()
 }
 
 // UpdateWorkStatistics updates work statistics in real-time

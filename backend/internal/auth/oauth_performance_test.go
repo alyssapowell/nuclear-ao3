@@ -37,6 +37,12 @@ type OAuth2PerformanceTestSuite struct {
 }
 
 func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
+	// These are load tests (thousands of OAuth flows); they don't belong in
+	// the normal test run.
+	if os.Getenv("RUN_PERF_TESTS") == "" {
+		suite.T().Skip("load test; set RUN_PERF_TESTS=1 to run")
+	}
+
 	// Use test database
 	testDB := os.Getenv("TEST_DATABASE_URL")
 	if testDB == "" {
