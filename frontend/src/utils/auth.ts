@@ -120,3 +120,20 @@ export function useAuth(): AuthState & { logout: () => void } {
 
   return { ...authState, logout };
 }
+
+/**
+ * Where to send someone after they log in or sign up, from a `?redirect=`
+ * value. Only addresses on this site are allowed: anything else (another
+ * site, `//other.site`, `javascript:`) becomes the home page, so a link can't
+ * use the login page to send people elsewhere or run code.
+ */
+export function safeRedirect(raw: string | null): string {
+  if (!raw) return '/';
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return '/';
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return '/';
+  }
+}

@@ -162,6 +162,8 @@ These were fixed by merging the backend into one program with one login check (`
 14. ~~Any logged-in user could delete anyone's notification~~ by ID. **Fixed:** the delete only matches the owner's rows, and returns 404 otherwise.
 15. ~~An OAuth consent request wasn't tied to the user who saw it~~, so another user could approve it. **Fixed:** the consent records its user, is checked on approval, and can be used only once.
 
+- ~~The login and sign-up pages followed any `?redirect=` address~~, so a crafted link could send people to another site after they logged in, or run code in their session with `javascript:`. **Fixed 2026-10-30:** only addresses on this site are followed (`safeRedirect` in `frontend/src/utils/auth.ts`).
+
 ### Still open
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.

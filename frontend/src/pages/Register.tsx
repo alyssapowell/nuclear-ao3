@@ -1,3 +1,4 @@
+import { safeRedirect } from '@/utils/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, Suspense } from 'react';
 import { register as registerRequest } from '@/lib/api';
@@ -27,7 +28,7 @@ function RegisterContent() {
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('auth_token');
       if (token) {
-        const redirect = searchParams.get('redirect') || '/';
+        const redirect = safeRedirect(searchParams.get('redirect'));
         navigate(redirect, { replace: true });
       }
     }
@@ -81,7 +82,7 @@ function RegisterContent() {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Redirect to the intended page or home with full reload to update all components
-        const redirect = searchParams.get('redirect') || '/';
+        const redirect = safeRedirect(searchParams.get('redirect'));
         window.location.href = redirect;
       } else {
         setError('Registration failed. Please try again.');
