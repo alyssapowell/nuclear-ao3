@@ -70,15 +70,13 @@ Status key:
 
 ## Search
 
-- **Search works, tags, users, collections, series; advanced and "smart" filtered search; suggestions**
-  - Status: Unverified. Runs on Elasticsearch today; planned to move to Postgres full-text search.
-- **Search history, saved searches, search alerts**
-  - Status: Unverified.
-- **Search analytics**: popular terms, zero-result terms, trends, tag-quality insights.
-  - Intent _(inferred)_: help wranglers and admins see what readers can't find.
-  - Status: Unverified. **Revisit: needed at launch?**
-- **Index management**: rebuild, optimize, index or delete individual records.
-  - Status: Admin-only (fixed 2026-10-29; it used to be open to anyone).
+- **Work search** with AO3's filters and sort orders, plus counts of the most common ratings and tags in the results (`GET /api/v1/search/works`)
+  - Status: **Working** (2026-10-30). Runs in Postgres; tested against a real database for drafts, restricted works, blocks, anonymity and each filter (`backend/internal/search/works_test.go`).
+- **Search-box suggestions**: works, tags and pseuds that start with what's typed (`GET /api/v1/search/suggestions`)
+  - Status: **Working** (2026-10-30).
+- **Tag search and people search** (AO3 has both)
+  - Status: **Not built.** Tag autocomplete exists (`/api/v1/tags/autocomplete`); full tag and people search pages don't.
+- Removed 2026-10-30 because nothing used them and AO3 doesn't have them: search history, saved searches and alerts, search analytics, "smart" and quality-scored search, and index management. See DECISIONS.md.
 
 ## Notifications and subscriptions
 
@@ -181,4 +179,8 @@ These were fixed by merging the backend into one program with one login check (`
 - **Block, mute and report crashed on every request** (500) because of a type mismatch; fixed 2026-10-29.
 - **118 of 422 frontend unit tests fail.** They all failed before the Vite move too (compared test by test). Two suites that tested components that don't exist (`LoginForm`) were deleted, and two Next.js config checks were replaced by a check that every page has a route.
 - ~~The dashboard, subscriptions page, work page and subscribe/gift buttons never knew who was logged in~~: they used a stub `useAuth` that always returned nobody, so the dashboard showed "Loading" forever. **Fixed 2026-10-30:** they use the real one (`src/utils/auth.ts`). It now returns the same objects between renders, because the subscriptions page re-fetched in a loop until rate-limited.
+- ~~Search never returned anything~~: works were never sent to Elasticsearch (the code that did it had no callers), and the website's search client crashed on its own address handling. A search with no matches also showed every work instead. **Fixed 2026-10-30** by the move to Postgres search.
+- **The works and auth test suites use the developer's own Postgres** (`localhost:5432/ao3_nuclear`) instead of a fresh database, so results depend on that machine. They should use `internal/testdb`, which builds a migrated database per test, as the search tests do.
+- **`scripts/backup-restore.sh` and `scripts/health-monitor.sh` name the old staging containers** (`nuclear-ao3-staging-*`), so they don't work with `docker-compose.yml`. `make backup-db` does work. Due for replacement in the monitoring and runbook work.
+- **Work gifts need a login to read** (`GET /works/:work_id/gifts` is behind `RequireUser`). On AO3, gifts show to everyone.
 - **API endpoints the website calls that fail** (seen 2026-10-30 with a fresh database): `GET /my/bookmarks` returns 500 ("Failed to count bookmarks"); the profile and pseud endpoints return 404; work gifts return 401 for logged-out readers, so the work page shows "Error loading gifts".

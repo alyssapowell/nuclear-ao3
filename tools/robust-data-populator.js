@@ -592,39 +592,6 @@ class RobustDataPopulator {
     console.log(`   ✅ Created ${this.stats.works} works total`);
   }
 
-  async updateElasticsearchIndex() {
-    console.log('\n🔍 Updating Elasticsearch index...');
-    
-    try {
-      // Run the existing sync script
-      const { spawn } = require('child_process');
-      
-      return new Promise((resolve, reject) => {
-        const syncProcess = spawn('node', ['unified-elasticsearch-sync.js'], {
-          cwd: __dirname,
-          stdio: 'inherit'
-        });
-        
-        syncProcess.on('close', (code) => {
-          if (code === 0) {
-            console.log('   ✅ Elasticsearch index updated successfully');
-            resolve();
-          } else {
-            console.log('   ⚠️ Elasticsearch sync completed with warnings');
-            resolve(); // Don't fail the whole process
-          }
-        });
-        
-        syncProcess.on('error', (error) => {
-          console.log(`   ⚠️ Elasticsearch sync error: ${error.message}`);
-          resolve(); // Don't fail the whole process
-        });
-      });
-    } catch (error) {
-      console.log(`   ⚠️ Could not update Elasticsearch: ${error.message}`);
-    }
-  }
-
   async generateFinalReport() {
     console.log('\n📊 Final Data Population Report');
     console.log('====================================');
@@ -727,9 +694,6 @@ async function main() {
     
     // Create 15k works with full metadata
     await populator.createWorks(15000);
-    
-    // Update Elasticsearch index
-    await populator.updateElasticsearchIndex();
     
     // Generate final report
     await populator.generateFinalReport();

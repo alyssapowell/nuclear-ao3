@@ -2,7 +2,6 @@ package works
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -193,59 +192,6 @@ func attachTags(tx *sql.Tx, workID, userID uuid.UUID, req models.CreateWorkReque
 		}
 	}
 	return nil
-}
-
-// indexWorkInSearch indexes a work in the search service
-func (ws *WorkService) indexWorkInSearch(workID uuid.UUID, work *models.Work) {
-	log.Printf("DEBUG: Starting indexing for work %s", workID)
-
-	// Prepare work data for search indexing in the format expected by search service
-	searchDoc := map[string]interface{}{
-		"work_id":           workID.String(),
-		"title":             work.Title,
-		"summary":           work.Summary,
-		"rating":            work.Rating,
-		"language":          work.Language,
-		"fandoms":           work.Fandoms,
-		"characters":        work.Characters,
-		"relationships":     work.Relationships,
-		"additional_tags":   work.FreeformTags,
-		"warnings":          work.Warnings,
-		"categories":        []string{}, // TODO: extract from work.Category if needed
-		"word_count":        work.WordCount,
-		"chapter_count":     work.ChapterCount,
-		"completion_status": work.Status,
-		"published_date":    work.CreatedAt,
-		"updated_date":      work.UpdatedAt,
-		"author_ids":        authorIDs(work),
-		"author_names":      []string{}, // TODO: fetch author name if needed
-		"hits":              work.Hits,
-		"kudos":             work.Kudos,
-		"comments":          work.Comments,
-		"bookmarks":         work.Bookmarks,
-		"collections":       []string{},
-		"series":            []string{},
-		"is_restricted":     work.RestrictedToUsers,
-		"is_anonymous":      work.IsAnonymous,
-	}
-
-	if ws.indexWork == nil {
-		return // search is disabled
-	}
-	body, _ := json.Marshal(searchDoc)
-	if err := ws.indexWork(workID.String(), body); err != nil {
-		log.Printf("ERROR: Failed to index work %s: %v", workID, err)
-	}
-
-}
-
-// authorIDs is what the search index may know about a work's authors:
-// nothing, for anonymous works.
-func authorIDs(work *models.Work) []string {
-	if work.IsAnonymous || work.InAnonCollection {
-		return []string{}
-	}
-	return []string{work.UserID.String()}
 }
 
 // GetWorkWithTags retrieves a work with all its tags from tag service

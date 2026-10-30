@@ -55,12 +55,12 @@ jobs:
             
             # Stop only infrastructure services
             echo '🛑 Stopping infrastructure services...'
-            docker-compose stop postgres redis elasticsearch prometheus grafana loki || true
+            docker-compose stop postgres redis prometheus grafana loki || true
             
             # Build and start infrastructure services
             echo '🏗️ Building and starting infrastructure services...'
-            docker-compose build --parallel postgres redis elasticsearch prometheus grafana loki
-            docker-compose up -d postgres redis elasticsearch prometheus grafana loki
+            docker-compose build --parallel postgres redis prometheus grafana loki
+            docker-compose up -d postgres redis prometheus grafana loki
             
             # Wait for databases to be ready
             echo '⏳ Waiting for databases to be ready...'
@@ -73,8 +73,7 @@ jobs:
             while [ \$attempt -lt \$max_attempts ]; do
               echo '⏳ Database health check attempt \$((attempt + 1))/\$max_attempts...'
               if docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && \
-                 docker-compose exec -T redis redis-cli ping >/dev/null 2>&1 && \
-                 curl -f http://localhost:9200/_cluster/health >/dev/null 2>&1; then
+                 docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
                 echo '✅ All databases are healthy!'
                 break
               else
@@ -92,7 +91,7 @@ jobs:
             fi
             
             echo '📊 Final infrastructure status:'
-            docker-compose ps postgres redis elasticsearch prometheus grafana loki
+            docker-compose ps postgres redis prometheus grafana loki
             
             echo '✅ Nuclear AO3 infrastructure deployment complete!'
           "

@@ -1,3 +1,4 @@
+import { getAuthToken } from '@/utils/auth';
 // Legacy REST API client for Nuclear AO3 (updated to use API Gateway)
 // Note: Consider migrating to GraphQL client in graphql.ts for enhanced features
 
@@ -10,43 +11,66 @@ const getApiGatewayUrl = () => {
 const API_GATEWAY_URL = getApiGatewayUrl();
 
 export interface SearchParams {
-  q?: string;                    // General search query
-  fandom?: string[];             // Fandoms filter (alias for fandoms)
-  fandoms?: string[];            // Fandoms filter
-  character?: string[];          // Characters filter (alias for characters)
-  characters?: string[];         // Characters filter
-  relationship?: string[];       // Relationships filter (alias for relationships) 
-  relationships?: string[];      // Relationships filter
-  tag?: string[];               // Freeform tags filter (alias for tags)
-  tags?: string[];              // Freeform tags filter
-  rating?: string[];            // Rating filter
-  category?: string[];          // Category filter
-  warning?: string[];           // Warnings filter (alias for warnings)
-  warnings?: string[];          // Warnings filter
-  language?: string[];          // Language filter
-  status?: string;              // Completion status (all, complete, in-progress)
-  wordCountMin?: number;        // Minimum word count
-  wordCountMax?: number;        // Maximum word count
-  relationshipCount?: string;   // Relationship count filter ('1-2', '3-5', '6-10', '10+')
-  tagProminence?: string;       // Tag prominence filter ('primary', 'secondary', 'any')
-  // Content filtering
-  blockedTags?: string[];       // Tags to exclude from results
-  hideIncomplete?: boolean;     // Hide incomplete works
-  hideCrossovers?: boolean;     // Hide crossover works
-  hideNoRelationships?: boolean; // Hide gen fic
-  // Date filtering
-  updatedWithin?: string;       // 'week', 'month', '3months', 'year'
-  publishedAfter?: string;      // ISO date string
-  publishedBefore?: string;     // ISO date string
-  // Engagement filtering
-  minKudos?: number;           // Minimum kudos count
-  minComments?: number;        // Minimum comments count
-  minBookmarks?: number;       // Minimum bookmarks count
-  hideOrphaned?: boolean;      // Hide orphaned works
-  sort?: 'title' | 'updated_at' | 'created_at' | 'published_at' | 'word_count' | 'hits' | 'kudos' | 'comments' | 'bookmarks' | 'relevance' | 'quality_score' | 'engagement_rate' | 'comment_quality' | 'discovery_boost';
-  order?: 'asc' | 'desc';
   page?: number;
   limit?: number;
+  sort?: 'relevance' | 'updated_at' | 'published_at' | 'title' | 'word_count' | 'hits' | 'kudos' | 'comments' | 'bookmarks';
+  order?: 'asc' | 'desc';
+  rating?: string[];         // "General Audiences" or "general" both work
+  fandoms?: string[];        // works must have all of these
+  characters?: string[];
+  relationships?: string[];
+  tags?: string[];           // additional (freeform) tags
+  blockedTags?: string[];    // works with any of these tags are left out
+  category?: string[];
+  warnings?: string[];
+  language?: string[];
+  wordCountMin?: number;
+  wordCountMax?: number;
+  kudosMin?: number;
+  commentsMin?: number;
+  status?: string;           // 'complete', 'in-progress' or 'all'
+  updatedWithin?: string;    // 'week', 'month', '3months', 'year'
+  hideCrossovers?: boolean;
+  creator?: string;          // a pseud name
+}
+
+// A work's creator, as the API shows it: by pseud only.
+export interface WorkAuthor {
+  id: string;
+  name: string;
+}
+
+export interface WorkSearchResult {
+  id: string;
+  title: string;
+  summary: string;
+  authors: WorkAuthor[];     // empty for anonymous works
+  anonymous: boolean;
+  rating: string;
+  warnings: string[];
+  categories: string[];
+  language: string;
+  fandoms: string[];
+  characters: string[];
+  relationships: string[];
+  freeform_tags: string[];
+  word_count: number;
+  chapter_count: number;
+  max_chapters: number | null;
+  is_complete: boolean;
+  kudos_count: number;
+  hit_count: number;
+  comment_count: number;
+  bookmark_count: number;
+  published_at: string | null;
+  updated_at: string;
+}
+
+export interface WorkSearchResponse {
+  works: WorkSearchResult[];
+  total: number;
+  pagination: { page: number; limit: number; total: number; pages: number };
+  facets: Record<string, { name: string; count: number }[]>;
 }
 
 // Tag suggestion and autocomplete types
@@ -108,161 +132,76 @@ export async function getTagSuggestions(request: TagAutoCompleteRequest): Promis
   }
 }
 
-// Search works using the dedicated Search Service with faceting support
-export async function searchWorks(query: string, searchParams?: SearchParams) {
-  try {
-    // Use the Search Service for all searches to get faceting and advanced features
-    const searchUrl = new URL(`${API_GATEWAY_URL}/api/v1/search/works`);
-    
-    // Add query parameters
-    if (query) {
-      searchUrl.searchParams.append('q', query);
-    }
-    if (searchParams?.page) {
-      searchUrl.searchParams.append('page', searchParams.page.toString());
-    }
-    if (searchParams?.limit) {
-      searchUrl.searchParams.append('limit', searchParams.limit.toString());
-    }
-    if (searchParams?.sort) {
-      searchUrl.searchParams.append('sort', searchParams.sort);
-    }
-
-    // Add filters as query parameters
-    if (searchParams?.rating?.length) {
-      searchParams.rating.forEach(rating => searchUrl.searchParams.append('rating', rating));
-    }
-    if (searchParams?.fandoms?.length) {
-      searchParams.fandoms.forEach(fandom => searchUrl.searchParams.append('fandoms', fandom));
-    }
-    if (searchParams?.characters?.length) {
-      searchParams.characters.forEach(character => searchUrl.searchParams.append('characters', character));
-    }
-    if (searchParams?.relationships?.length) {
-      searchParams.relationships.forEach(relationship => searchUrl.searchParams.append('relationships', relationship));
-    }
-    if (searchParams?.tags?.length) {
-      searchParams.tags.forEach(tag => searchUrl.searchParams.append('tags', tag));
-    }
-    if (searchParams?.category?.length) {
-      searchParams.category.forEach(category => searchUrl.searchParams.append('category', category));
-    }
-    if (searchParams?.warnings?.length) {
-      searchParams.warnings.forEach(warning => searchUrl.searchParams.append('warnings', warning));
-    }
-    if (searchParams?.language?.length) {
-      searchParams.language.forEach(language => searchUrl.searchParams.append('languages', language));
-    }
-    if (searchParams?.wordCountMin) {
-      searchUrl.searchParams.append('word_count_min', searchParams.wordCountMin.toString());
-    }
-    if (searchParams?.wordCountMax) {
-      searchUrl.searchParams.append('word_count_max', searchParams.wordCountMax.toString());
-    }
-    if (searchParams?.status && searchParams.status !== 'all') {
-      searchUrl.searchParams.append('status', searchParams.status);
-    }
-
-    const response = await fetch(searchUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      // Fallback to Works API for basic listing if search service fails
-      console.log('Search service failed, falling back to Works API');
-      const basicParams = new URLSearchParams();
-      if (searchParams?.limit) basicParams.append('limit', searchParams.limit.toString());
-      if (searchParams?.page) basicParams.append('page', searchParams.page.toString());
-      
-      const fallbackUrl = `${API_GATEWAY_URL}/api/v1/works/${basicParams.toString() ? '?' + basicParams.toString() : ''}`;
-      
-      const fallbackResponse = await fetch(fallbackUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        return {
-          works: fallbackData.works || [],
-          total: fallbackData.pagination?.total || fallbackData.works?.length || 0,
-          pagination: fallbackData.pagination || {
-            page: 1,
-            limit: 20,
-            pages: 1,
-            total: fallbackData.works?.length || 0
-          },
-          facets: {} // No facets from Works API
-        };
-      }
-      
-      throw new Error(`Search service and fallback both failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    // Check if search service returned no results and fallback to Works API
-    if ((data.total === 0 || !data.results || data.results.length === 0) && query) {
-      console.log('Search service returned no results, falling back to Works API');
-      const basicParams = new URLSearchParams();
-      if (searchParams?.limit) basicParams.append('limit', searchParams.limit.toString());
-      if (searchParams?.page) basicParams.append('page', searchParams.page.toString());
-      
-      const fallbackUrl = `${API_GATEWAY_URL}/api/v1/works/${basicParams.toString() ? '?' + basicParams.toString() : ''}`;
-      
-      const fallbackResponse = await fetch(fallbackUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        return {
-          works: fallbackData.works || [],
-          results: fallbackData.works || [],
-          total: fallbackData.pagination?.total || fallbackData.works?.length || 0,
-          facets: data.facets || {}, // Keep facets structure even for fallback
-          pagination: fallbackData.pagination || {
-            page: 1,
-            limit: 20,
-            pages: 1,
-            total: fallbackData.works?.length || 0
-          }
-        };
-      }
-    }
-    
-    // Search service returns results in a different format
-    return {
-      works: data.results || [],
-      results: data.results || [],
-      total: data.total || 0,
-      facets: data.facets || {},
-      pagination: {
-        page: data.page || 1,
-        limit: data.limit || 20,
-        pages: data.pages || 1,
-        total: data.total || 0
-      }
-    };
-    
-  } catch (error) {
-    console.error('Search API error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
+// Logged-in readers send their token, so search includes works that are
+// restricted to logged-in users.
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
 }
 
-export async function getWorks(searchParams?: SearchParams) {
+// Searches works (GET /api/v1/search/works). The search runs in Postgres
+// and only returns works the reader may see; with no matches, `works` is
+// empty. Filters left out aren't applied.
+export async function searchWorks(query: string, searchParams: SearchParams = {}): Promise<WorkSearchResponse> {
+  const params = new URLSearchParams();
+  const add = (name: string, value: string | number | undefined) => {
+    if (value !== undefined && value !== '') params.append(name, String(value));
+  };
+  const addAll = (name: string, values: string[] | undefined) => values?.forEach(v => add(name, v));
+
+  add('q', query);
+  add('page', searchParams.page);
+  add('limit', searchParams.limit);
+  add('sort', searchParams.sort);
+  add('order', searchParams.order);
+  addAll('rating', searchParams.rating);
+  addAll('fandoms', searchParams.fandoms);
+  addAll('characters', searchParams.characters);
+  addAll('relationships', searchParams.relationships);
+  addAll('tags', searchParams.tags);
+  addAll('exclude_tags', searchParams.blockedTags);
+  addAll('category', searchParams.category);
+  addAll('warnings', searchParams.warnings);
+  addAll('languages', searchParams.language);
+  add('word_count_min', searchParams.wordCountMin);
+  add('word_count_max', searchParams.wordCountMax);
+  add('kudos_min', searchParams.kudosMin);
+  add('comments_min', searchParams.commentsMin);
+  if (searchParams.status && searchParams.status !== 'all') add('status', searchParams.status);
+  add('updated_within', searchParams.updatedWithin);
+  if (searchParams.hideCrossovers) add('crossovers', 'exclude');
+  add('creator', searchParams.creator);
+
+  const response = await fetch(`${API_GATEWAY_URL}/api/v1/search/works?${params.toString()}`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `Search failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// Filters for the plain works listing (GET /api/v1/works).
+export interface WorkListParams {
+  q?: string;
+  fandom?: string[];
+  character?: string[];
+  relationship?: string[];
+  tag?: string[];
+  rating?: string[];
+  category?: string[];
+  warning?: string[];
+  sort?: string;
+  order?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+export async function getWorks(searchParams?: WorkListParams) {
   try {
     // Build query string
     const params = new URLSearchParams();
@@ -2034,103 +1973,9 @@ export async function getSearchSuggestions(query: string) {
   }
 }
 
-export async function getPopularSearches() {
-  try {
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/search/popular`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Popular searches failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('Popular searches failed:', error)
-    return []
-  }
-}
 
-export async function getTrendingSearches() {
-  try {
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/search/trending`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Trending searches failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('Trending searches failed:', error)
-    return []
-  }
-}
 
-export async function getSmartFilters(query: string, currentFilters: any) {
-  try {
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/search/facets/smart`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        current_filters: currentFilters,
-        limit: 20
-      })
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Smart filters failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('Smart filters failed:', error)
-    return {}
-  }
-}
 
-export async function searchUsers(query: string, searchParams?: any) {
-  try {
-    const searchUrl = new URL(`${API_GATEWAY_URL}/api/v1/search/users`);
-    
-    if (query) {
-      searchUrl.searchParams.append('q', query);
-    }
-    if (searchParams?.limit) {
-      searchUrl.searchParams.append('limit', searchParams.limit.toString());
-    }
-    if (searchParams?.page) {
-      searchUrl.searchParams.append('page', searchParams.page.toString());
-    }
-
-    const response = await fetch(searchUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`User search failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('User search failed:', error)
-    throw error
-  }
-}
 
 // Browse collections (uses work-service collections endpoint)
 export async function browseCollections(params: {
@@ -2163,69 +2008,7 @@ export async function browseCollections(params: {
   }
 }
 
-export async function searchCollections(query: string, searchParams?: any) {
-  try {
-    const searchUrl = new URL(`${API_GATEWAY_URL}/api/v1/search/collections`);
-    
-    if (query) {
-      searchUrl.searchParams.append('q', query);
-    }
-    if (searchParams?.limit) {
-      searchUrl.searchParams.append('limit', searchParams.limit.toString());
-    }
-    if (searchParams?.page) {
-      searchUrl.searchParams.append('page', searchParams.page.toString());
-    }
 
-    const response = await fetch(searchUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Collection search failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('Collection search failed:', error)
-    throw error
-  }
-}
-
-export async function searchSeries(query: string, searchParams?: any) {
-  try {
-    const searchUrl = new URL(`${API_GATEWAY_URL}/api/v1/search/series`);
-    
-    if (query) {
-      searchUrl.searchParams.append('q', query);
-    }
-    if (searchParams?.limit) {
-      searchUrl.searchParams.append('limit', searchParams.limit.toString());
-    }
-    if (searchParams?.page) {
-      searchUrl.searchParams.append('page', searchParams.page.toString());
-    }
-
-    const response = await fetch(searchUrl.toString(), {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Series search failed: ${response.status}`)
-    }
-    
-    return await response.json()
-  } catch (error) {
-    console.error('Series search failed:', error)
-    throw error
-  }
-}
 
 export async function getPopularTags(type?: 'fandom' | 'character' | 'relationship' | 'freeform') {
   try {

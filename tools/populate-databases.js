@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Database Population Script
- * Loads the comprehensive fanfiction dataset into PostgreSQL and Elasticsearch
+ * Loads the comprehensive fanfiction dataset into PostgreSQL. Search reads
+ * the works table directly, so there's no separate index to fill.
  */
 
 const fs = require('fs');
@@ -16,8 +17,6 @@ const pgConfig = {
   user: 'ao3_user',
   password: 'ao3_password'
 };
-
-const elasticsearchUrl = 'http://localhost:9200';
 
 class DatabasePopulator {
   constructor() {
@@ -80,105 +79,8 @@ class DatabasePopulator {
         }
       }
 
-      // Clear Elasticsearch index
-      try {
-        const response = await fetch(`${elasticsearchUrl}/works`, {
-          method: 'DELETE'
-        });
-        console.log(`  ✅ Cleared Elasticsearch works index`);
-      } catch (error) {
-        console.log(`  ⚠️  Could not clear Elasticsearch: ${error.message}`);
-      }
-
     } catch (error) {
       console.error('❌ Error clearing data:', error.message);
-    }
-  }
-
-  async createElasticsearchIndex() {
-    console.log('🔍 Creating Elasticsearch index...');
-    
-    const indexMapping = {
-      mappings: {
-        properties: {
-          id: { type: 'keyword' },
-          title: { 
-            type: 'text',
-            analyzer: 'standard',
-            fields: {
-              keyword: { type: 'keyword' },
-              suggest: { type: 'completion' }
-            }
-          },
-          summary: { type: 'text', analyzer: 'standard' },
-          author: { 
-            type: 'text',
-            fields: { keyword: { type: 'keyword' } }
-          },
-          word_count: { type: 'integer' },
-          chapter_count: { type: 'integer' },
-          max_chapters: { type: 'integer' },
-          rating: { type: 'keyword' },
-          status: { type: 'keyword' },
-          language: { type: 'keyword' },
-          published_date: { type: 'date' },
-          updated_date: { type: 'date' },
-          kudos_count: { type: 'integer' },
-          comment_count: { type: 'integer' },
-          bookmark_count: { type: 'integer' },
-          hit_count: { type: 'integer' },
-          tag_quality_score: { type: 'float' },
-          fandoms: {
-            type: 'nested',
-            properties: {
-              name: { type: 'keyword' },
-              category: { type: 'keyword' },
-              is_canonical: { type: 'boolean' }
-            }
-          },
-          characters: {
-            type: 'nested',
-            properties: {
-              name: { type: 'keyword' },
-              category: { type: 'keyword' },
-              is_canonical: { type: 'boolean' }
-            }
-          },
-          relationships: {
-            type: 'nested',
-            properties: {
-              name: { type: 'keyword' },
-              category: { type: 'keyword' },
-              is_canonical: { type: 'boolean' }
-            }
-          },
-          freeform_tags: {
-            type: 'nested',
-            properties: {
-              name: { type: 'keyword' },
-              category: { type: 'keyword' },
-              is_canonical: { type: 'boolean' }
-            }
-          }
-        }
-      }
-    };
-
-    try {
-      const response = await fetch(`${elasticsearchUrl}/works`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(indexMapping)
-      });
-      
-      if (response.ok) {
-        console.log('✅ Created Elasticsearch index mapping');
-      } else {
-        const error = await response.text();
-        console.error('❌ Failed to create Elasticsearch index:', error);
-      }
-    } catch (error) {
-      console.error('❌ Error creating Elasticsearch index:', error.message);
     }
   }
 
@@ -337,56 +239,19 @@ class DatabasePopulator {
     }
   }
 
-  async insertElasticsearchBatch(works) {
-    const bulkBody = [];
-    
-    for (const work of works) {
-      bulkBody.push({ index: { _index: 'works', _id: work.id } });
-      bulkBody.push(work);
-    }
-
-    try {
-      const response = await fetch(`${elasticsearchUrl}/_bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: bulkBody.map(item => JSON.stringify(item)).join('\n') + '\n'
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Elasticsearch bulk insert error:', error);
-      }
-    } catch (error) {
-      console.error('Error inserting to Elasticsearch:', error.message);
-    }
-  }
-
   async populateDatabases() {
     console.log('🚀 Starting database population...');
     const startTime = Date.now();
 
     let processed = 0;
     const total = this.works.length;
-    let elasticsearchBatch = [];
 
     for (const work of this.works) {
       // Insert to PostgreSQL
       const workId = await this.insertWork(work);
       
       if (workId) {
-        // Add to Elasticsearch batch only if work was successfully inserted
-        const esDoc = {
-          ...work,
-          id: workId.toString()
-        };
-        elasticsearchBatch.push(esDoc);
         processed++;
-      }
-
-      // Process Elasticsearch batch
-      if (elasticsearchBatch.length >= this.batchSize) {
-        await this.insertElasticsearchBatch(elasticsearchBatch);
-        elasticsearchBatch = [];
       }
 
       // Progress reporting
@@ -398,11 +263,6 @@ class DatabasePopulator {
       }
     }
 
-    // Process remaining Elasticsearch batch
-    if (elasticsearchBatch.length > 0) {
-      await this.insertElasticsearchBatch(elasticsearchBatch);
-    }
-
     const elapsed = (Date.now() - startTime) / 1000;
     console.log(`✅ Population complete! Processed ${processed.toLocaleString()} works in ${elapsed.toFixed(1)} seconds`);
   }
@@ -412,7 +272,6 @@ class DatabasePopulator {
       await this.loadDataset();
       await this.connect();
       await this.clearExistingData();
-      await this.createElasticsearchIndex();
       await this.populateDatabases();
       
       console.log('\n📊 Final Statistics:');
@@ -431,16 +290,6 @@ class DatabasePopulator {
       console.log(`  Works: ${pgStats.rows[0].works.toLocaleString()}`);
       console.log(`  Tags: ${pgStats.rows[0].tags.toLocaleString()}`);
       console.log(`  Work-Tag relationships: ${pgStats.rows[0].work_tags.toLocaleString()}`);
-
-      // Elasticsearch stats
-      try {
-        const esResponse = await fetch(`${elasticsearchUrl}/works/_count`);
-        const esData = await esResponse.json();
-        console.log('Elasticsearch:');
-        console.log(`  Indexed works: ${esData.count.toLocaleString()}`);
-      } catch (error) {
-        console.log('Elasticsearch: Could not retrieve stats');
-      }
 
     } catch (error) {
       console.error('❌ Population failed:', error.message);

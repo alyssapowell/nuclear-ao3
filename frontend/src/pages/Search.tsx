@@ -108,33 +108,6 @@ export default function SearchPage() {
             </div>
           ) : searchResults.length > 0 ? (
             <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Search Results ({searchResults.length} works)
-                </h2>
-                <div className="flex gap-2">
-                  <select className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500">
-                    <optgroup label="Smart Sorting (Anti-Gaming)">
-                      <option value="quality_score">🏆 Quality Score</option>
-                      <option value="engagement_rate">📊 Engagement Rate</option>
-                      <option value="comment_quality">💬 Discussion Quality</option>
-                      <option value="discovery_boost">🔍 Discovery Boost</option>
-                    </optgroup>
-                    <optgroup label="Traditional Sorting">
-                      <option value="relevance">Best Match</option>
-                      <option value="updated_at">Recently Updated</option>
-                      <option value="published_at">Recently Published</option>
-                      <option value="word_count">Word Count</option>
-                    </optgroup>
-                    <optgroup label="Raw Numbers (Gaming-Prone)">
-                      <option value="kudos">Most Kudos</option>
-                      <option value="hits">Most Hits</option>
-                      <option value="bookmarks">Most Bookmarks</option>
-                      <option value="comments">Most Comments</option>
-                    </optgroup>
-                  </select>
-                </div>
-              </div>
               <SearchResults results={searchResults} onWorkClick={handleWorkClick} />
             </div>
           ) : (

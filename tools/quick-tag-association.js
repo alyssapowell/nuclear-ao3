@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const { Client } = require('pg');
-const axios = require('axios');
 
 const config = {
   database: {
@@ -79,27 +78,6 @@ async function associateTagsWithWorks() {
       ]);
       
       console.log(`📝 Updated work title to: "${newTitle}"`);
-    }
-    
-    console.log('\n🔄 Triggering Elasticsearch re-sync...');
-    
-    // Trigger re-sync of updated works
-    try {
-      const response = await axios.post('http://localhost:8080/api/v1/search/reindex');
-      console.log('✅ Elasticsearch re-sync triggered successfully');
-    } catch (error) {
-      console.log('⚠️ Re-sync endpoint not available, manually syncing...');
-      
-      // Manual sync using the existing sync script
-      const { exec } = require('child_process');
-      exec('cd /Users/alyssapowell/Documents/projects/otwarchive/nuclear-ao3/tools && node unified-elasticsearch-sync.js', (error, stdout, stderr) => {
-        if (error) {
-          console.error('❌ Manual sync failed:', error);
-        } else {
-          console.log('✅ Manual sync completed');
-          console.log(stdout);
-        }
-      });
     }
     
     console.log('\n🎉 Quick tag association complete!');

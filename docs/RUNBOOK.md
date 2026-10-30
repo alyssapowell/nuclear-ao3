@@ -25,7 +25,7 @@ There are no built-in accounts or default passwords.
 1. **Back up first:** `make backup-db`.
 2. Get the new version and rebuild: `git pull && docker-compose build app`.
 3. `docker-compose up -d app`.
-4. Check it works: `scripts/smoke-test.sh https://your.archive`. It creates two throwaway accounts and a work, and prints PASS or FAIL for posting, privacy, publishing, comments, kudos and notifications.
+4. Check it works: `scripts/smoke-test.sh https://your.archive`. It creates two throwaway accounts and a work, and prints PASS or FAIL for posting, privacy, publishing, comments, kudos, search and notifications.
 
 On startup the app applies any new database migrations, one at a time. If you run several copies of the app, only one migrates; the others wait. If a migration fails, the app doesn't start, nothing from that migration is applied, and the log says which file failed (see below).
 
@@ -66,3 +66,15 @@ If it **has real data**:
 
 1. In-app notifications: check that the app log has no `PANIC while processing` lines.
 2. Email: the log says `Failed to send` with the reason. Usually the mail server settings (`SMTP_HOST`, `SMTP_PORT`) are wrong.
+
+### Search doesn't find a work
+
+Search reads the works table directly. There's no separate index that can fall behind, so there's nothing to rebuild. If a work doesn't show up, it's being left out on purpose. Check, in order:
+
+1. **Is it posted?** Drafts never appear in search.
+2. **Is it restricted to logged-in users?** Then it only appears for readers who are logged in.
+3. **Has the reader blocked or muted the creator, or has the creator blocked the reader?** Then it's hidden from that reader.
+4. **Is it anonymous?** Then searching by creator won't find it (on purpose), but searching its title will.
+5. **Is it in a collection that hasn't revealed its works yet?** Then it stays out of search until the reveal.
+
+To see exactly what search returns: `curl "https://your.archive/api/v1/search/works?q=some+words" | jq '.total, [.works[].title]'`.

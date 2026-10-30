@@ -127,7 +127,7 @@ JWT_SECRET=your-jwt-secret
 ```bash
 # Start infrastructure services
 cd /opt/nuclear-ao3
-docker-compose up -d postgres redis elasticsearch
+docker-compose up -d postgres redis
 
 # Wait for services to be ready
 sleep 30

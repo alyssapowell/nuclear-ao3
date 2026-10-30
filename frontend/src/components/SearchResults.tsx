@@ -326,7 +326,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       )}
 
       {/* Results List */}
-      <main>
+      <div>
         <h3 className="sr-only">Works matching your search</h3>
         <ol className="space-y-6" role="list">
           {results.map((work, index) => {
@@ -577,7 +577,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             );
           })}
         </ol>
-      </main>
+      </div>
     </div>
   );
 };

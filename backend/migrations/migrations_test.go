@@ -136,12 +136,14 @@ func TestCodeOnlyUsesTablesThatExist(t *testing.T) {
 	}
 	rows.Close()
 	// Names that appear after FROM/JOIN but aren't tables.
-	for _, n := range []string{"comment_tree", "information_schema", "pg_proc", "pg_stat_activity",
+	for _, n := range []string{"information_schema", "pg_proc", "pg_stat_activity",
 		"pg_tables", "pg_indexes", "set", "pg_class", "pg_namespace", "unnest", "generate_series", "jsonb_array_elements_text"} {
 		known[n] = true
 	}
 
 	sqlRef := regexp.MustCompile(`\b(?:FROM|JOIN|INTO|UPDATE)\s+([a-z_][a-z0-9_]*)\b`) // SQL here is written in capitals
+	// Names a query defines for itself with WITH name AS (...).
+	cteDef := regexp.MustCompile(`(?:\bWITH(?:\s+RECURSIVE)?|,)\s+([a-z_][a-z0-9_]*)\s+AS\s*\(`)
 	missing := map[string][]string{}
 	for _, dir := range []string{"../internal", "../shared"} {
 		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -155,9 +157,13 @@ func TestCodeOnlyUsesTablesThatExist(t *testing.T) {
 			}
 			// Only look inside backquoted strings, where this code keeps its SQL.
 			for _, lit := range regexp.MustCompile("`[^`]*`").FindAllString(string(src), -1) {
+				local := map[string]bool{}
+				for _, m := range cteDef.FindAllStringSubmatch(lit, -1) {
+					local[strings.ToLower(m[1])] = true
+				}
 				for _, m := range sqlRef.FindAllStringSubmatch(lit, -1) {
 					name := strings.ToLower(m[1])
-					if !known[name] {
+					if !known[name] && !local[name] {
 						missing[name] = append(missing[name], path)
 					}
 				}

@@ -212,7 +212,7 @@ export default function UserProfileSettings({ authToken }: UserProfileSettingsPr
   }
 
   return (
-    <main className="max-w-4xl mx-auto" role="main" aria-labelledby={`${componentId}-heading`}>
+    <section className="max-w-4xl mx-auto" aria-labelledby={`${componentId}-heading`}>
       {/* Live Region for Announcements */}
       <div
         id={liveRegionId}
@@ -656,6 +656,6 @@ export default function UserProfileSettings({ authToken }: UserProfileSettingsPr
           </article>
         </section>
       )}
-    </main>
+    </section>
   );
 }

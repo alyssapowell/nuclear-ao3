@@ -21,7 +21,8 @@ const mockSearchWorksMocks = {
     {
       id: '1',
       title: 'Harry Potter and the Test Story',
-      author: 'Test Author',
+      authors: [{ id: 'pseud-1', name: 'Test Author' }],
+      anonymous: false,
       summary: 'A test story',
       word_count: 1000,
       chapter_count: 1,
@@ -90,12 +91,6 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       const sortSelect = screen.getByLabelText(/sort results by/i);
       expect(sortSelect).toBeInTheDocument();
 
-      // Checkboxes
-      const excludePoorlyTaggedCheckbox = screen.getByLabelText(/exclude poorly tagged works/i);
-      expect(excludePoorlyTaggedCheckbox).toBeInTheDocument();
-
-      const smartSuggestionsCheckbox = screen.getByLabelText(/smart suggestions/i);
-      expect(smartSuggestionsCheckbox).toBeInTheDocument();
     });
 
     it('provides proper help text for form fields', () => {
@@ -103,7 +98,7 @@ describe('SearchForm - Accessibility-First Implementation', () => {
 
       // Check for help text
       expect(screen.getByText(/enter keywords from the work title/i)).toBeInTheDocument();
-      expect(screen.getByText(/enter author username or display name/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter the creator's pseud/i)).toBeInTheDocument();
     });
   });
 
@@ -398,7 +393,6 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       const initialFilters = {
         title: 'Initial Title',
         rating: 'General Audiences',
-        excludePoorlyTagged: true,
       };
 
       renderSearchForm({ initialFilters });
@@ -409,8 +403,6 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       const ratingSelect = screen.getByLabelText(/rating/i);
       expect(ratingSelect).toHaveValue('General Audiences');
 
-      const excludeCheckbox = screen.getByLabelText(/exclude poorly tagged works/i);
-      expect(excludeCheckbox).toBeChecked();
     });
   });
 });

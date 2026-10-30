@@ -12,7 +12,6 @@ BACKUP_ROOT="/backups"  # Inside backup container
 RETENTION_DAYS=30
 POSTGRES_CONTAINER="nuclear-ao3-staging-postgres"
 REDIS_CONTAINER="nuclear-ao3-staging-redis"
-ES_CONTAINER="nuclear-ao3-staging-elasticsearch"
 
 # Database credentials (should match your .env)
 POSTGRES_DB="ao3_nuclear"
@@ -105,53 +104,6 @@ backup_redis() {
     else
         log "❌ Redis backup failed"
         return 1
-    fi
-}
-
-# Function to backup Elasticsearch data
-backup_elasticsearch() {
-    local backup_dir="$1"
-    local snapshot_name="nuclear_ao3_$(date '+%Y%m%d_%H%M%S')"
-    
-    log "🔍 Backing up Elasticsearch indices..."
-    
-    if ! docker ps | grep -q "$ES_CONTAINER"; then
-        log "❌ Elasticsearch container not running"
-        return 1
-    fi
-    
-    # Check if Elasticsearch is responsive
-    if ! curl -f -s "http://localhost:9200/_cluster/health" >/dev/null; then
-        log "❌ Elasticsearch not responding"
-        return 1
-    fi
-    
-    # Export all indices as JSON
-    local indices=$(curl -s "http://localhost:9200/_cat/indices?h=index" | grep -v '^\.' || echo "")
-    
-    if [[ -n "$indices" ]]; then
-        mkdir -p "$backup_dir/elasticsearch"
-        
-        while read -r index; do
-            if [[ -n "$index" ]]; then
-                log "📄 Exporting index: $index"
-                curl -s "http://localhost:9200/$index/_search?scroll=5m&size=1000" > "$backup_dir/elasticsearch/${index}.json"
-            fi
-        done <<< "$indices"
-        
-        # Create a mapping export
-        curl -s "http://localhost:9200/_mapping" > "$backup_dir/elasticsearch/mappings.json"
-        curl -s "http://localhost:9200/_settings" > "$backup_dir/elasticsearch/settings.json"
-        
-        # Compress the directory
-        tar -czf "$backup_dir/elasticsearch_backup.tar.gz" -C "$backup_dir" elasticsearch/
-        rm -rf "$backup_dir/elasticsearch"
-        
-        log "✅ Elasticsearch backup completed: elasticsearch_backup.tar.gz"
-        return 0
-    else
-        log "ℹ️ No Elasticsearch indices to backup"
-        return 0
     fi
 }
 
@@ -248,7 +200,7 @@ backup_system_info() {
         echo ""
         
         echo "ENVIRONMENT VARIABLES:"
-        env | grep -E "(DATABASE_URL|REDIS_URL|ELASTICSEARCH_URL)" | sed 's/password=[^&]*/password=***/' || echo "No relevant env vars found"
+        env | grep -E "(DATABASE_URL|REDIS_URL)" | sed 's/password=[^&]*/password=***/' || echo "No relevant env vars found"
         echo ""
         
     } > "$info_file"
@@ -274,7 +226,6 @@ perform_full_backup() {
     # Backup each component
     backup_postgres "$backup_dir" || success=false
     backup_redis "$backup_dir" || success=false
-    backup_elasticsearch "$backup_dir" || success=false
     backup_volumes "$backup_dir" || success=false
     backup_application "$backup_dir" || success=false
     backup_system_info "$backup_dir"
@@ -419,24 +370,6 @@ restore_from_backup() {
         log "✅ Redis restore completed"
     fi
     
-    # Restore Elasticsearch
-    if [[ -f "$backup_dir/elasticsearch_backup.tar.gz" ]]; then
-        log "🔍 Restoring Elasticsearch data..."
-        
-        # Extract backup
-        tar -xzf "$backup_dir/elasticsearch_backup.tar.gz" -C "/tmp/"
-        
-        # Start Elasticsearch if not running
-        if ! docker ps | grep -q "$ES_CONTAINER"; then
-            docker start "$ES_CONTAINER" 2>/dev/null || true
-            sleep 30
-        fi
-        
-        # Restore indices (simplified - real restoration would need more sophisticated approach)
-        log "ℹ️ Elasticsearch restoration requires manual intervention for production use"
-        
-        log "✅ Elasticsearch restore completed"
-    fi
     
     log "✅ Restore completed from backup: $backup_timestamp"
     log "🔄 Please restart Nuclear AO3 services manually"

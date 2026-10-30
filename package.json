@@ -15,7 +15,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@elastic/elasticsearch": "^9.1.1",
     "axios": "^1.12.2",
     "node-cron": "^4.2.1",
     "pg": "^8.16.3",

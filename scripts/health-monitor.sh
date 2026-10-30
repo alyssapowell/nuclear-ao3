@@ -168,7 +168,6 @@ perform_health_check() {
         "nuclear-ao3-staging-frontend:3000:/health:none"
         "nuclear-ao3-staging-postgres:5432:none"
         "nuclear-ao3-staging-redis:6379:none"
-        "nuclear-ao3-staging-elasticsearch:9200:/_cluster/health"
     )
     
     local failed_services=()

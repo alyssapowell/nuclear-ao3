@@ -48,14 +48,6 @@ export default function AttributionsPage() {
         publisher: 'Gin Contributors',
         description: 'HTTP web framework written in Go'
       },
-      'elasticsearch': {
-        name: 'Elasticsearch Go Client',
-        version: 'v8.9.0',
-        licenses: 'Apache-2.0',
-        repository: 'https://github.com/elastic/go-elasticsearch',
-        publisher: 'Elastic N.V.',
-        description: 'Official Go client for Elasticsearch'
-      },
       'postgresql': {
         name: 'PostgreSQL Driver',
         version: 'v1.10.9',

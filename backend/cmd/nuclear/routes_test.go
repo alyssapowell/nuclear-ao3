@@ -27,10 +27,26 @@ func TestRoutesDoNotCollide(t *testing.T) {
 		tags:   &tags.TagService{},
 		notify: &notify.NotificationService{},
 		export: &export.ExportService{},
-		search: &search.SearchService{},
+		search: &search.Service{},
 	})
 	t.Logf("%d routes mounted", len(r.Routes()))
-	if n := len(r.Routes()); n < 200 {
-		t.Fatalf("expected the full API to be mounted, got only %d routes", n)
+	mounted := map[string]bool{}
+	for _, rt := range r.Routes() {
+		mounted[rt.Method+" "+rt.Path] = true
+	}
+	// One or two routes from each area, so a forgotten Mount call shows up.
+	for _, want := range []string{
+		"GET /health",
+		"POST /api/v1/auth/login",
+		"POST /api/v1/works",
+		"GET /api/v1/works/:work_id",
+		"GET /api/v1/tags/autocomplete",
+		"GET /api/v1/notifications",
+		"GET /api/v1/search/works",
+		"GET /api/v1/search/suggestions",
+	} {
+		if !mounted[want] {
+			t.Errorf("route %s is not mounted", want)
+		}
 	}
 }

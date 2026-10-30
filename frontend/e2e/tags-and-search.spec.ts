@@ -87,99 +87,32 @@ test.describe('Tags and Enhanced Search Features', () => {
   });
 
   test.describe('Enhanced Search Features', () => {
-    test('should connect to Elasticsearch and return search results', async ({ request }) => {
-      // Test basic search endpoint
-      const basicSearch = await request.get(`${API_URL}/api/v1/search/works?q=harry`);
-      console.log('Basic Search Status:', basicSearch.status());
-      
-      if (basicSearch.ok()) {
-        const basicData = await basicSearch.json();
-        console.log('Basic Search Response:', JSON.stringify(basicData, null, 2));
-        
-        // Basic search should return results if Elasticsearch is working
-        expect(basicData.results).toBeDefined();
-        // Note: This might currently fail due to Elasticsearch connection issues
+    test('searches works and returns results with filter counts', async ({ request }) => {
+      const res = await request.get(`${API_URL}/api/v1/search/works?q=harry`);
+      expect(res.ok()).toBeTruthy();
+      const data = await res.json();
+      expect(Array.isArray(data.works)).toBeTruthy();
+      expect(typeof data.total).toBe('number');
+      expect(data.facets).toBeDefined();
+    });
+
+    test('filters by fandom', async ({ request }) => {
+      const fandom = 'Harry Potter - J. K. Rowling';
+      const res = await request.get(`${API_URL}/api/v1/search/works?fandoms=${encodeURIComponent(fandom)}`);
+      expect(res.ok()).toBeTruthy();
+      const data = await res.json();
+      for (const work of data.works) {
+        expect(work.fandoms).toContain(fandom);
       }
     });
 
-    test('should support advanced search with filters', async ({ request }) => {
-      // Test advanced search endpoint
-      const advancedSearch = await request.post(`${API_URL}/api/v1/search/works/advanced`, {
-        data: {
-          query: 'harry',
-          limit: 10,
-          filters: {
-            fandoms: ['Harry Potter - J. K. Rowling']
-          }
-        }
-      });
-      
-      console.log('Advanced Search Status:', advancedSearch.status());
-      
-      if (advancedSearch.ok()) {
-        const advancedData = await advancedSearch.json();
-        console.log('Advanced Search Response:', JSON.stringify(advancedData, null, 2));
-        
-        expect(advancedData.results).toBeDefined();
-        expect(advancedData.facets).toBeDefined();
-        expect(advancedData.search_time_ms).toBeDefined();
-        
-        // Check for enhanced features
-        expect(advancedData.facets.fandoms).toBeDefined();
-        expect(advancedData.facets.ratings).toBeDefined();
-        expect(advancedData.facets.word_count_ranges).toBeDefined();
-      }
-    });
-
-    test('should support smart filtering with tag weights', async ({ request }) => {
-      // Test smart/enhanced search endpoint
-      const smartSearch = await request.post(`${API_URL}/api/v1/search/works/smart`, {
-        data: {
-          query: 'harry potter',
-          filters: {
-            use_smart_weights: true,
-            enable_tag_prominence: true
-          },
-          limit: 5
-        }
-      });
-      
-      console.log('Smart Search Status:', smartSearch.status());
-      
-      if (smartSearch.ok()) {
-        const smartData = await smartSearch.json();
-        console.log('Smart Search Response:', JSON.stringify(smartData, null, 2));
-        
-        // Check for enhanced/smart features
-        expect(smartData.results).toBeDefined();
-        expect(smartData.smart_weights_applied).toBeDefined();
-        expect(smartData.search_time).toBeDefined();
-        
-        // Smart search should have ranking/scoring information
-        if (smartData.results.length > 0) {
-          const firstResult = smartData.results[0];
-          expect(firstResult._score).toBeDefined();
-        }
-      }
-    });
-
-    test('should support tag quality analysis', async ({ request }) => {
-      // Test tag quality analysis endpoint
-      const qualityAnalysis = await request.post(`${API_URL}/api/v1/search/quality/analyze`, {
-        data: {
-          work_ids: ['e38ec269-901f-4469-b0b1-acb346b82e08'],
-          analysis_type: 'comprehensive'
-        }
-      });
-      
-      console.log('Quality Analysis Status:', qualityAnalysis.status());
-      
-      if (qualityAnalysis.ok()) {
-        const qualityData = await qualityAnalysis.json();
-        console.log('Quality Analysis Response:', JSON.stringify(qualityData, null, 2));
-        
-        expect(qualityData.analysis).toBeDefined();
-        expect(qualityData.recommendations).toBeDefined();
+    test('shows creators by pseud only', async ({ request }) => {
+      const res = await request.get(`${API_URL}/api/v1/search/works?limit=5`);
+      const data = await res.json();
+      for (const work of data.works) {
+        expect(work).not.toHaveProperty('user_id');
+        expect(work).not.toHaveProperty('username');
+        expect(Array.isArray(work.authors)).toBeTruthy();
       }
     });
   });

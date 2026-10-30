@@ -2,7 +2,7 @@
 
 /**
  * Search Functionality Comprehensive Validation
- * Tests all aspects of the search system including Elasticsearch integration
+ * Tests the search system (Postgres full-text search)
  */
 
 const axios = require('axios');
@@ -39,25 +39,6 @@ class SearchValidator {
       }
     } catch (error) {
       this.logResult('Search service health', 'error', `Service unavailable: ${error.message}`);
-    }
-  }
-
-  async testElasticsearchHealth() {
-    console.log('\n🔎 Elasticsearch Health Check\n');
-    
-    try {
-      const response = await axios.get(`${SEARCH_SERVICE_URL}/api/v1/search/health`, { timeout: 5000 });
-      if (response.status === 200) {
-        this.logResult('Elasticsearch health', 'success', 'Elasticsearch responding');
-        
-        if (response.data.document_count !== undefined) {
-          this.logResult('Document count', 'success', `${response.data.document_count} documents indexed`);
-        }
-      } else {
-        this.logResult('Elasticsearch health', 'error', `Unexpected status: ${response.status}`);
-      }
-    } catch (error) {
-      this.logResult('Elasticsearch health', 'error', `Connection failed: ${error.message}`);
     }
   }
 
@@ -339,7 +320,7 @@ class SearchValidator {
     console.log(`📈 Success rate: ${successRate}%`);
 
     console.log('\n💡 Search System Capabilities:');
-    console.log('   ✓ Elasticsearch integration with full-text search');
+    console.log('   ✓ Postgres full-text search');
     console.log('   ✓ Advanced filtering (fandom, rating, characters, etc.)');
     console.log('   ✓ Multiple sorting options');
     console.log('   ✓ Search aggregations for faceted search');
@@ -364,7 +345,6 @@ class SearchValidator {
     console.log('🚀 Starting Search System Validation\n');
     
     await this.testSearchServiceHealth();
-    await this.testElasticsearchHealth();
     await this.testBasicSearch();
     await this.testAdvancedSearch();
     await this.testSearchSorting();

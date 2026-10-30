@@ -6,7 +6,6 @@
 //
 //	DATABASE_URL       Postgres connection string
 //	REDIS_URL          Redis host:port
-//	ELASTICSEARCH_URL  search backend (search is disabled if unreachable)
 //	PORT               where the API listens (default 8080)
 //	METRICS_ADDR       where Prometheus metrics are served (default :9091);
 //	                   keep this port private
@@ -94,13 +93,7 @@ func main() {
 	notifySvc.Start()
 	exportSvc := export.New(db)
 	exportSvc.Start()
-	searchSvc, err := search.New(db, deps.Redis(3))
-	if err != nil {
-		log.Printf("WARNING: search is disabled: %v", err)
-		searchSvc = nil
-	} else {
-		worksSvc.SetSearchIndexer(searchSvc.IndexWorkDoc)
-	}
+	searchSvc := search.New(db)
 
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -220,15 +213,14 @@ func grantRole(ctx context.Context, db *sql.DB, username, role string) error {
 	return nil
 }
 
-// services are the areas of the app. search may be nil when Elasticsearch
-// is unreachable.
+// services are the areas of the app.
 type services struct {
 	auth   *auth.AuthService
 	works  *works.WorkService
 	tags   *tags.TagService
 	notify *notify.NotificationService
 	export *export.ExportService
-	search *search.SearchService
+	search *search.Service
 }
 
 // mountRoutes registers every API route on r.
@@ -239,9 +231,7 @@ func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	tags.Mount(r, s.tags, deps)
 	notify.Mount(r, s.notify, deps)
 	export.Mount(r, s.export, deps)
-	if s.search != nil {
-		search.Mount(r, s.search, deps)
-	}
+	search.Mount(r, s.search, deps)
 }
 
 // serveMetrics exposes Prometheus metrics on their own port so they are never

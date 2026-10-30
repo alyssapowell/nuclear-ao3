@@ -12,7 +12,7 @@ This document provides a comprehensive guide to testing Nuclear AO3 for both dev
   - Auth Service (OAuth2, OIDC, JWT)
   - Work Service (CRUD, chapters, comments)
   - Tag Service (prominence, smart filtering)
-  - Search Service (Elasticsearch integration)
+  - Search (Postgres full-text search)
   - Notification Service (events, subscriptions)
   - Email Service (SMTP, templates)
   - Shared libraries (messaging, notifications)
@@ -197,7 +197,6 @@ test('BookmarkButton renders correctly', () => {
 - Go 1.21+
 - PostgreSQL 15+
 - Redis 7+
-- Elasticsearch 8+
 
 # Frontend
 - Node.js 20+

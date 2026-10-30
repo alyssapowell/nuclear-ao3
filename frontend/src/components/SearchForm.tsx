@@ -1,6 +1,6 @@
 import React, { useState, useRef, useId, useCallback, useMemo } from 'react';
 import { Search, Filter, X, AlertCircle, Loader2 } from 'lucide-react';
-import { searchWorks } from '@/lib/api';
+import { searchWorks, type SearchParams } from '@/lib/api';
 import TagAutocomplete from './TagAutocomplete';
 import { SmartRecommendation } from './SmartRecommendations';
 // Temporarily disable render profiler to fix loading issues
@@ -96,15 +96,10 @@ interface SearchFilters {
   wordCountMax?: number;
   language?: string;
   status?: string;
-  excludePoorlyTagged?: boolean;
-  enableSmartSuggestions?: boolean;
-  relationshipCount?: string; // '1-2', '3-5', '6-10', '10+'
-  tagProminence?: string; // 'primary', 'secondary', 'any'
   // Content filtering
   blockedTags: string[];
   hideIncomplete?: boolean;
   hideCrossovers?: boolean;
-  hideNoRelationships?: boolean;
   // Date filtering
   updatedWithin?: string; // 'week', 'month', 'year'
   publishedAfter?: string;
@@ -177,15 +172,10 @@ const SearchForm = React.memo(function SearchForm({
     characters: [],
     freeformTags: [],
     fandoms: [],
-    excludePoorlyTagged: false,
-    enableSmartSuggestions: true,
-    relationshipCount: '',
-    tagProminence: '',
     // Content filtering
     blockedTags: [],
     hideIncomplete: false,
     hideCrossovers: false,
-    hideNoRelationships: false,
     // Date filtering
     updatedWithin: '',
     publishedAfter: '',
@@ -220,29 +210,40 @@ const SearchForm = React.memo(function SearchForm({
   const submitButtonRef = useRef<HTMLButtonElement>(null);
   const firstAdvancedFieldRef = useRef<HTMLInputElement>(null);
 
+  // The API sends tags as plain names; the results list shows { name, category }.
+  const asTags = (names: string[] | undefined, category: string) =>
+    (names || []).map((name) => ({ name, category }));
+
   // Runs the search against the REST API (lib/api.ts searchWorks).
   const [loading, setLoading] = useState(false);
   const executeSearch = useCallback(async (f: SearchFilters) => {
     setLoading(true);
     try {
-      const data: any = await searchWorks(f.title || '', {
+      const data = await searchWorks(f.title || '', {
         fandoms: f.fandoms,
         characters: f.characters,
         relationships: f.relationships,
         tags: f.freeformTags,
+        blockedTags: f.blockedTags,
         rating: f.rating ? [f.rating] : undefined,
         language: f.language ? [f.language] : undefined,
         wordCountMin: f.wordCountMin,
         wordCountMax: f.wordCountMax,
-        status: f.status,
+        kudosMin: f.minKudos,
+        commentsMin: f.minComments,
+        status: f.hideIncomplete ? 'complete' : f.status,
+        hideCrossovers: f.hideCrossovers,
+        updatedWithin: f.updatedWithin,
+        creator: f.author || undefined,
+        sort: (f.sort as SearchParams['sort']) || 'relevance',
       });
-      const works = data?.works || data?.results || [];
+      const works: any[] = data.works;
 
       // The API returns snake_case fields; accept camelCase too.
       const normalizedWorks = works.map((work: any) => ({
         id: work.id ?? work.work_id,
         title: work.title,
-        author: work.author ?? work.username ?? work.author_names?.[0] ?? work.authors?.[0]?.username ?? 'Anonymous',
+        author: work.anonymous || !work.authors?.length ? 'Anonymous' : work.authors.map((a: any) => a.name).join(', '),
         summary: work.summary,
         word_count: work.word_count ?? work.wordCount,
         chapter_count: work.chapter_count ?? work.chapterCount,
@@ -252,10 +253,10 @@ const SearchForm = React.memo(function SearchForm({
         language: work.language,
         published_date: work.published_date ?? work.published_at ?? work.created_at,
         updated_date: work.updated_date ?? work.updated_at,
-        relationships: work.relationships || [],
-        characters: work.characters || [],
-        freeform_tags: work.freeform_tags ?? work.additional_tags ?? [],
-        fandoms: work.fandoms || [],
+        relationships: asTags(work.relationships, 'relationship'),
+        characters: asTags(work.characters, 'character'),
+        freeform_tags: asTags(work.freeform_tags, 'freeform'),
+        fandoms: asTags(work.fandoms, 'fandom'),
         kudos_count: work.kudos_count ?? work.kudos,
         bookmark_count: work.bookmark_count ?? work.bookmarks,
         hit_count: work.hit_count ?? work.hits,
@@ -348,14 +349,9 @@ const SearchForm = React.memo(function SearchForm({
       characters: [],
       freeformTags: [],
       fandoms: [],
-      excludePoorlyTagged: false,
-      enableSmartSuggestions: true,
-      relationshipCount: '',
-      tagProminence: '',
       blockedTags: [],
       hideIncomplete: false,
       hideCrossovers: false,
-      hideNoRelationships: false,
       updatedWithin: '',
       publishedAfter: '',
       publishedBefore: '',
@@ -363,7 +359,7 @@ const SearchForm = React.memo(function SearchForm({
       minComments: undefined,
       minBookmarks: undefined,
       hideOrphaned: false,
-      sort: 'quality_score'
+      sort: 'relevance'
     });
     setTagInputs({
       relationships: '',
@@ -454,40 +450,6 @@ const SearchForm = React.memo(function SearchForm({
             Enhanced Search
           </h1>
           
-          {/* Quick Options */}
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              <input
-                id={`${formId}-exclude-poorly-tagged`}
-                type="checkbox"
-                checked={filters.excludePoorlyTagged}
-                onChange={(e) => handleInputChange('excludePoorlyTagged', e.target.checked)}
-                className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
-              />
-              <label 
-                htmlFor={`${formId}-exclude-poorly-tagged`}
-                className="text-sm text-gray-700 cursor-pointer"
-              >
-                Exclude poorly tagged works
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <input
-                id={`${formId}-smart-suggestions`}
-                type="checkbox"
-                checked={filters.enableSmartSuggestions}
-                onChange={(e) => handleInputChange('enableSmartSuggestions', e.target.checked)}
-                className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
-              />
-              <label 
-                htmlFor={`${formId}-smart-suggestions`}
-                className="text-sm text-gray-700 cursor-pointer"
-              >
-                Smart suggestions
-              </label>
-            </div>
-          </div>
         </header>
 
         {/* Basic Search Fields */}
@@ -531,7 +493,7 @@ const SearchForm = React.memo(function SearchForm({
                 aria-describedby={`${formId}-author-help`}
               />
               <div id={`${formId}-author-help`} className="mt-1 text-xs text-gray-600">
-                Enter author username or display name
+                Enter the creator's pseud
               </div>
             </div>
 
@@ -613,30 +575,20 @@ const SearchForm = React.memo(function SearchForm({
                 </label>
                 <select
                   id={`${formId}-sort`}
-                  value={filters.sort || 'quality_score'}
+                  value={filters.sort || 'relevance'}
                   onChange={(e) => handleInputChange('sort', e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <optgroup label="Anti-Gaming Algorithms">
-                    <option value="quality_score">Quality Score (engagement + length balanced)</option>
-                    <option value="engagement_rate">Engagement Rate (kudos/hits ratio)</option>
-                    <option value="comment_quality">Comment Quality (discussion-generating)</option>
-                    <option value="discovery_boost">Discovery Boost (recent activity)</option>
-                  </optgroup>
-                  <optgroup label="Traditional Metrics">
-                    <option value="relevance">Relevance (search matching)</option>
-                    <option value="updated_at">Recently Updated</option>
-                    <option value="published_at">Recently Published</option>
-                    <option value="kudos">Most Kudos</option>
-                    <option value="hits">Most Hits</option>
-                    <option value="comments">Most Comments</option>
-                    <option value="bookmarks">Most Bookmarks</option>
-                    <option value="word_count">Word Count</option>
-                  </optgroup>
+                  <option value="relevance">Best Match</option>
+                  <option value="updated_at">Date Updated</option>
+                  <option value="published_at">Date Posted</option>
+                  <option value="title">Title</option>
+                  <option value="word_count">Word Count</option>
+                  <option value="hits">Hits</option>
+                  <option value="kudos">Kudos</option>
+                  <option value="comments">Comments</option>
+                  <option value="bookmarks">Bookmarks</option>
                 </select>
-                <p className="text-xs text-gray-600 mt-1">
-                  Quality algorithms resist gaming and promote genuinely engaging works
-                </p>
               </div>
             </section>
           </section>
@@ -724,42 +676,6 @@ const SearchForm = React.memo(function SearchForm({
                 </select>
               </div>
 
-              <div>
-                <label htmlFor={`${formId}-tag-prominence`} className="block text-sm font-medium text-gray-700 mb-2">
-                  ⭐ Relationship Focus
-                </label>
-                <select
-                  id={`${formId}-tag-prominence`}
-                  value={filters.tagProminence || ''}
-                  onChange={(e) => handleInputChange('tagProminence', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Any role in story</option>
-                  <option value="primary">Main relationship (story centers on this pairing)</option>
-                  <option value="secondary">Important subplot (significant romantic arc)</option>
-                  <option value="any">Background mentions (appears but not central)</option>
-                </select>
-                <p className="text-xs text-gray-600 mt-1">How central are your selected relationships to the story's main plot?</p>
-              </div>
-
-              <div>
-                <label htmlFor={`${formId}-relationship-count`} className="block text-sm font-medium text-gray-700 mb-2">
-                  📊 Relationship Scope
-                </label>
-                <select
-                  id={`${formId}-relationship-count`}
-                  value={filters.relationshipCount || ''}
-                  onChange={(e) => handleInputChange('relationshipCount', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Any scope</option>
-                  <option value="1-2">Focused (1-2 relationships total)</option>
-                  <option value="3-5">Moderate cast (3-5 relationships total)</option>
-                  <option value="6-10">Large ensemble (6-10 relationships total)</option>
-                  <option value="10+">Comprehensive (10+ relationships total)</option>
-                </select>
-                <p className="text-xs text-gray-600 mt-1">Total number of relationships in the story - some readers prefer focused romance, others like multi-pairing stories</p>
-              </div>
             </section>
 
             {/* Content Filtering Section */}
@@ -818,15 +734,6 @@ const SearchForm = React.memo(function SearchForm({
                         className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
                       />
                       <span className="ml-2 text-sm text-gray-700">Hide crossovers</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={filters.hideNoRelationships || false}
-                        onChange={(e) => handleInputChange('hideNoRelationships', e.target.checked)}
-                        className="rounded border-gray-300 text-blue-700 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">Hide gen fic (no relationships)</span>
                     </label>
                   </div>
                 </div>

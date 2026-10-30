@@ -17,7 +17,6 @@
 #### **📊 Monitoring & Admin**
 - **Grafana Dashboard**: http://localhost:3002 (admin/admin)
 - **Prometheus Metrics**: http://localhost:9090
-- **Elasticsearch**: http://localhost:9200
 
 ---
 
@@ -42,10 +41,10 @@ API Direct: http://localhost:8080/api/v1/works/f2bef99e-0814-46b7-b81e-10ae934b1
 - Comments system
 - Kudos and bookmarks
 
-### **3. Search System (Elasticsearch)**
+### **3. Search System (Postgres full-text search)**
 ```
 Frontend: http://localhost:3001/search
-API Direct: http://localhost:8084/api/v1/search/works?query=love&limit=10
+API Direct: http://localhost:8088/api/v1/search/works?q=love&limit=10
 ```
 - **Full-text search** across all works
 - **Advanced filtering** by tags, ratings, etc.
@@ -129,15 +128,6 @@ docker exec ao3_redis redis-cli INFO memory
 docker exec ao3_redis redis-cli -n 1 KEYS "*work*" | wc -l
 ```
 
-### **Elasticsearch Health**
-```bash
-# Cluster status
-curl "http://localhost:9200/_cluster/health?pretty"
-
-# Index statistics
-curl "http://localhost:9200/works/_stats?pretty"
-```
-
 ---
 
 ## 🎯 **Key Optimizations You'll See**
@@ -150,7 +140,6 @@ curl "http://localhost:9200/works/_stats?pretty"
 ### **2. Efficient Resource Usage**
 - **Database connections: 10 max** (optimized for $5/month VPS)
 - **Container memory: 20-30MB each** (85% reduction via Alpine Linux)
-- **Elasticsearch: 61% heap usage** (single-shard optimization)
 
 ### **3. High Throughput**
 - **92+ requests/second** (sufficient for 100-200 concurrent users)
@@ -180,7 +169,7 @@ This optimized Nuclear AO3 instance is configured for:
 The performance optimizations are **live and working**! You can see them in action across:
 - ✅ Database connection pooling
 - ✅ Redis caching layer
-- ✅ Elasticsearch optimization
+- ✅ Postgres full-text search
 - ✅ Alpine Docker containers
 - ✅ Intelligent load balancing
 

@@ -49,11 +49,6 @@ scrape_configs:
       - targets: ['redis:6379']
     scrape_interval: 30s
 
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch:9200']
-    scrape_interval: 30s
-
   # Self-monitoring
   - job_name: 'prometheus'
     static_configs:

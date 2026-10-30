@@ -58,29 +58,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Elasticsearch for search
-  elasticsearch:
-    image: elasticsearch:8.9.0
-    container_name: nuclear-ao3-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
-      - bootstrap.memory_lock=true
-    ports:
-      - "127.0.0.1:9200:9200"  # Only accessible from localhost
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
   # The whole backend: accounts, works, tags, search, notifications, exports.
   # One program, one port. Only Caddy talks to it from outside.
   app:
@@ -92,7 +69,6 @@ services:
       - METRICS_ADDR=:9091
       - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
       - REDIS_URL=redis:6379
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - JWT_ISSUER=nuclear-ao3
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       - SMTP_HOST=smtp
@@ -240,8 +216,6 @@ services:
 volumes:
   # Large data volumes (separate for performance & backup isolation)
   postgres_data:      # 20-50GB - Database 
-    driver: local
-  es_data:           # 10-20GB - Search indexes
     driver: local
   backup_data:       # 50-100GB - Backups
     driver: local

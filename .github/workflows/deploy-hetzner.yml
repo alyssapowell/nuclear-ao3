@@ -99,7 +99,6 @@ jobs:
             sed -i "s|JWT_SECRET=.*|JWT_SECRET=\$JWT_SECRET|" backend/.env
             sed -i "s|POSTGRES_HOST=localhost|POSTGRES_HOST=postgres|" backend/.env
             sed -i "s|REDIS_HOST=localhost|REDIS_HOST=redis|" backend/.env
-            sed -i "s|ELASTICSEARCH_HOST=localhost|ELASTICSEARCH_HOST=elasticsearch|" backend/.env
             sed -i "s|FRONTEND_URL=.*|FRONTEND_URL=https://\$DOMAIN|" backend/.env
             
             # Frontend environment for production builds

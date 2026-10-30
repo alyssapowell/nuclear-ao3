@@ -45,7 +45,7 @@ This document describes the microservices architecture of Nuclear AO3.
   - Search analytics and trending
   - Faceted search results
   - Search history and saved searches
-- **Dependencies**: PostgreSQL, Redis, Elasticsearch
+- **Dependencies**: PostgreSQL, Redis
 
 ### Notification Service (Port 8085)
 - **Purpose**: User notifications and messaging system
@@ -104,7 +104,7 @@ Services communicate via HTTP APIs. Future improvements could include:
   - Popular/trending data
 
 ### Search Index
-- Elasticsearch for full-text search
+- Postgres full-text search (no separate search server)
 - Separate indices for works, tags, users, collections
 - Real-time indexing on data changes
 

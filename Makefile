@@ -12,7 +12,7 @@ help: ## Show this help message
 # Database Management
 db-status: ## Check database status and connection
 	@echo "🔍 Checking database status..."
-	@docker-compose ps postgres elasticsearch redis
+	@docker-compose ps postgres redis
 	@echo "\n📊 Database statistics:"
 	@docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -c "\
 		SELECT 'Users' as table, COUNT(*) as count FROM users \
@@ -25,12 +25,12 @@ db-flush: ## Completely flush all databases (DESTRUCTIVE)
 	@echo "⚠️  This will DELETE ALL DATA. Press Ctrl+C to cancel, Enter to continue..."
 	@read
 	@docker-compose down
-	@docker volume rm nuclear-ao3_postgres_data nuclear-ao3_elasticsearch_data nuclear-ao3_redis_data 2>/dev/null || true
+	@docker volume rm nuclear-ao3_postgres_data nuclear-ao3_redis_data 2>/dev/null || true
 	@echo "✅ Databases flushed"
 
 db-start: ## Start database services only
 	@echo "🚀 Starting database services..."
-	@docker-compose up -d postgres elasticsearch redis
+	@docker-compose up -d postgres redis
 	@echo "⏳ Waiting for services to be healthy..."
 	@sleep 15
 	@make db-status
@@ -171,7 +171,6 @@ performance-test: ## Run performance tests with large dataset
 quick-reset: ## Quick reset for development (keeps containers running)
 	@echo "🔄 Quick development reset..."
 	@docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -c "TRUNCATE TABLE work_tags, work_statistics, works, tags, users RESTART IDENTITY CASCADE;"
-	@curl -X DELETE http://localhost:9200/works 2>/dev/null || true
 	@make db-populate
 
 demo-data: ## Generate and load demo data optimized for demonstrations

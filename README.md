@@ -2,7 +2,7 @@
 
 > **This project is being simplified.** The backend is now a single Go program (`backend/cmd/nuclear`) instead of six services and a gateway. Parts of this README still describe the old layout. For what exists and why, read [docs/FEATURES.md](docs/FEATURES.md) and [docs/DECISIONS.md](docs/DECISIONS.md).
 
-**A modern fanfiction platform built with contemporary web technologies and microservices architecture.**
+**A modern fanfiction platform: one Go program, Postgres, and a website served as plain files.**
 
 ## ♿ **Accessibility-First Design**
 
@@ -65,7 +65,6 @@ make service-status
 - **API**: http://localhost:8088 - the whole backend (one program: accounts, works, tags, search, notifications, exports)
 - **Database**: localhost:5432 - PostgreSQL 
 - **Cache**: localhost:6379 - Redis
-- **Search Engine**: http://localhost:9200 - Elasticsearch
 - **Monitoring**: http://localhost:3002 - Grafana (admin/admin)
 
 ### 🎯 Take It for a Test Drive
@@ -73,7 +72,7 @@ make service-status
 **Try the OAuth2/OIDC API:**
 ```bash
 # Register an OAuth2 client
-curl -X POST http://localhost:8081/auth/register-client \
+curl -X POST http://localhost:8088/auth/register-client \
   -H "Content-Type: application/json" \
   -d '{
     "client_name": "My Test App",
@@ -84,7 +83,7 @@ curl -X POST http://localhost:8081/auth/register-client \
   }'
 
 # Get an access token (replace YOUR_CLIENT_ID and YOUR_CLIENT_SECRET)
-curl -X POST http://localhost:8081/auth/token \
+curl -X POST http://localhost:8088/auth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"
 ```
@@ -92,7 +91,7 @@ curl -X POST http://localhost:8081/auth/token \
 **Create and search works:**
 ```bash
 # Create a work (requires authentication)
-curl -X POST http://localhost:8082/api/v1/works \
+curl -X POST http://localhost:8088/api/v1/works \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -103,7 +102,7 @@ curl -X POST http://localhost:8082/api/v1/works \
   }'
 
 # Search works
-curl "http://localhost:8084/api/v1/search/works?q=fanfic" | jq
+curl "http://localhost:8088/api/v1/search/works?q=fanfic" | jq
 ```
 
 **📚 Complete API Testing Guide:** [backend/auth-service/API_TESTING_GUIDE.md](backend/auth-service/API_TESTING_GUIDE.md)
@@ -116,12 +115,12 @@ curl "http://localhost:8084/api/v1/search/works?q=fanfic" | jq
 make dev-setup
 
 # Register your app
-curl -X POST http://localhost:8081/auth/register-client \
+curl -X POST http://localhost:8088/auth/register-client \
   -H "Content-Type: application/json" \
   -d '{"client_name": "My App", "redirect_uris": ["http://localhost:3000/callback"], "scopes": ["read", "write"], "grant_types": ["authorization_code", "client_credentials"], "response_types": ["code"]}'
 
 # Use client credentials for testing
-curl -X POST http://localhost:8081/auth/token \
+curl -X POST http://localhost:8088/auth/token \
   -d "grant_type=client_credentials&client_id=YOUR_ID&client_secret=YOUR_SECRET"
 ```
 
@@ -168,38 +167,37 @@ make db-populate
 ## 🏗️ Architecture
 
 ```
-Your Frontend (React/Vue/Angular/Mobile/Custom)
-    ↓ HTTP/REST
-API Gateway (GraphQL) :8080
-    ↓
-┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
-│ Auth        │ Work        │ Tag         │ Search      │ Notification│ Export      │
-│ Service     │ Service     │ Service     │ Service     │ Service     │ Service     │
-│ :8081       │ :8082       │ :8083       │ :8084       │ :8085       │ :8086       │
-└─────────────┴─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
-    ↓
-┌─────────────┬─────────────┬─────────────┐
-│ PostgreSQL  │ Redis       │ Elasticsearch│
-│ :5432       │ :6379       │ :9200        │
-└─────────────┴─────────────┴─────────────┘
+Browser
+   │
+   ▼
+Caddy (HTTPS)  ── serves the website: plain files built from frontend/
+   │  /api, /ws, /health
+   ▼
+nuclear (one Go program): accounts, works, tags, search, notifications, exports
+   │
+   ├── PostgreSQL: all data, including search
+   └── Redis: caching only (optional)
 ```
+
+There's one backend program to run, upgrade and watch. Search is part of
+Postgres (full-text search on the works table), so there's no search server
+to run or index to rebuild.
 
 ## 📁 Project Structure
 
 ```
 nuclear-ao3/
-├── backend/                    # Go microservices
-│   ├── auth-service/          # JWT authentication & user management
-│   ├── work-service/          # Works, chapters, series CRUD
-│   ├── tag-service/           # Tag taxonomy and relationships
-│   ├── search-service/        # Elasticsearch integration
-│   └── shared/                # Common models and middleware
-├── frontend/                  # The website: Vite + React + React Router
-├── backend/migrations/       # Database schema, applied by the app itself
+├── backend/
+│   ├── cmd/nuclear/          # The program: starts everything, plus admin commands
+│   ├── internal/             # One folder per area: auth, works, tags, search, notify, export
+│   ├── migrations/           # Database schema, applied by the app itself
+│   └── shared/               # Code the areas share
+├── frontend/                 # The website: Vite + React + React Router
 ├── monitoring/               # Prometheus & Grafana config
-├── docker-compose.yml        # Development environment
-├── nginx.conf               # API gateway configuration
-└── Makefile                 # Development commands
+├── docs/                     # Features, decisions and the runbook
+├── Caddyfile                 # The front door: HTTPS, website files, /api
+├── docker-compose.yml        # Everything, ready to run
+└── Makefile                  # Shortcuts for common jobs
 ```
 
 ## 🛠️ Development Commands
@@ -258,70 +256,28 @@ make logs
 docker-compose up -d --scale work-service=3
 ```
 
-## 🔧 Services
+## 🔧 What the backend does
 
-### Auth Service (:8081)
-- JWT authentication with refresh tokens
-- User registration, login, password reset
-- Role-based access control (admin, tag_wrangler, etc.)
-- Session management and security events
-- Rate limiting and abuse protection
+Everything below is one program, `nuclear`, listening on one port. The
+areas are folders in `backend/internal/`.
 
-**Key Endpoints:**
-```
-POST /api/v1/auth/register      # User registration
-POST /api/v1/auth/login         # User login
-POST /api/v1/auth/refresh       # Refresh JWT token
-GET  /api/v1/auth/me           # Get user profile
-```
-
-### Work Service (:8082)
-- Work CRUD operations (create, read, update, delete)
-- Chapter management within works
-- Series and collections
-- Comments and kudos
-- Bookmarks and statistics
-- Work publishing workflow
+- **Accounts** (`auth`): registration, login, password reset, roles (admin, moderator, tag wrangler)
+- **Works** (`works`): works, chapters, series, collections, comments, kudos, bookmarks
+- **Tags** (`tags`): tags, wrangling, synonyms, autocomplete
+- **Search** (`search`): work search with AO3's filters, and suggestions while typing
+- **Notifications** (`notify`): in-app and email notifications, subscriptions
+- **Exports** (`export`): downloads of works
 
 **Key Endpoints:**
 ```
-GET  /api/v1/works             # Search works
-POST /api/v1/works             # Create work
-GET  /api/v1/works/:id         # Get work by ID
-PUT  /api/v1/works/:id         # Update work
-POST /api/v1/works/:id/kudos   # Give kudos
-```
-
-### Tag Service (:8083)
-- Tag creation and management
-- Fandom, character, relationship hierarchies
-- Tag wrangling and canonicalization
-- Synonym management
-- Tag autocomplete and suggestions
-- User tag following
-
-**Key Endpoints:**
-```
-GET  /api/v1/tags              # Search tags
-POST /api/v1/tags              # Create tag
-GET  /api/v1/tags/autocomplete # Autocomplete suggestions
-GET  /api/v1/fandoms           # Browse fandoms
-```
-
-### Search Service (:8084)
-- Elasticsearch integration
-- Advanced work search with filters
-- Tag and user search
-- Search suggestions and autocomplete
-- Search analytics and popular terms
-- Saved searches and alerts
-
-**Key Endpoints:**
-```
-GET  /api/v1/search/works      # Search works
-POST /api/v1/search/works/advanced # Advanced search
-GET  /api/v1/search/suggestions # Search suggestions
-GET  /api/v1/filters/fandoms   # Get fandom filters
+POST /api/v1/auth/register       # Create an account
+POST /api/v1/auth/login          # Log in
+POST /api/v1/works               # Post a work (starts as a draft)
+GET  /api/v1/works/:id           # Read a work
+POST /api/v1/works/:id/kudos     # Leave kudos
+GET  /api/v1/tags/autocomplete   # Tag suggestions while typing
+GET  /api/v1/search/works        # Search works
+GET  /api/v1/search/suggestions  # Search-box suggestions
 ```
 
 ## 💾 Data Models
@@ -347,21 +303,21 @@ GET  /api/v1/filters/fandoms   # Get fandom filters
 
 ## 🔍 Search Capabilities
 
-The search service provides powerful querying capabilities:
+Search runs in Postgres and follows the same visibility rules as the work
+page: drafts, works restricted to logged-in users, blocks and mutes all
+apply, and anonymous works never reveal their creator.
 
-- **Full-text search** across titles, summaries, content
-- **Faceted filtering** by fandoms, characters, relationships, tags
-- **Metadata filtering** by rating, category, warnings, language
-- **Range filtering** by word count, date ranges
-- **Sorting** by relevance, date, popularity, word count
-- **Autocomplete** for search terms and tags
-- **Search analytics** and popular terms tracking
+- **Words** anywhere in the title, tags or summary (quotes, `OR` and `-word` work)
+- **Tags**: fandoms, characters, relationships and additional tags, plus tags to exclude
+- **Filters**: rating, warnings, categories, language, complete or in progress, crossovers, single chapter
+- **Ranges**: word count, minimum kudos and comments, updated within a week, month or year
+- **Sorting** by best match, date updated or posted, title, word count, hits, kudos, comments or bookmarks
+- **Counts** beside the results for the most common ratings and tags
 
 ## 🚦 Performance Features
 
 ### Caching Strategy
 - **Redis multi-layer caching** for frequently accessed data
-- **Elasticsearch result caching** for search queries
 - **HTTP caching headers** for static content
 - **Database query optimization** with proper indexing
 
@@ -424,45 +380,38 @@ make performance-test
 **Test Authentication Flow:**
 ```bash
 # 1. Get OAuth2 discovery info
-curl http://localhost:8081/.well-known/openid-configuration | jq
+curl http://localhost:8088/.well-known/openid-configuration | jq
 
 # 2. Register a client
-curl -X POST http://localhost:8081/auth/register-client \
+curl -X POST http://localhost:8088/auth/register-client \
   -H "Content-Type: application/json" \
   -d '{"client_name": "Test App", "redirect_uris": ["https://example.com"], "scopes": ["read"], "grant_types": ["client_credentials"], "response_types": ["code"]}'
 
 # 3. Get access token
-curl -X POST http://localhost:8081/auth/token \
+curl -X POST http://localhost:8088/auth/token \
   -d "grant_type=client_credentials&client_id=YOUR_ID&client_secret=YOUR_SECRET"
 ```
 
 **Test Work Management:**
 ```bash
 # Create a work
-curl -X POST http://localhost:8082/api/v1/works \
+curl -X POST http://localhost:8088/api/v1/works \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"title": "Test Work", "content": "Test content", "fandoms": ["Original Work"]}'
 
 # Get works
-curl http://localhost:8082/api/v1/works | jq
+curl http://localhost:8088/api/v1/works | jq
 ```
 
 **Test Search:**
 ```bash
 # Search works
-curl "http://localhost:8084/api/v1/search/works?q=test&limit=10" | jq
+curl "http://localhost:8088/api/v1/search/works?q=test&limit=10" | jq
 
 # Get search suggestions  
-curl "http://localhost:8084/api/v1/search/suggestions?q=fan" | jq
+curl "http://localhost:8088/api/v1/search/suggestions?q=fan" | jq
 ```
 
-**Test Through API Gateway:**
-```bash
-# All requests can go through the unified gateway
-curl http://localhost:8080/api/v1/auth/health
-curl http://localhost:8080/api/v1/works
-curl http://localhost:8080/api/v1/search/works?q=test
-```
 
 ## 🐳 Development with Docker
 
@@ -503,13 +452,12 @@ make clean-all
 - **130,628 tag associations** using full tag taxonomy
 - **Search Performance**: 11ms response time for complex queries
 - **Database Performance**: Sub-50ms for most operations
-- **Elasticsearch**: Handles 15k+ documents with excellent performance
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-Each service uses these environment variables:
+The app reads these environment variables (all of them are listed in `.env.example`):
 
 ```bash
 # Database
@@ -519,12 +467,9 @@ DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=
 REDIS_URL=redis:6379
 REDIS_PASSWORD=
 
-# JWT (Auth Service)
+# Login tokens
 JWT_SECRET=your-super-secret-key
 JWT_ISSUER=nuclear-ao3
-
-# Elasticsearch (Search Service)
-ELASTICSEARCH_URL=http://elasticsearch:9200
 
 # Application
 GIN_MODE=debug|release
@@ -561,11 +506,9 @@ The PostgreSQL schema includes:
 
 ## 📝 API Documentation
 
-API documentation is available at:
-- Auth Service: http://localhost:8081/docs
-- Work Service: http://localhost:8082/docs  
-- Tag Service: http://localhost:8083/docs
-- Search Service: http://localhost:8084/docs
+The API is described on the website at `/api-docs`, and each route is
+listed with a one-line comment in the `Mount` function of its area, such as
+`backend/internal/search/main.go`.
 
 ## 🚨 Troubleshooting
 
@@ -588,11 +531,9 @@ docker --version
 # Start fresh
 make clean-all && make dev-setup
 
-# Check individual service logs
+# Check logs
 make logs-db
-docker-compose logs auth-service
-docker-compose logs work-service
-docker-compose logs search-service
+docker-compose logs app
 ```
 
 **"Connection refused" errors:**
@@ -618,26 +559,26 @@ make db-reset
 
 **Search not working:**
 ```bash
-# Check Elasticsearch health
-curl http://localhost:9200/_cluster/health | jq
+# Is the app up, and can it reach the database?
+curl http://localhost:8088/health | jq
 
-# Verify search service
-curl http://localhost:8084/health | jq
+# Try a search directly
+curl "http://localhost:8088/api/v1/search/works?q=test" | jq '.total'
 
 # Check logs
-docker-compose logs search-service
+docker-compose logs app
 ```
 
 **Authentication problems:**
 ```bash
 # Test OAuth2 endpoints
-curl http://localhost:8081/.well-known/openid-configuration
+curl http://localhost:8088/.well-known/openid-configuration
 
 # Check auth service logs  
 docker-compose logs auth-service
 
 # Verify JWT key generation
-curl http://localhost:8081/auth/jwks | jq
+curl http://localhost:8088/auth/jwks | jq
 ```
 
 **Performance issues:**

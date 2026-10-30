@@ -125,7 +125,7 @@ CPX41: 8 vCPU, 16GB RAM, 240GB SSD
 Backups are automatically retained for **30 days** by default:
 
 ```
-Backup Size = (PostgreSQL + Redis + Elasticsearch) × 30 days
+Backup Size = (PostgreSQL + Redis) × 30 days
 Small:  (500MB + 50MB + 200MB) × 30 = ~22GB
 Medium: (2.5GB + 200MB + 1GB) × 30 = ~110GB  
 Large:  (7.5GB + 500MB + 3GB) × 30 = ~330GB

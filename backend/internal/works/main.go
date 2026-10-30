@@ -176,7 +176,6 @@ type WorkService struct {
 	redis               *redis.Client
 	cache               *cache.Cache
 	notificationService *notifications.NotificationService
-	indexWork           func(workID string, doc []byte) error // nil when search is disabled
 }
 
 // New builds the works service on top of the shared database and Redis.
@@ -191,12 +190,6 @@ func New(db *sql.DB, rdb *redis.Client) (*WorkService, error) {
 		cache:               cache.NewCache(rdb, "work-service"),
 		notificationService: nil, // set by SetNotifier
 	}, nil
-}
-
-// SetSearchIndexer connects the works package to search so new and edited
-// works show up in results.
-func (ws *WorkService) SetSearchIndexer(index func(workID string, doc []byte) error) {
-	ws.indexWork = index
 }
 
 // SetNotifier connects the works package to notifications so subscribers

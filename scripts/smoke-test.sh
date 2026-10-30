@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks that the core of the archive works, end to end, through the public
 # API: accounts, posting, drafts staying private, publishing, reading,
-# comments, kudos and notifications.
+# comments, kudos, search and notifications.
 #
 # Run it after an upgrade, or any time you're not sure the site works:
 #
@@ -48,6 +48,10 @@ check "only the author can publish" 403 "$(code -X PUT "$B/works/$WORK" -H "Auth
 check "author publishes" 200 "$(code -X PUT "$B/works/$WORK" -H "Authorization: Bearer $AUTHOR" -H 'Content-Type: application/json' -d '{"status":"posted"}')"
 check "logged-out reader can read it" 200 "$(code "$B/works/$WORK")"
 check "first chapter is there" 1 "$(curl -s "$B/works/$WORK/chapters" | json "len(d.get('chapters',[]))")"
+found() { # how many times $WORK appears in a search; extra curl args allowed
+	curl -s "$B/search/works?q=smoke&sort=published_at&limit=100" "$@" | json "sum(1 for w in d.get('works', []) if w['id'] == '$WORK')"
+}
+check "search finds the posted work" 1 "$(found)"
 
 COMMENT=$(curl -s -X POST "$B/works/$WORK/comments" -H "Authorization: Bearer $READER" -H 'Content-Type: application/json' -d '{"content":"Lovely."}')
 READER_PSEUD=$(echo "$COMMENT" | json "d.get('pseudonym_id','')")
@@ -62,6 +66,8 @@ check "restricted work is hidden when logged out" 404 "$(code "$B/works/$WORK")"
 logged_out_chapters=$(code "$B/works/$WORK/chapters")
 [ "$logged_out_chapters" = 403 ] || [ "$logged_out_chapters" = 404 ]; check "restricted chapters are hidden when logged out" 0 $?
 check "restricted work is readable when logged in" 200 "$(code "$B/works/$WORK" -H "Authorization: Bearer $READER")"
+check "search hides the restricted work when logged out" 0 "$(found)"
+check "search shows the restricted work when logged in" 1 "$(found -H "Authorization: Bearer $READER")"
 
 sleep 1 # notifications are delivered in the background
 check "author is notified of comments" 2 "$(curl -s "$B/notifications" -H "Authorization: Bearer $AUTHOR" | json "len(d.get('notifications',[]))")"

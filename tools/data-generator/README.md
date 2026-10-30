@@ -48,7 +48,7 @@ This tool generates realistic test data for the Nuclear AO3 platform, simulating
 - **Data Integrity**: All foreign key relationships maintained
 - **Realistic Ratios**: Kudos, comments, bookmarks follow real-world patterns  
 - **Performance Indexes**: Generated data designed to stress-test indexes
-- **Search Optimization**: Content structured for Elasticsearch indexing
+- **Search**: Titles, summaries and tags are searchable as soon as they are loaded
 
 ## Usage
 

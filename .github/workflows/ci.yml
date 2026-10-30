@@ -189,7 +189,7 @@ jobs:
         run: |
           echo "🧪 Testing docker-compose startup..."
           # Start infrastructure services first
-          docker-compose up -d postgres redis elasticsearch
+          docker-compose up -d postgres redis
           
           # Wait for databases to be ready
           echo "⏳ Waiting for databases..."
@@ -330,8 +330,6 @@ jobs:
           # Test Redis
           docker-compose exec -T redis redis-cli ping || echo "Redis test failed"
           
-          # Test Elasticsearch
-          curl -f http://localhost:9200/_cluster/health || echo "Elasticsearch test failed"
 
       - name: Cleanup
         if: always()
