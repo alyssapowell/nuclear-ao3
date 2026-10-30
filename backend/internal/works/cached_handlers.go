@@ -168,7 +168,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (i
 			COALESCE(w.chapter_count, 1) as chapter_count, 
 			w.max_chapters,
 			COALESCE(w.status, 'draft') as status, 
-			COALESCE(w.restricted_to_users, false) as restricted_to_users,
+			(COALESCE(w.restricted, false) OR COALESCE(w.restricted_to_users, false)) as restricted_to_users,
 			COALESCE(w.restricted_to_adults, false) as restricted_to_adults,
 			COALESCE(w.comment_policy, 'open') as comment_policy,
 			COALESCE(w.moderate_comments, false) as moderate_comments,

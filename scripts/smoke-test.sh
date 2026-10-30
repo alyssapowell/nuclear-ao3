@@ -57,6 +57,12 @@ check "can't comment as someone else's pseud" 403 "$(code -X POST "$B/works/$WOR
 check "guest comments" 201 "$(code -X POST "$B/works/$WORK/comments" -H 'Content-Type: application/json' -d '{"content":"Hi!","guest_name":"Lurker"}')"
 check "reader leaves kudos" 201 "$(code -X POST "$B/works/$WORK/kudos" -H "Authorization: Bearer $READER")"
 
+check "author restricts the work to logged-in users" 200 "$(code -X PUT "$B/works/$WORK" -H "Authorization: Bearer $AUTHOR" -H 'Content-Type: application/json' -d '{"restricted_to_users":true}')"
+check "restricted work is hidden when logged out" 404 "$(code "$B/works/$WORK")"
+logged_out_chapters=$(code "$B/works/$WORK/chapters")
+[ "$logged_out_chapters" = 403 ] || [ "$logged_out_chapters" = 404 ]; check "restricted chapters are hidden when logged out" 0 $?
+check "restricted work is readable when logged in" 200 "$(code "$B/works/$WORK" -H "Authorization: Bearer $READER")"
+
 sleep 1 # notifications are delivered in the background
 check "author is notified of comments" 2 "$(curl -s "$B/notifications" -H "Authorization: Bearer $AUTHOR" | json "len(d.get('notifications',[]))")"
 
