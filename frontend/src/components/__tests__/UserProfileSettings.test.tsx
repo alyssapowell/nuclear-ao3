@@ -1,20 +1,21 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import UserProfileSettings from '../UserProfileSettings';
 import { getMyProfile, updateProfile, getPseudonyms, createPseudonym } from '@/lib/api';
 
 // Mock the API functions
-jest.mock('@/lib/api', () => ({
-  getMyProfile: jest.fn(),
-  updateProfile: jest.fn(),
-  getPseudonyms: jest.fn(),
-  createPseudonym: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  getMyProfile: vi.fn(),
+  updateProfile: vi.fn(),
+  getPseudonyms: vi.fn(),
+  createPseudonym: vi.fn(),
 }));
 
-const mockGetMyProfile = getMyProfile as jest.MockedFunction<typeof getMyProfile>;
-const mockUpdateProfile = updateProfile as jest.MockedFunction<typeof updateProfile>;
-const mockGetPseudonyms = getPseudonyms as jest.MockedFunction<typeof getPseudonyms>;
-const mockCreatePseudonym = createPseudonym as jest.MockedFunction<typeof createPseudonym>;
+const mockGetMyProfile = getMyProfile as MockedFunction<typeof getMyProfile>;
+const mockUpdateProfile = updateProfile as MockedFunction<typeof updateProfile>;
+const mockGetPseudonyms = getPseudonyms as MockedFunction<typeof getPseudonyms>;
+const mockCreatePseudonym = createPseudonym as MockedFunction<typeof createPseudonym>;
 
 // Helper function to render UserProfileSettings component wrapped in act
 const renderUserProfileWithAct = async (props: any) => {
@@ -57,7 +58,7 @@ describe('UserProfileSettings', () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetMyProfile.mockResolvedValue({ user: mockUser });
     mockGetPseudonyms.mockResolvedValue({ pseudonyms: mockPseudonyms });
     mockUpdateProfile.mockResolvedValue({ success: true });

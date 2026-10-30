@@ -114,7 +114,7 @@ describe('SearchResults - Accessibility Implementation', () => {
 
   describe('Interactive Elements', () => {
     it('makes work titles keyboard accessible', async () => {
-      const mockOnWorkClick = jest.fn();
+      const mockOnWorkClick = vi.fn();
       const user = userEvent.setup();
       
       render(<SearchResults {...defaultProps} onWorkClick={mockOnWorkClick} />);

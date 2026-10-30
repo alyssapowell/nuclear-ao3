@@ -4,8 +4,8 @@ import '@testing-library/jest-dom';
 import TagAutocomplete from '../TagAutocomplete';
 
 // Mock the API call
-jest.mock('@/lib/api', () => ({
-  searchTags: jest.fn().mockResolvedValue([
+vi.mock('@/lib/api', () => ({
+  searchTags: vi.fn().mockResolvedValue([
     {
       name: 'Harry Potter',
       type: 'character',
@@ -23,8 +23,8 @@ jest.mock('@/lib/api', () => ({
 
 const defaultProps = {
   value: '',
-  onChange: jest.fn(),
-  onTagSelect: jest.fn(),
+  onChange: vi.fn(),
+  onTagSelect: vi.fn(),
   placeholder: 'Add characters...',
   tagType: 'character' as const,
 };
@@ -37,7 +37,7 @@ const renderTagAutocomplete = (props = {}) => {
 
 describe('TagAutocomplete', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Basic Rendering', () => {
@@ -79,7 +79,7 @@ describe('TagAutocomplete', () => {
     });
 
     it('calls onChange when typing', async () => {
-      const onChange = jest.fn();
+      const onChange = vi.fn();
       const user = userEvent.setup();
       renderTagAutocomplete({ onChange });
 
@@ -113,7 +113,7 @@ describe('TagAutocomplete', () => {
 
   describe('Tag Selection', () => {
     it('calls onTagSelect when clicking on suggestion', async () => {
-      const onTagSelect = jest.fn();
+      const onTagSelect = vi.fn();
       const user = userEvent.setup();
       renderTagAutocomplete({ onTagSelect });
 
@@ -131,7 +131,7 @@ describe('TagAutocomplete', () => {
     });
 
     it('adds tag on Enter key press', async () => {
-      const onChange = jest.fn();
+      const onChange = vi.fn();
       const user = userEvent.setup();
       renderTagAutocomplete({ onChange });
 

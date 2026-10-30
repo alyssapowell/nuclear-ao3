@@ -200,7 +200,7 @@ test.describe('Enhanced Work Reader Interface', () => {
     
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto(`http://localhost:3002/works/${workId}`);
+    await page.goto(`http://localhost:3001/works/${workId}`);
     
     // Should start on chapter 1
     await expect(page.locator('text=Chapter 1: The Beginning')).toBeVisible();
@@ -255,7 +255,7 @@ test.describe('Enhanced Work Reader Interface', () => {
     const singleWorkData = await singleChapterResponse.json();
     const singleWorkId = singleWorkData.work?.id || singleWorkData.id;
     
-    await page.goto(`http://localhost:3002/works/${singleWorkId}`);
+    await page.goto(`http://localhost:3001/works/${singleWorkId}`);
     
     // Verify work displays correctly
     await expect(page.locator('h1')).toContainText('Single Chapter Test Work');

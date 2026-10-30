@@ -1,7 +1,5 @@
-'use client';
-
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { routes, getConversationUrl, getWorkCommentsUrl } from '@/lib/urls';
 
 interface UseConversationNavigationProps {
@@ -18,7 +16,7 @@ export function useConversationNavigation({
   threadId,
   onNavigateAway
 }: UseConversationNavigationProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   // Handle browser back/forward navigation
   useEffect(() => {
@@ -39,21 +37,21 @@ export function useConversationNavigation({
 
   // Navigation methods
   const navigateToComments = useCallback(() => {
-    router.push(getWorkCommentsUrl(workId));
-  }, [router, workId]);
+    navigate(getWorkCommentsUrl(workId));
+  }, [navigate, workId]);
 
   const navigateToWork = useCallback(() => {
-    router.push(`/works/${workId}`);
-  }, [router, workId]);
+    navigate(`/works/${workId}`);
+  }, [navigate, workId]);
 
   const navigateToConversation = useCallback((newThreadId: string, replace = false) => {
     const url = getConversationUrl(workId, newThreadId);
     if (replace) {
-      router.replace(url);
+      navigate(url, { replace: true });
     } else {
-      router.push(url);
+      navigate(url);
     }
-  }, [router, workId]);
+  }, [navigate, workId]);
 
   // Share conversation
   const shareConversation = useCallback(async (workTitle?: string) => {

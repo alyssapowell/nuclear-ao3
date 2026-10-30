@@ -1,8 +1,5 @@
-'use client';
-
+import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { 
   HomeIcon, 
   MagnifyingGlassIcon, 
@@ -37,7 +34,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showOfflineManager, setShowOfflineManager] = useState(false);
   const [offlineWorksCount, setOfflineWorksCount] = useState(0);
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   // PWA state management
   const [pwaState, pwaActions] = usePWAState();
@@ -145,7 +142,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
           </div>
 
           {/* Logo */}
-          <Link href="/" className="font-bold text-lg text-blue-700">
+          <Link to="/" className="font-bold text-lg text-blue-700">
             Nuclear AO3
           </Link>
 
@@ -170,7 +167,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             return (
               <Link
                 key={item.name}
-                href={item.href}
+                to={item.href}
                 className={`flex flex-col items-center justify-center py-2 px-1 text-xs transition-colors ${
                   active 
                     ? 'text-blue-700 bg-blue-50' 
@@ -298,14 +295,14 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             ) : (
               <div className="p-4 border-b border-gray-200">
                 <Link
-                  href="/auth/login"
+                  to="/auth/login"
                   className="block w-full py-2 px-4 bg-blue-600 text-white text-center rounded-lg hover:bg-blue-700"
                   onClick={() => setShowMenu(false)}
                 >
                   Sign In
                 </Link>
                 <Link
-                  href="/auth/register"
+                  to="/auth/register"
                   className="block w-full py-2 px-4 mt-2 border border-gray-300 text-center rounded-lg hover:bg-gray-50"
                   onClick={() => setShowMenu(false)}
                 >
@@ -352,7 +349,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                 return (
                   <Link
                     key={item.name}
-                    href={item.href}
+                    to={item.href}
                     className="block px-4 py-3 text-gray-700 hover:bg-gray-50 border-b border-gray-100"
                     onClick={() => setShowMenu(false)}
                   >
@@ -366,9 +363,9 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
             <div className="p-4 border-t border-gray-200 text-center text-xs text-gray-700">
               <div className="mb-2">Nuclear AO3 v2.0.0</div>
               <div className="flex justify-center space-x-4">
-                <Link href="/privacy" className="hover:text-gray-700">Privacy</Link>
-                <Link href="/terms" className="hover:text-gray-700">Terms</Link>
-                <Link href="/contact" className="hover:text-gray-700">Contact</Link>
+                <Link to="/privacy" className="hover:text-gray-700">Privacy</Link>
+                <Link to="/terms" className="hover:text-gray-700">Terms</Link>
+                <Link to="/contact" className="hover:text-gray-700">Contact</Link>
               </div>
             </div>
 

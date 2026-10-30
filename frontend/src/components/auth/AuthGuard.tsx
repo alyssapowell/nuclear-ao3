@@ -1,7 +1,5 @@
-'use client'
-
+import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 
 interface AuthGuardProps {
@@ -17,7 +15,7 @@ export default function AuthGuard({
 }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
+  const navigate = useNavigate()
 
   useEffect(() => {
     let isMounted = true
@@ -36,7 +34,7 @@ export default function AuthGuard({
         if (!token && !window.location.pathname.includes('/auth/')) {
           const currentPath = window.location.pathname + window.location.search
           const redirectUrl = `${redirectTo}?redirect=${encodeURIComponent(currentPath)}`
-          router.replace(redirectUrl)
+          navigate(redirectUrl, { replace: true })
         }
       } catch (error) {
         console.warn('Could not access localStorage in AuthGuard:', error)
@@ -61,7 +59,7 @@ export default function AuthGuard({
       isMounted = false
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [router, redirectTo])
+  }, [navigate, redirectTo])
 
   // Show loading state
   if (isLoading) {
@@ -92,12 +90,12 @@ export default function AuthGuard({
             You need to be logged in to access this page.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button onClick={() => router.push(`${redirectTo}?redirect=${encodeURIComponent(window.location.pathname)}`)}>
+            <Button onClick={() => navigate(`${redirectTo}?redirect=${encodeURIComponent(window.location.pathname)}`)}>
               Log In
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => router.push(`/auth/register?redirect=${encodeURIComponent(window.location.pathname)}`)}
+              onClick={() => navigate(`/auth/register?redirect=${encodeURIComponent(window.location.pathname)}`)}
             >
               Create Account
             </Button>

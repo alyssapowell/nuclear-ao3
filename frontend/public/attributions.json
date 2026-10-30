@@ -1,25 +1,9 @@
 {
-  "generatedAt": "2025-11-17T21:10:52.351Z",
+  "generatedAt": "2026-10-30T07:20:43.899Z",
   "dependencies": [
     {
-      "name": "@apollo/client",
-      "version": "^3.11.8",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/@apollo/client",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
-      "name": "@axe-core/playwright",
-      "version": "^4.10.2",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/@axe-core/playwright",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
       "name": "@headlessui/react",
-      "version": "^2.2.9",
+      "version": "2.2.9",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@headlessui/react",
       "publisher": "Unknown",
@@ -27,23 +11,15 @@
     },
     {
       "name": "@heroicons/react",
-      "version": "^2.2.0",
+      "version": "2.2.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@heroicons/react",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
-      "name": "@tailwindcss/typography",
-      "version": "^0.5.19",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/@tailwindcss/typography",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
       "name": "@tiptap/extension-link",
-      "version": "^3.7.0",
+      "version": "3.7.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@tiptap/extension-link",
       "publisher": "Unknown",
@@ -51,7 +27,7 @@
     },
     {
       "name": "@tiptap/extension-placeholder",
-      "version": "^3.7.0",
+      "version": "3.7.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@tiptap/extension-placeholder",
       "publisher": "Unknown",
@@ -59,7 +35,7 @@
     },
     {
       "name": "@tiptap/react",
-      "version": "^3.7.0",
+      "version": "3.7.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@tiptap/react",
       "publisher": "Unknown",
@@ -67,31 +43,15 @@
     },
     {
       "name": "@tiptap/starter-kit",
-      "version": "^3.7.0",
+      "version": "3.7.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/@tiptap/starter-kit",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
-      "name": "axios",
-      "version": "^1.12.2",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/axios",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
-      "name": "class-variance-authority",
-      "version": "^0.7.1",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/class-variance-authority",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
       "name": "clsx",
-      "version": "^2.1.1",
+      "version": "2.1.1",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/clsx",
       "publisher": "Unknown",
@@ -99,23 +59,15 @@
     },
     {
       "name": "date-fns",
-      "version": "^4.1.0",
+      "version": "4.1.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/date-fns",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
-      "name": "graphql",
-      "version": "^16.11.0",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/graphql",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
       "name": "lodash.debounce",
-      "version": "^4.0.8",
+      "version": "4.0.8",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/lodash.debounce",
       "publisher": "Unknown",
@@ -123,31 +75,15 @@
     },
     {
       "name": "lucide-react",
-      "version": "^0.544.0",
+      "version": "0.544.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/lucide-react",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
-      "name": "next",
-      "version": "^15.5.4",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/next",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
-      "name": "postcss-load-config",
-      "version": "^6.0.1",
-      "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/postcss-load-config",
-      "publisher": "Unknown",
-      "description": "Package description would be fetched from npm API"
-    },
-    {
       "name": "react",
-      "version": "^18.3.1",
+      "version": "18.3.1",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/react",
       "publisher": "Unknown",
@@ -155,23 +91,23 @@
     },
     {
       "name": "react-dom",
-      "version": "^18.3.1",
+      "version": "18.3.1",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/react-dom",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
-      "name": "swr",
-      "version": "^2.3.6",
+      "name": "react-router-dom",
+      "version": "7.18.4",
       "licenses": "MIT",
-      "repository": "https://www.npmjs.com/package/swr",
+      "repository": "https://www.npmjs.com/package/react-router-dom",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },
     {
       "name": "tailwind-merge",
-      "version": "^3.3.1",
+      "version": "3.3.1",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/tailwind-merge",
       "publisher": "Unknown",

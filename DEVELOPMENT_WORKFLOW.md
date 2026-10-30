@@ -20,7 +20,7 @@ Before starting any development work:
 ```bash
 cd frontend
 npm install
-npm run validate  # Runs both TypeScript check and ESLint
+npm run build     # type-checks, then builds
 ```
 
 ### 2. Code Validation Commands
@@ -31,23 +31,16 @@ npm run validate  # Runs both TypeScript check and ESLint
 # Type checking only
 npm run type-check
 
-# Linting only  
-npm run lint
-
-# Full validation (both TypeScript + ESLint)
-npm run validate
-
 # Full build test
 npm run build
 ```
 
 ### 3. Pre-Commit Validation
 
-**Automatic validation is set up** via Git pre-commit hooks at `.git/hooks/pre-commit`.
+**Automatic validation is set up** via Git pre-commit hooks at `.git/hooks/pre-commit` (type check only).
 
 Every commit will automatically:
 - ✅ Run TypeScript checking (`npm run type-check`)
-- ✅ Run ESLint validation (`npm run lint`)
 - ❌ **Block the commit** if any errors are found
 
 ### 4. Commit Workflow
@@ -62,8 +55,7 @@ git commit -m "Your commit message"
 
 # 4. If pre-commit fails:
 #    - Fix all TypeScript errors
-#    - Fix all ESLint errors  
-#    - Run `npm run validate` to verify
+#    - Run `npm run build` to verify
 #    - Try commit again
 ```
 
@@ -72,7 +64,6 @@ git commit -m "Your commit message"
 GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 
 - ✅ TypeScript validation
-- ✅ ESLint validation  
 - ✅ Full build test
 - ✅ Unit tests
 
@@ -109,8 +100,7 @@ GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 - ✅ **Explicit type annotations** for state and complex objects
 - ✅ **Proper null/undefined handling**
 
-### ESLint
-- ✅ **Fix all linting errors** before committing
+### Style
 - ✅ **Follow existing code patterns**
 - ✅ **Use consistent naming conventions**
 
@@ -136,7 +126,7 @@ GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 
 1. **Read the error messages** carefully
 2. **Fix each issue** one by one
-3. **Verify the fix** with `npm run validate`
+3. **Verify the fix** with `npm run build`
 4. **Commit only after** all issues are resolved
 
 ## 📚 Commands Reference
@@ -144,8 +134,6 @@ GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
 | `npm run type-check` | TypeScript validation only | During development |
-| `npm run lint` | ESLint validation only | During development |
-| `npm run validate` | Both TypeScript + ESLint | Before committing |
 | `npm run build` | Full production build | Before deployment |
 | `npm run dev` | Development server | During development |
 
@@ -153,7 +141,7 @@ GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 
 **For future Claude sessions:**
 
-1. **Always run `npm run validate`** before making changes
+1. **Always run `npm run build`** before making changes
 2. **Fix any existing issues first** before adding new features  
 3. **Test builds locally** before considering anything "complete"
 4. **Never disable error checking** as a workaround
@@ -163,7 +151,7 @@ GitHub Actions automatically runs on every push/PR to `main` or `develop`:
 
 A feature is only considered complete when:
 
-- ✅ `npm run validate` passes with zero errors
+- ✅ `npm run build` passes with zero errors
 - ✅ `npm run build` completes successfully  
 - ✅ Pre-commit hook allows commits
 - ✅ CI/CD pipeline passes all checks

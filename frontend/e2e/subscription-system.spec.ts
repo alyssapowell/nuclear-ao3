@@ -1,7 +1,7 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
 
 // Test configuration
-const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3002';
+const TEST_BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3001';
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 
 // Test data

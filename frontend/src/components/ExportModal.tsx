@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { XMarkIcon, DocumentArrowDownIcon, Cog6ToothIcon, PhotoIcon } from '@heroicons/react/24/outline';
 

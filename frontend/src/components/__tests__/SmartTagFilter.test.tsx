@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import SmartTagFilter, { TagFilters } from '../SmartTagFilter';
 
 describe('SmartTagFilter', () => {
-  const mockOnFilterChange = jest.fn();
+  const mockOnFilterChange = vi.fn();
 
   beforeEach(() => {
     mockOnFilterChange.mockClear();

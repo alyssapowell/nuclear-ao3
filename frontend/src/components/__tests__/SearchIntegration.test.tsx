@@ -1,22 +1,17 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import SearchPage from '@/app/search/page';
+import SearchPage from '@/pages/Search';
 
 // Mock Next.js navigation
-const mockPush = jest.fn();
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    back: jest.fn(),
-    forward: jest.fn(),
-    refresh: jest.fn(),
-    replace: jest.fn(),
-  }),
-  useParams: () => ({ id: 'test-id' }),
-  usePathname: () => '/search',
-  useSearchParams: () => new URLSearchParams(),
-}));
+const mockPush = vi.fn();
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useNavigate: () => mockPush,
+    useParams: () => ({ id: 'test-id' }),
+    useLocation: () => ({ pathname: '/search', search: '', hash: '', state: null, key: 'test' }),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  }));
 
 // Mock the GraphQL API gateway
 const mockGraphQLResponses = {
@@ -130,10 +125,10 @@ const mockGraphQLResponses = {
 
 describe('Search Integration Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock the GraphQL fetch calls
-    global.fetch = jest.fn().mockImplementation((url, options) => {
+    global.fetch = vi.fn().mockImplementation((url, options) => {
       if (url.includes('/graphql')) {
         const body = JSON.parse(options.body);
         const query = body.query;
@@ -154,7 +149,7 @@ describe('Search Integration Tests', () => {
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Complete Search Flow', () => {
@@ -242,7 +237,7 @@ describe('Search Integration Tests', () => {
       const user = userEvent.setup();
       
       // Mock tag autocomplete response
-      global.fetch = jest.fn().mockImplementation((url, options) => {
+      global.fetch = vi.fn().mockImplementation((url, options) => {
         if (url.includes('/graphql')) {
           const body = JSON.parse(options.body);
           if (body.query.includes('TagAutocomplete')) {
@@ -314,7 +309,7 @@ describe('Search Integration Tests', () => {
       const user = userEvent.setup();
       
       // Mock delayed response to test loading state
-      global.fetch = jest.fn().mockImplementation(() => 
+      global.fetch = vi.fn().mockImplementation(() => 
         new Promise(resolve => 
           setTimeout(() => resolve({
             ok: true,
@@ -351,7 +346,7 @@ describe('Search Integration Tests', () => {
       const user = userEvent.setup();
       
       // Mock error response
-      global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
       render(<SearchPage />);
 
@@ -526,7 +521,7 @@ describe('Search Integration Tests', () => {
       
       // Track autocomplete calls
       const autocompleteCallCount = { count: 0 };
-      global.fetch = jest.fn().mockImplementation((url, options) => {
+      global.fetch = vi.fn().mockImplementation((url, options) => {
         const body = JSON.parse(options.body);
         if (body.query.includes('TagAutocomplete')) {
           autocompleteCallCount.count++;

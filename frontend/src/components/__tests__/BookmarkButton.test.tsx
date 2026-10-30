@@ -1,19 +1,20 @@
+import type { MockedFunction } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BookmarkButton } from '../BookmarkButton';
 
 // Mock API functions
-jest.mock('@/lib/api', () => ({
-  createBookmark: jest.fn(),
-  deleteBookmark: jest.fn(),
-  isWorkBookmarked: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  createBookmark: vi.fn(),
+  deleteBookmark: vi.fn(),
+  isWorkBookmarked: vi.fn(),
 }));
 
 import { createBookmark, deleteBookmark, isWorkBookmarked } from '@/lib/api';
 
-const mockCreateBookmark = createBookmark as jest.MockedFunction<typeof createBookmark>;
-const mockDeleteBookmark = deleteBookmark as jest.MockedFunction<typeof deleteBookmark>;
-const mockIsWorkBookmarked = isWorkBookmarked as jest.MockedFunction<typeof isWorkBookmarked>;
+const mockCreateBookmark = createBookmark as MockedFunction<typeof createBookmark>;
+const mockDeleteBookmark = deleteBookmark as MockedFunction<typeof deleteBookmark>;
+const mockIsWorkBookmarked = isWorkBookmarked as MockedFunction<typeof isWorkBookmarked>;
 
 describe('BookmarkButton', () => {
   const defaultProps = {
@@ -22,7 +23,7 @@ describe('BookmarkButton', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Initial State', () => {
@@ -250,7 +251,7 @@ describe('BookmarkButton', () => {
 
   describe('Callback Functions', () => {
     it('calls onBookmarkChange when bookmark is created', async () => {
-      const mockOnBookmarkChange = jest.fn();
+      const mockOnBookmarkChange = vi.fn();
       mockIsWorkBookmarked.mockResolvedValue(false);
       mockCreateBookmark.mockResolvedValue({ bookmark: { id: 'bookmark-id' } });
       

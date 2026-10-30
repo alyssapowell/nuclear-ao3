@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import NotificationBell from '../components/notifications/NotificationBell';
@@ -6,29 +7,19 @@ import { useNotifications } from '../hooks/useNotifications';
 import { useAuth } from '../utils/auth';
 
 // Mock dependencies
-jest.mock('../hooks/useNotifications', () => ({
-  useNotifications: jest.fn(),
+vi.mock('../hooks/useNotifications', () => ({
+  useNotifications: vi.fn(),
 }));
 
-jest.mock('../utils/auth', () => ({
-  useAuth: jest.fn(),
-  getAuthState: jest.fn(),
-  isAuthenticated: jest.fn(),
+vi.mock('../utils/auth', () => ({
+  useAuth: vi.fn(),
+  getAuthState: vi.fn(),
+  isAuthenticated: vi.fn(),
 }));
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    back: jest.fn(),
-    forward: jest.fn(),
-    refresh: jest.fn(),
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-  }),
-}));
 
-const mockUseNotifications = useNotifications as jest.MockedFunction<typeof useNotifications>;
-const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockUseNotifications = useNotifications as MockedFunction<typeof useNotifications>;
+const mockUseAuth = useAuth as MockedFunction<typeof useAuth>;
 
 const mockNotifications = [
   {
@@ -63,24 +54,24 @@ const mockNotifications = [
 ];
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   
   mockUseAuth.mockReturnValue({
     user: { id: '1', username: 'testuser' },
     isLoading: false,
     isAuthenticated: true,
-    login: jest.fn(),
-    logout: jest.fn(),
-    register: jest.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    register: vi.fn(),
   });
 
   // Mock localStorage for SSR safety
   Object.defineProperty(window, 'localStorage', {
     value: {
-      getItem: jest.fn(),
-      setItem: jest.fn(),
-      removeItem: jest.fn(),
-      clear: jest.fn(),
+      getItem: vi.fn(),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
     },
     writable: true,
   });
@@ -94,10 +85,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -112,10 +103,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -132,10 +123,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -156,10 +147,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(
@@ -194,10 +185,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       expect(() => render(<NotificationBell />)).not.toThrow();
@@ -211,10 +202,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: true,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -231,10 +222,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -263,10 +254,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -282,10 +273,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -301,7 +292,7 @@ describe('Notification System Tests', () => {
 
     test('marks notification as read when clicked', async () => {
       const user = userEvent.setup();
-      const mockMarkAsRead = jest.fn();
+      const mockMarkAsRead = vi.fn();
       
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
@@ -309,9 +300,9 @@ describe('Notification System Tests', () => {
         isLoading: false,
         error: null,
         markAsRead: mockMarkAsRead,
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -324,17 +315,17 @@ describe('Notification System Tests', () => {
 
     test('handles mark all as read action', async () => {
       const user = userEvent.setup();
-      const mockMarkAllAsRead = jest.fn();
+      const mockMarkAllAsRead = vi.fn();
       
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
+        markAsRead: vi.fn(),
         markAllAsRead: mockMarkAllAsRead,
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -347,17 +338,17 @@ describe('Notification System Tests', () => {
 
     test('handles notification deletion', async () => {
       const user = userEvent.setup();
-      const mockDeleteNotification = jest.fn();
+      const mockDeleteNotification = vi.fn();
       
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
         deleteNotification: mockDeleteNotification,
-        fetchNotifications: jest.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -374,10 +365,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -391,10 +382,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: true,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -408,10 +399,10 @@ describe('Notification System Tests', () => {
         unreadCount: 0,
         isLoading: false,
         error: 'Failed to load notifications',
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -436,10 +427,10 @@ describe('Notification System Tests', () => {
         unreadCount: 1,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -460,10 +451,10 @@ describe('Notification System Tests', () => {
         unreadCount: 5,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -482,16 +473,16 @@ describe('Notification System Tests', () => {
 
   describe('Notification System Integration', () => {
     test('real-time notification updates', async () => {
-      const mockFetchNotifications = jest.fn();
+      const mockFetchNotifications = vi.fn();
       
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
         fetchNotifications: mockFetchNotifications,
       });
 
@@ -509,22 +500,22 @@ describe('Notification System Tests', () => {
     test('handles WebSocket connection for real-time updates', () => {
       // Mock WebSocket
       const mockWebSocket = {
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        close: jest.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        close: vi.fn(),
       };
       
-      global.WebSocket = jest.fn(() => mockWebSocket) as any;
+      global.WebSocket = vi.fn(() => mockWebSocket) as any;
 
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -535,17 +526,17 @@ describe('Notification System Tests', () => {
 
     test('persists notification preferences', async () => {
       const user = userEvent.setup();
-      const mockSetItem = jest.spyOn(Storage.prototype, 'setItem');
+      const mockSetItem = vi.spyOn(Storage.prototype, 'setItem');
       
       mockUseNotifications.mockReturnValue({
         notifications: mockNotifications,
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -573,7 +564,7 @@ describe('Notification System Tests', () => {
       // Mock Notification API
       global.Notification = {
         permission: 'default',
-        requestPermission: jest.fn().mockResolvedValue('granted'),
+        requestPermission: vi.fn().mockResolvedValue('granted'),
       } as any;
 
       mockUseNotifications.mockReturnValue({
@@ -581,10 +572,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -606,10 +597,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationList />);
@@ -631,10 +622,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -650,10 +641,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);
@@ -667,15 +658,15 @@ describe('Notification System Tests', () => {
       // Mock high contrast mode
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
-        value: jest.fn().mockImplementation(query => ({
+        value: vi.fn().mockImplementation(query => ({
           matches: query === '(prefers-contrast: high)',
           media: query,
           onchange: null,
-          addListener: jest.fn(),
-          removeListener: jest.fn(),
-          addEventListener: jest.fn(),
-          removeEventListener: jest.fn(),
-          dispatchEvent: jest.fn(),
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
         })),
       });
 
@@ -684,10 +675,10 @@ describe('Notification System Tests', () => {
         unreadCount: 2,
         isLoading: false,
         error: null,
-        markAsRead: jest.fn(),
-        markAllAsRead: jest.fn(),
-        deleteNotification: jest.fn(),
-        fetchNotifications: jest.fn(),
+        markAsRead: vi.fn(),
+        markAllAsRead: vi.fn(),
+        deleteNotification: vi.fn(),
+        fetchNotifications: vi.fn(),
       });
 
       render(<NotificationBell />);

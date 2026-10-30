@@ -4,7 +4,7 @@ test("minimal connectivity test", async ({ page }) => {
   test.setTimeout(15000);
   
   // Test that server responds at all
-  await page.goto("http://localhost:3002/");
+  await page.goto("http://localhost:3001/");
   
   // Wait for any content to appear
   await page.waitForSelector("body", { timeout: 10000 });

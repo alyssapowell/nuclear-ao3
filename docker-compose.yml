@@ -100,8 +100,8 @@ services:
       - SMTP_FROM=${SMTP_FROM:-noreply@nuclear-ao3.local}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
     ports:
-      # Published on localhost only, for the Next.js dev server. Caddy is the
-      # public entrance.
+      # Published on localhost only, for `npm run dev` in frontend/. Caddy is
+      # the public entrance.
       - "127.0.0.1:8088:8080"
     depends_on:
       postgres:
@@ -136,27 +136,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: nuclear-ao3-frontend
-    environment:
-      - NEXT_PUBLIC_API_GATEWAY_URL=https://${DOMAIN:-localhost}
-      - NEXT_PUBLIC_WS_URL=wss://${DOMAIN:-localhost}/ws
-      - NODE_ENV=production
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      - app
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # Monitoring - Prometheus
   prometheus:
@@ -219,9 +198,12 @@ services:
         /usr/bin/loki -config.file=/etc/loki/local-config.yaml
       "
 
-  # Load balancer - Caddy
+  # The front door: serves the website and forwards /api to the app.
+  # Its image is built from frontend/ and contains the website's files.
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: ./frontend
+    image: nuclear-ao3/web
     container_name: nuclear-ao3-caddy
     ports:
       - "80:80"
@@ -245,12 +227,9 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - APP_HOST=app
       - APP_PORT=8080
-      - FRONTEND_HOST=frontend
-      - FRONTEND_PORT=3000
       - GRAFANA_HOST=grafana
       - GRAFANA_PORT=3000
     depends_on:
-      - frontend
       - app
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]

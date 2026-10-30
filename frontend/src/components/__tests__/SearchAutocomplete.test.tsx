@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -5,22 +6,22 @@ import SearchAutocomplete from '../SearchAutocomplete'
 import { getSearchSuggestions } from '@/lib/api'
 
 // Mock the API
-jest.mock('@/lib/api', () => ({
-  getSearchSuggestions: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  getSearchSuggestions: vi.fn(),
 }))
 
-const mockGetSearchSuggestions = getSearchSuggestions as jest.MockedFunction<typeof getSearchSuggestions>
+const mockGetSearchSuggestions = getSearchSuggestions as MockedFunction<typeof getSearchSuggestions>
 
 describe('SearchAutocomplete', () => {
   const defaultProps = {
     value: '',
-    onChange: jest.fn(),
-    onSearch: jest.fn(),
+    onChange: vi.fn(),
+    onSearch: vi.fn(),
     placeholder: 'Search...',
   }
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     mockGetSearchSuggestions.mockResolvedValue({
       authors: [],
       tags: [],
@@ -43,7 +44,7 @@ describe('SearchAutocomplete', () => {
   })
 
   it('calls onChange when user types', async () => {
-    const onChange = jest.fn()
+    const onChange = vi.fn()
     
     render(<SearchAutocomplete {...defaultProps} onChange={onChange} />)
     
@@ -115,7 +116,7 @@ describe('SearchAutocomplete', () => {
 
   it('handles keyboard navigation with accessibility announcements', async () => {
     const user = userEvent.setup()
-    const onSearch = jest.fn()
+    const onSearch = vi.fn()
     
     const mockSuggestions = {
       works: [
@@ -192,7 +193,7 @@ describe('SearchAutocomplete', () => {
 
   it('calls onSearch when clicking a suggestion', async () => {
     const user = userEvent.setup()
-    const onSearch = jest.fn()
+    const onSearch = vi.fn()
     
     const mockSuggestions = {
       works: [{ title: 'Clicked Work', id: '1' }],

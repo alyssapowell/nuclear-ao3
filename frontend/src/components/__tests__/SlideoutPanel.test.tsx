@@ -4,21 +4,21 @@ import '@testing-library/jest-dom';
 import SlideoutPanel from '../SlideoutPanel';
 
 // Mock createPortal since we're not testing in a real DOM environment
-jest.mock('react-dom', () => ({
-  ...jest.requireActual('react-dom'),
+vi.mock('react-dom', async () => ({
+  ...(await vi.importActual('react-dom')),
   createPortal: (node: React.ReactNode) => node,
 }));
 
 describe('SlideoutPanel', () => {
   const defaultProps = {
     isOpen: true,
-    onClose: jest.fn(),
+    onClose: vi.fn(),
     title: 'Test Panel',
     children: <div>Test content</div>,
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Mock document.body.style
     Object.defineProperty(document.body, 'style', {
       value: { overflow: '' },
@@ -46,7 +46,7 @@ describe('SlideoutPanel', () => {
   });
 
   it('calls onClose when close button is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<SlideoutPanel {...defaultProps} onClose={onClose} />);
     
     const closeButton = screen.getByLabelText('Close panel');
@@ -56,7 +56,7 @@ describe('SlideoutPanel', () => {
   });
 
   it('calls onClose when backdrop is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<SlideoutPanel {...defaultProps} onClose={onClose} />);
     
     // Find the backdrop (first div with bg-black)
@@ -70,7 +70,7 @@ describe('SlideoutPanel', () => {
   });
 
   it('calls onClose when Escape key is pressed', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     render(<SlideoutPanel {...defaultProps} onClose={onClose} />);
     
     fireEvent.keyDown(document, { key: 'Escape' });

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
 export default function Footer() {
   return (
@@ -13,13 +13,13 @@ export default function Footer() {
               Built with enhanced search, accessibility features, and a focus on reader experience.
             </p>
             <div className="flex space-x-4">
-              <Link href="/about" className="text-slate-400 hover:text-white transition-colors">
+              <Link to="/about" className="text-slate-400 hover:text-white transition-colors">
                 About
               </Link>
-              <Link href="/terms" className="text-slate-400 hover:text-white transition-colors">
+              <Link to="/terms" className="text-slate-400 hover:text-white transition-colors">
                 Terms of Service
               </Link>
-              <Link href="/privacy" className="text-slate-400 hover:text-white transition-colors">
+              <Link to="/privacy" className="text-slate-400 hover:text-white transition-colors">
                 Privacy Policy
               </Link>
             </div>
@@ -30,22 +30,22 @@ export default function Footer() {
             <h4 className="text-white font-medium mb-4">Browse</h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/works" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/works" className="text-slate-400 hover:text-white transition-colors">
                   All Works
                 </Link>
               </li>
               <li>
-                <Link href="/search" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/search" className="text-slate-400 hover:text-white transition-colors">
                   Advanced Search
                 </Link>
               </li>
               <li>
-                <Link href="/collections" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/collections" className="text-slate-400 hover:text-white transition-colors">
                   Collections
                 </Link>
               </li>
               <li>
-                <Link href="/series" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/series" className="text-slate-400 hover:text-white transition-colors">
                   Series
                 </Link>
               </li>
@@ -57,22 +57,22 @@ export default function Footer() {
             <h4 className="text-white font-medium mb-4">Support</h4>
             <ul className="space-y-2">
               <li>
-                <Link href="/help" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/help" className="text-slate-400 hover:text-white transition-colors">
                   Help & FAQ
                 </Link>
               </li>
               <li>
-                <Link href="/accessibility" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/accessibility" className="text-slate-400 hover:text-white transition-colors">
                   Accessibility
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/contact" className="text-slate-400 hover:text-white transition-colors">
                   Contact Us
                 </Link>
               </li>
               <li>
-                <Link href="/feedback" className="text-slate-400 hover:text-white transition-colors">
+                <Link to="/feedback" className="text-slate-400 hover:text-white transition-colors">
                   Feedback
                 </Link>
               </li>
@@ -84,16 +84,16 @@ export default function Footer() {
         <div className="border-t border-slate-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
           <div className="text-slate-400 text-sm mb-4 sm:mb-0">
             © {new Date().getFullYear()} Nuclear AO3 Contributors. 
-            <Link href="https://github.com/liberationlicense/license" className="text-slate-300 hover:text-white ml-1" target="_blank" rel="noopener noreferrer">
+            <Link to="https://github.com/liberationlicense/license" className="text-slate-300 hover:text-white ml-1" target="_blank" rel="noopener noreferrer">
               Liberation Licensed
             </Link>
           </div>
           <div className="flex items-center space-x-4 text-sm">
             <span className="text-slate-500">Version 1.0.0</span>
-            <Link href="/api-docs" className="text-slate-400 hover:text-white transition-colors">
+            <Link to="/api-docs" className="text-slate-400 hover:text-white transition-colors">
               API Docs
             </Link>
-            <Link href="/attributions" className="text-slate-400 hover:text-white transition-colors">
+            <Link to="/attributions" className="text-slate-400 hover:text-white transition-colors">
               Attributions
             </Link>
           </div>

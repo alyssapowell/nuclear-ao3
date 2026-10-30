@@ -1,24 +1,25 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Comments from '../Comments';
 import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos } from '@/lib/api';
 
 // Mock the API functions
-jest.mock('@/lib/api', () => ({
-  getWorkComments: jest.fn(),
-  createComment: jest.fn(),
-  updateComment: jest.fn(),
-  deleteComment: jest.fn(),
-  giveCommentKudos: jest.fn(),
-  removeCommentKudos: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  getWorkComments: vi.fn(),
+  createComment: vi.fn(),
+  updateComment: vi.fn(),
+  deleteComment: vi.fn(),
+  giveCommentKudos: vi.fn(),
+  removeCommentKudos: vi.fn(),
 }));
 
-const mockGetWorkComments = getWorkComments as jest.MockedFunction<typeof getWorkComments>;
-const mockCreateComment = createComment as jest.MockedFunction<typeof createComment>;
-const mockUpdateComment = updateComment as jest.MockedFunction<typeof updateComment>;
-const mockDeleteComment = deleteComment as jest.MockedFunction<typeof deleteComment>;
-const mockGiveCommentKudos = giveCommentKudos as jest.MockedFunction<typeof giveCommentKudos>;
-const mockRemoveCommentKudos = removeCommentKudos as jest.MockedFunction<typeof removeCommentKudos>;
+const mockGetWorkComments = getWorkComments as MockedFunction<typeof getWorkComments>;
+const mockCreateComment = createComment as MockedFunction<typeof createComment>;
+const mockUpdateComment = updateComment as MockedFunction<typeof updateComment>;
+const mockDeleteComment = deleteComment as MockedFunction<typeof deleteComment>;
+const mockGiveCommentKudos = giveCommentKudos as MockedFunction<typeof giveCommentKudos>;
+const mockRemoveCommentKudos = removeCommentKudos as MockedFunction<typeof removeCommentKudos>;
 
 // Helper function to render Comments component wrapped in act
 const renderCommentsWithAct = async (props: any) => {
@@ -59,7 +60,7 @@ describe('Comments', () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetWorkComments.mockResolvedValue({ comments: mockComments });
     mockCreateComment.mockResolvedValue({ 
       comment: {

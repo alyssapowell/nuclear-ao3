@@ -1,6 +1,4 @@
-'use client';
-
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 
 interface Tag {
   name: string;
@@ -106,7 +104,7 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
         {tags.map((tag, index) => (
           <Link
             key={index}
-            href={`/works?${category}=${encodeURIComponent(tag.name)}`}
+            to={`/works?${category}=${encodeURIComponent(tag.name)}`}
             className="inline-flex items-center px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded-full transition-colors"
           >
             <span className="mr-1">{getCategoryIcon(tag.category)}</span>
@@ -129,7 +127,7 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <Link href={`/works/${work.id}`} className="text-lg font-semibold text-blue-700 hover:text-blue-800">
+          <Link to={`/works/${work.id}`} className="text-lg font-semibold text-blue-700 hover:text-blue-800">
             {work.title}
           </Link>
           <p className="text-sm text-gray-700">by {work.author}</p>

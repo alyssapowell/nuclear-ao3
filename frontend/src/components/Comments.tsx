@@ -1,7 +1,5 @@
-'use client';
-
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos, WorkComment, CreateCommentRequest, CommentUpdateRequest } from '@/lib/api';
 import { getConversationUrl, navigation, routes } from '@/lib/urls';
 import SlideoutPanel from './SlideoutPanel';
@@ -19,7 +17,7 @@ interface CommentTreeNode extends WorkComment {
 }
 
 export default function Comments({ workId, chapterId, allowComments = true, authToken }: CommentsProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [comments, setComments] = useState<WorkComment[]>([]);
   const [commentTree, setCommentTree] = useState<CommentTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -342,7 +340,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
                 
                 {/* Mobile: Navigate to conversation page */}
                 <button
-                  onClick={() => router.push(getConversationUrl(workId, comment.id))}
+                  onClick={() => navigate(getConversationUrl(workId, comment.id))}
                   className="md:hidden text-sm text-blue-700 hover:text-blue-700 transition-colors inline-flex items-center gap-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

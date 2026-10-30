@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useId } from 'react';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 

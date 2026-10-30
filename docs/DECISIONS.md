@@ -60,7 +60,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ## 2026-10-29: Vite + React instead of Next.js
 
-**Decision:** Build the frontend as static files with Vite, React and React Router, served by the Go binary or Caddy. There is no Node server in production.
+**Decision:** Build the frontend as static files with Vite, React and React Router, served by Caddy. There is no Node server in production.
 
 **Why:**
 - The app didn't use Next.js's server features. It had no API routes or server actions, most components were client-side, and the only Next-specific code was a cookie-redirect middleware.
@@ -68,6 +68,14 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - Contributors only need to know plain React.
 
 **Cost:** No server-side rendering. Search engines and no-JavaScript readers get less. Revisit if public pages need it.
+
+**How it was done (2026-10-30):**
+- Every page lives in `frontend/src/pages/`, and `frontend/src/App.tsx` lists every page and its address. Logged-in-only pages are grouped there behind one `AuthGuard`, which replaces both Next's middleware and the per-page guards.
+- Caddy serves the built files, so the `frontend` container is gone. `frontend/Dockerfile` builds the files into the Caddy image. Fingerprinted files under `/assets/` are cached forever; everything else (`index.html` above all) is checked every time, so an upgrade reaches everyone at once.
+- Pages load on first visit (`React.lazy`), so the first visit downloads only what it needs.
+- Tests run on Vitest instead of Jest: same API, no separate build setup. Nine Playwright configs became one.
+- ESLint was dropped. Most of its rules were switched off, CI ignored its result, and it needed Next's config. `npm run build` now runs the TypeScript check, and the build fails on a type error. Before, Next skipped it.
+- Dependencies in `package.json` are pinned to exact versions.
 
 ## 2026-10-29: Repo cleanup
 

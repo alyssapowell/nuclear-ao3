@@ -55,12 +55,12 @@ jobs:
             
             # Stop only application services (preserve databases)
             echo '🛑 Stopping application services...'
-            docker-compose stop frontend app caddy || true
+            docker-compose stop app caddy || true
             
             # Build and start application services
             echo '🏗️ Building and starting application services...'
-            docker-compose build --parallel frontend app caddy
-            docker-compose up -d frontend app caddy
+            docker-compose build --parallel app caddy
+            docker-compose up -d app caddy
             
             # Wait for services to be ready
             echo '⏳ Waiting for application services to be ready...'
@@ -94,7 +94,7 @@ jobs:
             
             # Show final status
             echo '📊 Final application deployment status:'
-            docker-compose ps frontend app caddy
+            docker-compose ps app caddy
             
             echo '✅ Nuclear AO3 application deployment complete!'
           "

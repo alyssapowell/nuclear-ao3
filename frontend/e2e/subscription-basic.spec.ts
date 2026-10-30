@@ -105,7 +105,7 @@ test.describe('Basic Subscription Functionality', () => {
     });
 
     // Set mock auth token
-    await page.goto('http://localhost:3002');
+    await page.goto('http://localhost:3001');
     await page.evaluate(() => {
       localStorage.setItem('auth_token', 'mock-auth-token');
       document.cookie = 'auth_token=mock-auth-token; path=/';
@@ -113,7 +113,7 @@ test.describe('Basic Subscription Functionality', () => {
   }
 
   test('should display subscription button on work page', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     // Should show the subscription button
@@ -121,7 +121,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('should open subscription modal when clicked', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     // Click subscribe button
@@ -133,7 +133,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('should show subscription options in modal', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     await page.click('button:has-text("Subscribe")');
@@ -151,7 +151,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('should create subscription successfully', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     await page.click('button:has-text("Subscribe")');
@@ -168,7 +168,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('should navigate to subscription management page', async () => {
-    await page.goto('http://localhost:3002');
+    await page.goto('http://localhost:3001');
     await page.waitForLoadState('networkidle');
 
     // Look for subscriptions link in navigation
@@ -178,14 +178,14 @@ test.describe('Basic Subscription Functionality', () => {
       await expect(page).toHaveURL(/\/subscriptions/);
     } else {
       // Direct navigation if link not found
-      await page.goto('http://localhost:3002/subscriptions');
+      await page.goto('http://localhost:3001/subscriptions');
     }
 
     await expect(page.locator('h1:has-text("Your Subscriptions")')).toBeVisible();
   });
 
   test('should display subscriptions in management page', async () => {
-    await page.goto('http://localhost:3002/subscriptions');
+    await page.goto('http://localhost:3001/subscriptions');
     await page.waitForLoadState('networkidle');
 
     // Should show subscription management interface
@@ -198,7 +198,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('subscription modal should be accessible', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     // Test keyboard navigation
@@ -227,7 +227,7 @@ test.describe('Basic Subscription Functionality', () => {
       }
     });
 
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     await page.click('button:has-text("Subscribe")');
@@ -239,7 +239,7 @@ test.describe('Basic Subscription Functionality', () => {
   });
 
   test('subscription form validation', async () => {
-    await page.goto('http://localhost:3002/works/test-work-id');
+    await page.goto('http://localhost:3001/works/test-work-id');
     await page.waitForLoadState('networkidle');
 
     await page.click('button:has-text("Subscribe")');
@@ -269,7 +269,7 @@ test.describe('Basic Subscription Functionality', () => {
       }
     });
 
-    await page.goto('http://localhost:3002/subscriptions');
+    await page.goto('http://localhost:3001/subscriptions');
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('text=No subscriptions yet')).toBeVisible();

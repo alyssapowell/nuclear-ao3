@@ -1,7 +1,5 @@
-'use client'
-
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/lib/auth'
+import { useAuth } from '@/utils/auth'
 import { 
   createSubscription, 
   deleteSubscription, 

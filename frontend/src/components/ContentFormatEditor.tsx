@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, FileText, Code, AlignLeft, Edit3, Image, Video, Music, Link } from 'lucide-react';
 

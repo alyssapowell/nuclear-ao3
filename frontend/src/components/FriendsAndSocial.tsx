@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { 
   sendFriendRequest, 

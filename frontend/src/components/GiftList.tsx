@@ -1,5 +1,3 @@
-'use client'
-
 import { useEffect, useState } from 'react'
 import { Gift as GiftIcon } from 'lucide-react'
 import { getWorkGifts, Gift } from '@/lib/api'

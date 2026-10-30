@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, ShareIcon, AdjustmentsHorizontalIcon, HeartIcon, CloudArrowDownIcon, WifiIcon } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolidIcon, HeartIcon as HeartSolidIcon, CloudArrowDownIcon as CloudArrowDownSolidIcon } from '@heroicons/react/24/solid';

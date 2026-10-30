@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePWAState } from '../../hooks/usePWAState';
 import { 
@@ -9,17 +10,17 @@ import {
 } from '../test-utils';
 
 // Mock the offline reading manager
-jest.mock('../../utils/offlineReadingManager', () => ({
+vi.mock('../../utils/offlineReadingManager', () => ({
   offlineReadingManager: {
-    onConnectionChange: jest.fn().mockReturnValue(() => {}),
-    getInstance: jest.fn().mockReturnValue({
-      onConnectionChange: jest.fn().mockReturnValue(() => {})
+    onConnectionChange: vi.fn().mockReturnValue(() => {}),
+    getInstance: vi.fn().mockReturnValue({
+      onConnectionChange: vi.fn().mockReturnValue(() => {})
     })
   }
 }));
 
 describe('usePWAState', () => {
-  let mockMatchMedia: jest.Mock;
+  let mockMatchMedia: Mock;
   let originalAddEventListener: typeof window.addEventListener;
   let originalRemoveEventListener: typeof window.removeEventListener;
 
@@ -27,12 +28,12 @@ describe('usePWAState', () => {
     setupGlobalMocks();
     
     // Mock matchMedia
-    mockMatchMedia = jest.fn().mockReturnValue({
+    mockMatchMedia = vi.fn().mockReturnValue({
       matches: false,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     });
     Object.defineProperty(window, 'matchMedia', {
       value: mockMatchMedia,
@@ -44,8 +45,8 @@ describe('usePWAState', () => {
     originalRemoveEventListener = window.removeEventListener;
 
     // Mock window event listeners
-    window.addEventListener = jest.fn();
-    window.removeEventListener = jest.fn();
+    window.addEventListener = vi.fn();
+    window.removeEventListener = vi.fn();
   });
 
   afterEach(() => {
@@ -82,10 +83,10 @@ describe('usePWAState', () => {
       // Mock standalone mode
       mockMatchMedia.mockReturnValue({
         matches: true,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
       });
 
       const { result } = renderHook(() => usePWAState());
@@ -116,12 +117,12 @@ describe('usePWAState', () => {
       act(() => {
         const event = new Event('beforeinstallprompt');
         Object.defineProperty(event, 'preventDefault', {
-          value: jest.fn(),
+          value: vi.fn(),
           writable: true
         });
         
         // Get the event listener that was registered
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -142,11 +143,11 @@ describe('usePWAState', () => {
       act(() => {
         const beforeInstallEvent = new Event('beforeinstallprompt');
         Object.defineProperty(beforeInstallEvent, 'preventDefault', {
-          value: jest.fn(),
+          value: vi.fn(),
           writable: true
         });
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -159,7 +160,7 @@ describe('usePWAState', () => {
       act(() => {
         const installedEvent = new Event('appinstalled');
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const appInstalledListener = addEventListenerCalls
           .find(call => call[0] === 'appinstalled')?.[1];
         
@@ -182,7 +183,7 @@ describe('usePWAState', () => {
         ...mockServiceWorkerRegistration,
         waiting: {
           state: 'installed',
-          addEventListener: jest.fn()
+          addEventListener: vi.fn()
         }
       };
 
@@ -209,7 +210,7 @@ describe('usePWAState', () => {
       act(() => {
         const mockNewWorker = {
           state: 'installing',
-          addEventListener: jest.fn()
+          addEventListener: vi.fn()
         };
 
         const updateFoundEvent = new Event('updatefound');
@@ -259,7 +260,7 @@ describe('usePWAState', () => {
     it('should install PWA successfully', async () => {
       const mockPrompt = {
         ...mockInstallPromptEvent,
-        prompt: jest.fn().mockResolvedValue(undefined),
+        prompt: vi.fn().mockResolvedValue(undefined),
         userChoice: Promise.resolve({ outcome: 'accepted' })
       };
 
@@ -270,7 +271,7 @@ describe('usePWAState', () => {
         const event = new Event('beforeinstallprompt');
         Object.assign(event, mockPrompt);
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -292,7 +293,7 @@ describe('usePWAState', () => {
     it('should handle install PWA rejection', async () => {
       const mockPrompt = {
         ...mockInstallPromptEvent,
-        prompt: jest.fn().mockResolvedValue(undefined),
+        prompt: vi.fn().mockResolvedValue(undefined),
         userChoice: Promise.resolve({ outcome: 'dismissed' })
       };
 
@@ -303,7 +304,7 @@ describe('usePWAState', () => {
         const event = new Event('beforeinstallprompt');
         Object.assign(event, mockPrompt);
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -331,8 +332,8 @@ describe('usePWAState', () => {
     });
 
     it('should check for updates', async () => {
-      const mockUpdate = jest.fn().mockResolvedValue(undefined);
-      const mockGetRegistration = jest.fn().mockResolvedValue({
+      const mockUpdate = vi.fn().mockResolvedValue(undefined);
+      const mockGetRegistration = vi.fn().mockResolvedValue({
         update: mockUpdate
       });
 
@@ -352,7 +353,7 @@ describe('usePWAState', () => {
     });
 
     it('should skip waiting for new service worker', () => {
-      const mockPostMessage = jest.fn();
+      const mockPostMessage = vi.fn();
       
       Object.defineProperty(global.navigator.serviceWorker, 'controller', {
         value: { postMessage: mockPostMessage },
@@ -360,7 +361,7 @@ describe('usePWAState', () => {
       });
 
       // Mock window.location.reload
-      const mockReload = jest.fn();
+      const mockReload = vi.fn();
       Object.defineProperty(window.location, 'reload', {
         value: mockReload,
         writable: true
@@ -385,7 +386,7 @@ describe('usePWAState', () => {
         const event = new Event('beforeinstallprompt');
         Object.assign(event, mockInstallPromptEvent);
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -410,10 +411,10 @@ describe('usePWAState', () => {
     it('should listen for display mode changes', () => {
       const mockMediaQuery = {
         matches: false,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
       };
 
       mockMatchMedia.mockReturnValue(mockMediaQuery);
@@ -426,10 +427,10 @@ describe('usePWAState', () => {
     it('should update install status on display mode change', () => {
       const mockMediaQuery = {
         matches: false,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
       };
 
       mockMatchMedia.mockReturnValue(mockMediaQuery);
@@ -471,7 +472,7 @@ describe('usePWAState', () => {
     it('should handle install PWA error', async () => {
       const mockPrompt = {
         ...mockInstallPromptEvent,
-        prompt: jest.fn().mockRejectedValue(new Error('Install failed'))
+        prompt: vi.fn().mockRejectedValue(new Error('Install failed'))
       };
 
       const { result } = renderHook(() => usePWAState());
@@ -481,7 +482,7 @@ describe('usePWAState', () => {
         const event = new Event('beforeinstallprompt');
         Object.assign(event, mockPrompt);
         
-        const addEventListenerCalls = (window.addEventListener as jest.Mock).mock.calls;
+        const addEventListenerCalls = (window.addEventListener as Mock).mock.calls;
         const beforeInstallPromptListener = addEventListenerCalls
           .find(call => call[0] === 'beforeinstallprompt')?.[1];
         
@@ -499,7 +500,7 @@ describe('usePWAState', () => {
     });
 
     it('should handle update check failure', async () => {
-      const mockGetRegistration = jest.fn().mockRejectedValue(new Error('Update check failed'));
+      const mockGetRegistration = vi.fn().mockRejectedValue(new Error('Update check failed'));
 
       Object.defineProperty(global.navigator.serviceWorker, 'getRegistration', {
         value: mockGetRegistration,
@@ -520,12 +521,12 @@ describe('usePWAState', () => {
     it('should cleanup event listeners on unmount', () => {
       const { unmount } = renderHook(() => usePWAState());
 
-      const removeEventListenerCalls = (window.removeEventListener as jest.Mock).mock.calls;
+      const removeEventListenerCalls = (window.removeEventListener as Mock).mock.calls;
       const initialCallCount = removeEventListenerCalls.length;
 
       unmount();
 
-      const finalCallCount = (window.removeEventListener as jest.Mock).mock.calls.length;
+      const finalCallCount = (window.removeEventListener as Mock).mock.calls.length;
       expect(finalCallCount).toBeGreaterThan(initialCallCount);
 
       // Should remove beforeinstallprompt and appinstalled listeners
@@ -536,10 +537,10 @@ describe('usePWAState', () => {
     it('should cleanup media query listener on unmount', () => {
       const mockMediaQuery = {
         matches: false,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn()
       };
 
       mockMatchMedia.mockReturnValue(mockMediaQuery);

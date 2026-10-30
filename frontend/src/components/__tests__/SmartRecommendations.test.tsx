@@ -48,12 +48,12 @@ const mockRecommendations = [
 
 const defaultProps = {
   recommendations: mockRecommendations,
-  onApplyRecommendation: jest.fn(),
+  onApplyRecommendation: vi.fn(),
 };
 
 describe('SmartRecommendations', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Basic Rendering', () => {
@@ -120,7 +120,7 @@ describe('SmartRecommendations', () => {
         },
       ];
 
-      render(<SmartRecommendations recommendations={lowConfidenceRecs} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={lowConfidenceRecs} onApplyRecommendation={vi.fn()} />);
 
       const lowConfidenceText = screen.getByText('45%');
       const confidenceBadge = lowConfidenceText.closest('div');
@@ -140,7 +140,7 @@ describe('SmartRecommendations', () => {
 
     it('calls onApplyRecommendation when a suggestion is clicked', async () => {
       const user = userEvent.setup();
-      const onApplyRecommendation = jest.fn();
+      const onApplyRecommendation = vi.fn();
 
       render(<SmartRecommendations {...defaultProps} onApplyRecommendation={onApplyRecommendation} />);
 
@@ -215,7 +215,7 @@ describe('SmartRecommendations', () => {
 
   describe('Empty State', () => {
     it('handles empty recommendations gracefully', () => {
-      render(<SmartRecommendations recommendations={[]} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={[]} onApplyRecommendation={vi.fn()} />);
 
       expect(screen.queryByText('Smart Tag Suggestions')).not.toBeInTheDocument();
     });
@@ -232,7 +232,7 @@ describe('SmartRecommendations', () => {
         },
       ];
 
-      render(<SmartRecommendations recommendations={emptyRecommendations} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={emptyRecommendations} onApplyRecommendation={vi.fn()} />);
 
       expect(screen.getByText('Empty Recommendation')).toBeInTheDocument();
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -298,7 +298,7 @@ describe('SmartRecommendations', () => {
         category: 'freeform',
       };
 
-      render(<SmartRecommendations recommendations={[largeSuggestionRec]} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={[largeSuggestionRec]} onApplyRecommendation={vi.fn()} />);
 
       expect(screen.getByText('Large Suggestion Set')).toBeInTheDocument();
       expect(screen.getAllByRole('button')).toHaveLength(50);
@@ -314,7 +314,7 @@ describe('SmartRecommendations', () => {
         category: 'freeform',
       };
 
-      render(<SmartRecommendations recommendations={[longNameRec]} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={[longNameRec]} onApplyRecommendation={vi.fn()} />);
 
       const longButton = screen.getByRole('button');
       expect(longButton).toBeInTheDocument();
@@ -331,7 +331,7 @@ describe('SmartRecommendations', () => {
         category: 'freeform',
       };
 
-      render(<SmartRecommendations recommendations={[specialCharRec]} onApplyRecommendation={jest.fn()} />);
+      render(<SmartRecommendations recommendations={[specialCharRec]} onApplyRecommendation={vi.fn()} />);
 
       expect(screen.getByRole('button', { name: 'Reader/OC' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Hurt & Comfort' })).toBeInTheDocument();
@@ -342,7 +342,7 @@ describe('SmartRecommendations', () => {
   describe('Integration Features', () => {
     it('preserves recommendation data when suggestion is applied', async () => {
       const user = userEvent.setup();
-      const onApplyRecommendation = jest.fn();
+      const onApplyRecommendation = vi.fn();
 
       render(<SmartRecommendations {...defaultProps} onApplyRecommendation={onApplyRecommendation} />);
 
@@ -360,7 +360,7 @@ describe('SmartRecommendations', () => {
 
     it('handles rapid clicking without duplicate calls', async () => {
       const user = userEvent.setup();
-      const onApplyRecommendation = jest.fn();
+      const onApplyRecommendation = vi.fn();
 
       render(<SmartRecommendations {...defaultProps} onApplyRecommendation={onApplyRecommendation} />);
 

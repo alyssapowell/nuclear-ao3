@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, X } from 'lucide-react';
 import Badge from '../ui/Badge';
@@ -68,8 +66,7 @@ export const NotificationBell: React.FC = () => {
   } = useNotifications();
 
   const { connect, disconnect, isConnected } = useWebSocket({
-    url: process.env.NEXT_PUBLIC_NOTIFICATION_WS_URL ||
-      (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws` : ''),
+    url: `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws`,
     onMessage: (data) => {
       if (data.type === 'unread_count') {
         setUnreadCount(data.payload.count);

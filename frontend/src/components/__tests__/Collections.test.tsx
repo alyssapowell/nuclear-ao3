@@ -1,28 +1,30 @@
+import type { MockedFunction } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { jest } from '@jest/globals';
 
 // Mock fetch to control API responses
-const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+const mockFetch = global.fetch as MockedFunction<typeof fetch>;
 
 // Mock Next.js router
-const mockPush = jest.fn();
+const mockPush = vi.fn();
 const mockParams = { id: 'test-collection-id' };
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-  useParams: () => mockParams,
-}));
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useNavigate: () => mockPush,
+    useParams: () => mockParams,
+  }));
 
 // Mock AuthGuard
-jest.mock('@/components/auth/AuthGuard', () => ({
+vi.mock('@/components/auth/AuthGuard', () => ({
   __esModule: true,
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 // Mock UI components
-jest.mock('@/components/ui', () => ({
+vi.mock('@/components/ui', () => ({
   Card: ({ children, className }: { children: React.ReactNode; className?: string }) => 
     <div className={className} data-testid="card">{children}</div>,
   Button: ({ children, onClick, disabled, className }: any) => 
@@ -42,21 +44,21 @@ jest.mock('@/components/ui', () => ({
 }));
 
 // Import components after mocks
-import CollectionsPage from '@/app/collections/page';
-import CreateCollectionPage from '@/app/collections/new/page';
+import CollectionsPage from '@/pages/CollectionList';
+import CreateCollectionPage from '@/pages/CollectionNew';
 
 describe('Collections Components', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockFetch.mockClear();
     
     // Reset localStorage mock
     Object.defineProperty(window, 'localStorage', {
       value: {
-        getItem: jest.fn(() => 'mock-token'),
-        setItem: jest.fn(),
-        removeItem: jest.fn(),
-        clear: jest.fn(),
+        getItem: vi.fn(() => 'mock-token'),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
       },
       writable: true,
     });

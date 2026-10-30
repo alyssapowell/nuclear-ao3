@@ -34,7 +34,7 @@ make setup
 # - Start all microservices
 # - Launch frontend development server
 
-# Visit http://localhost:3000 to see Nuclear AO3!
+# Visit http://localhost:3001 to see Nuclear AO3!
 ```
 
 **Demo credentials:**
@@ -57,7 +57,7 @@ make clean        # Clean up containers
 Nuclear AO3 uses a **modern microservices architecture**:
 
 ```
-Frontend (Next.js + React)
+Frontend (Vite + React + React Router)
     ↓
 GraphQL Gateway (Node.js) 
     ↓
@@ -74,7 +74,7 @@ Kubernetes Auto-scaling
 ### Key Technologies
 
 - **Backend:** Go 1.21+ with Gin framework
-- **Frontend:** Next.js 14 with TypeScript and Tailwind CSS
+- **Frontend:** Vite, React and React Router, with TypeScript and Tailwind CSS. Built to static files; no Node server in production
 - **Database:** PostgreSQL 15 with optimized schema
 - **Cache:** Redis 7 for sessions and caching
 - **Search:** Elasticsearch 8 for full-text search
@@ -166,7 +166,7 @@ git push origin feature/amazing-new-feature
 
 **Before submitting:**
 - [ ] All tests pass (`make test`)
-- [ ] **Accessibility tests pass** (`npm run test:accessibility` in frontend/)
+- [ ] **Accessibility tests pass** (`npx vitest run -t 'Accessibility|a11y'` in frontend/)
 - [ ] Performance benchmarks show no regression (`make benchmark`)
 - [ ] Code is properly formatted (`make format`)
 - [ ] Documentation is updated if needed

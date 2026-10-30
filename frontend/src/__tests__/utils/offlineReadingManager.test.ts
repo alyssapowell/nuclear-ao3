@@ -1,4 +1,4 @@
-import { OfflineReadingManager } from '../../utils/offlineReadingManager';
+import { OfflineReadingManager, workMetadataStorage, readingSettingsStorage, useOfflineReading } from '../../utils/offlineReadingManager';
 import { 
   setupGlobalMocks, 
   resetMocks, 
@@ -61,7 +61,7 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should register message handlers', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       manager.onMessage('TEST_MESSAGE', handler);
       
       simulateServiceWorkerMessage('TEST_MESSAGE', { data: 'test' });
@@ -70,7 +70,7 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should remove message handlers', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       manager.onMessage('TEST_MESSAGE', handler);
       manager.offMessage('TEST_MESSAGE');
       
@@ -84,16 +84,16 @@ describe('OfflineReadingManager', () => {
     beforeEach(() => {
       // Mock MessageChannel communication
       const originalMessageChannel = global.MessageChannel;
-      global.MessageChannel = jest.fn().mockImplementation(() => ({
+      global.MessageChannel = vi.fn().mockImplementation(() => ({
         port1: {
           onmessage: null,
-          postMessage: jest.fn(),
-          close: jest.fn()
+          postMessage: vi.fn(),
+          close: vi.fn()
         },
         port2: {
           onmessage: null,
-          postMessage: jest.fn(),
-          close: jest.fn()
+          postMessage: vi.fn(),
+          close: vi.fn()
         }
       }));
     });
@@ -287,7 +287,7 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle connection change events', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const cleanup = manager.onConnectionChange(callback);
       
       simulateNetworkStatus(false);
@@ -305,7 +305,6 @@ describe('OfflineReadingManager', () => {
 
   describe('Local Storage Integration', () => {
     it('should save work metadata', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       const metadata = { title: 'Test Work', authors: [] };
       workMetadataStorage.set('test-id', metadata);
@@ -317,7 +316,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should get work metadata', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       const metadata = { title: 'Test Work', authors: [] };
       localStorageMock.getItem.mockReturnValue(JSON.stringify(metadata));
@@ -327,7 +325,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle missing work metadata', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       localStorageMock.getItem.mockReturnValue(null);
       
@@ -336,7 +333,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should remove work metadata', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       workMetadataStorage.remove('test-id');
       
@@ -344,7 +340,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle localStorage errors gracefully', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       localStorageMock.setItem.mockImplementation(() => {
         throw new Error('Storage quota exceeded');
@@ -359,7 +354,6 @@ describe('OfflineReadingManager', () => {
 
   describe('Reading Settings Storage', () => {
     it('should save reading settings', () => {
-      const { readingSettingsStorage } = require('../../utils/offlineReadingManager');
       
       const settings = { fontSize: 'large', theme: 'dark' };
       readingSettingsStorage.set(settings);
@@ -371,7 +365,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should get reading settings', () => {
-      const { readingSettingsStorage } = require('../../utils/offlineReadingManager');
       
       const settings = { fontSize: 'large', theme: 'dark' };
       localStorageMock.getItem.mockReturnValue(JSON.stringify(settings));
@@ -381,7 +374,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle missing reading settings', () => {
-      const { readingSettingsStorage } = require('../../utils/offlineReadingManager');
       
       localStorageMock.getItem.mockReturnValue(null);
       
@@ -411,7 +403,6 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle JSON parsing errors in localStorage', () => {
-      const { workMetadataStorage } = require('../../utils/offlineReadingManager');
       
       localStorageMock.getItem.mockReturnValue('invalid json');
       
@@ -425,7 +416,6 @@ describe('useOfflineReading hook', () => {
   it('should return the singleton instance', () => {
     setupGlobalMocks();
     
-    const { useOfflineReading } = require('../../utils/offlineReadingManager');
     const manager = useOfflineReading();
     
     expect(manager).toBeInstanceOf(OfflineReadingManager);

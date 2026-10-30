@@ -100,11 +100,11 @@ dev-setup: ## Complete development environment setup
 	@make services
 	@cd frontend && npm install
 	@echo "✅ Development environment ready!"
-	@echo "🌐 Frontend: http://localhost:3000"
+	@echo "🌐 Website (dev): run make frontend-dev, then http://localhost:3001"
 	@echo "🔌 API: http://localhost:8088"
 	@echo "📊 Grafana: http://localhost:3002"
 
-frontend-dev: ## Start frontend development server
+frontend-dev: ## Start the website on http://localhost:3001 (needs the app running)
 	@echo "🌐 Starting frontend development server..."
 	@cd frontend && npm run dev
 

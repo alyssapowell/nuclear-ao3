@@ -9,17 +9,11 @@ import { render } from '@testing-library/react';
 import { ReactElement, ReactNode } from 'react';
 
 // Mock Next.js navigation
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-  }),
-  usePathname: () => '/test',
-  useSearchParams: () => ({
-    get: jest.fn(),
-  }),
-}));
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useLocation: () => ({ pathname: '/test', search: '', hash: '', state: null, key: 'test' }),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  }));
 
 // SSR Environment Simulation
 const simulateSSR = () => {
@@ -35,21 +29,21 @@ const restoreClientEnv = () => {
   // @ts-ignore
   global.window = { location: { pathname: '/test', search: '' } };
   global.localStorage = {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn(),
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
   };
   global.document = {
     cookie: '',
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
   };
 };
 
 describe('SSR Safety Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -94,7 +88,7 @@ describe('SSR Safety Tests', () => {
     test('Profile page handles SSR without localStorage', async () => {
       simulateSSR();
       
-      const { default: ProfilePage } = await import('../app/profile/page');
+      const { default: ProfilePage } = await import('../pages/Profile');
       
       expect(() => {
         render(<ProfilePage />);
@@ -211,9 +205,9 @@ describe('SSR Safety Tests', () => {
         () => import('../components/Navigation'),
         () => import('../components/notifications/NotificationBell'),
         () => import('../components/privacy/PrivacyWizard'),
-        () => import('../app/profile/page'),
-        () => import('../app/dashboard/page'),
-        () => import('../app/auth/login/page'),
+        () => import('../pages/Profile'),
+        () => import('../pages/Dashboard'),
+        () => import('../pages/Login'),
       ];
 
       for (const importFn of componentsWithLocalStorage) {
@@ -238,10 +232,10 @@ describe('SSR Safety Tests', () => {
     test('Components recover from localStorage errors gracefully', async () => {
       // Mock localStorage to throw errors
       const mockLocalStorage = {
-        getItem: jest.fn(() => { throw new Error('localStorage not available'); }),
-        setItem: jest.fn(() => { throw new Error('localStorage not available'); }),
-        removeItem: jest.fn(() => { throw new Error('localStorage not available'); }),
-        clear: jest.fn(),
+        getItem: vi.fn(() => { throw new Error('localStorage not available'); }),
+        setItem: vi.fn(() => { throw new Error('localStorage not available'); }),
+        removeItem: vi.fn(() => { throw new Error('localStorage not available'); }),
+        clear: vi.fn(),
       };
       
       Object.defineProperty(window, 'localStorage', {

@@ -1,25 +1,19 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { jest } from '@jest/globals';
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-  }),
-}));
 
-import LoginPage from '../app/auth/login/page';
+import LoginPage from '../pages/Login';
 
 describe('Login Page Hooks Error', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock fetch for login API
-    global.fetch = jest.fn(() =>
+    global.fetch = vi.fn(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ 
@@ -27,11 +21,11 @@ describe('Login Page Hooks Error', () => {
           user: { id: '1', username: 'testuser' }
         }),
       })
-    ) as jest.Mock;
+    ) as Mock;
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should render login form without hooks error', () => {

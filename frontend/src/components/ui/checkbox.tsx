@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 
 export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {

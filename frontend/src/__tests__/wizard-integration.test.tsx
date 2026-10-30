@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PrivacyWizard from '../components/privacy/PrivacyWizard';
@@ -5,37 +6,27 @@ import { useAuth } from '../utils/auth';
 import { useUserSettings } from '../hooks/useUserSettings';
 
 // Mock dependencies
-jest.mock('../utils/auth', () => ({
-  useAuth: jest.fn(),
-  getAuthState: jest.fn(),
-  isAuthenticated: jest.fn(),
+vi.mock('../utils/auth', () => ({
+  useAuth: vi.fn(),
+  getAuthState: vi.fn(),
+  isAuthenticated: vi.fn(),
 }));
 
-jest.mock('../hooks/useUserSettings', () => ({
-  useUserSettings: jest.fn(),
+vi.mock('../hooks/useUserSettings', () => ({
+  useUserSettings: vi.fn(),
 }));
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    back: jest.fn(),
-    forward: jest.fn(),
-    refresh: jest.fn(),
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-  }),
-}));
 
-const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
-const mockUseUserSettings = useUserSettings as jest.MockedFunction<typeof useUserSettings>;
+const mockUseAuth = useAuth as MockedFunction<typeof useAuth>;
+const mockUseUserSettings = useUserSettings as MockedFunction<typeof useUserSettings>;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockUseAuth.mockReturnValue({
     user: { id: '1', username: 'testuser', email: 'test@example.com' },
     isAuthenticated: true,
     token: 'mock-token',
-    logout: jest.fn(),
+    logout: vi.fn(),
   });
 
   mockUseUserSettings.mockReturnValue({
@@ -44,7 +35,7 @@ beforeEach(() => {
       profilePrivacy: 'public',
       workPrivacy: 'public',
     },
-    updateSettings: jest.fn(),
+    updateSettings: vi.fn(),
     loading: false,
     error: null,
   });
@@ -88,7 +79,7 @@ describe('Wizard Integration Tests', () => {
     });
 
     test('saves privacy settings on completion', async () => {
-      const mockUpdateSettings = jest.fn();
+      const mockUpdateSettings = vi.fn();
       mockUseUserSettings.mockReturnValue({
         settings: {
           emailNotifications: true,
@@ -117,7 +108,7 @@ describe('Wizard Integration Tests', () => {
     test('handles errors gracefully during setup', async () => {
       mockUseUserSettings.mockReturnValue({
         settings: {},
-        updateSettings: jest.fn(),
+        updateSettings: vi.fn(),
         loading: false,
         error: 'Failed to save settings',
       });
@@ -133,7 +124,7 @@ describe('Wizard Integration Tests', () => {
     test('shows loading state during settings update', async () => {
       mockUseUserSettings.mockReturnValue({
         settings: {},
-        updateSettings: jest.fn(),
+        updateSettings: vi.fn(),
         loading: true,
         error: null,
       });

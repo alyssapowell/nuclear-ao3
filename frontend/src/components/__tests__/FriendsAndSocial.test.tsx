@@ -1,20 +1,21 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import FriendsAndSocial from '../FriendsAndSocial';
 import { sendFriendRequest, acceptFriendRequest, blockUser, getUserDashboard } from '@/lib/api';
 
 // Mock the API functions
-jest.mock('@/lib/api', () => ({
-  sendFriendRequest: jest.fn(),
-  acceptFriendRequest: jest.fn(),
-  blockUser: jest.fn(),
-  getUserDashboard: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  sendFriendRequest: vi.fn(),
+  acceptFriendRequest: vi.fn(),
+  blockUser: vi.fn(),
+  getUserDashboard: vi.fn(),
 }));
 
-const mockSendFriendRequest = sendFriendRequest as jest.MockedFunction<typeof sendFriendRequest>;
-const mockAcceptFriendRequest = acceptFriendRequest as jest.MockedFunction<typeof acceptFriendRequest>;
-const mockBlockUser = blockUser as jest.MockedFunction<typeof blockUser>;
-const mockGetUserDashboard = getUserDashboard as jest.MockedFunction<typeof getUserDashboard>;
+const mockSendFriendRequest = sendFriendRequest as MockedFunction<typeof sendFriendRequest>;
+const mockAcceptFriendRequest = acceptFriendRequest as MockedFunction<typeof acceptFriendRequest>;
+const mockBlockUser = blockUser as MockedFunction<typeof blockUser>;
+const mockGetUserDashboard = getUserDashboard as MockedFunction<typeof getUserDashboard>;
 
 // Helper function to render FriendsAndSocial component wrapped in act
 const renderFriendsAndSocialWithAct = async (props: any) => {
@@ -93,7 +94,7 @@ describe('FriendsAndSocial', () => {
   ];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetUserDashboard.mockResolvedValue({ relationships: mockRelationships });
     mockSendFriendRequest.mockResolvedValue({ success: true });
     mockAcceptFriendRequest.mockResolvedValue({ success: true });

@@ -1,7 +1,7 @@
 # Nuclear AO3 Caddy Configuration
 # Automatic HTTPS, load balancing, and reverse proxy
 
-# Main site - frontend and API routing
+# Main site: the website files, plus the API behind /api
 {$DOMAIN:localhost} {
     # Enable compression
     encode gzip
@@ -31,9 +31,20 @@
         reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
 
-    # Static assets and frontend
-    handle /* {
-        reverse_proxy {$FRONTEND_HOST:frontend}:{$FRONTEND_PORT:3000}
+    # The website itself: plain files built by frontend/Dockerfile into /srv.
+    # Any address that isn't a file (like /works/123) gets index.html, and the
+    # site's own router shows the right page.
+    handle {
+        root * /srv
+        # Built files have a fingerprint in their name, so they never change.
+        @fingerprinted path /assets/*
+        header @fingerprinted Cache-Control "public, max-age=31536000, immutable"
+        # Everything else (index.html above all) must be checked every time,
+        # or visitors keep running an old version after an upgrade.
+        @not_fingerprinted not path /assets/*
+        header @not_fingerprinted Cache-Control "no-cache"
+        try_files {path} /index.html
+        file_server
     }
 
     # Request logging

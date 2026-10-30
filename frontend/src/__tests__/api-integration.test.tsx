@@ -218,19 +218,19 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 // Mock authentication utilities
-jest.mock('../utils/auth', () => ({
-  useAuth: jest.fn(() => ({
+vi.mock('../utils/auth', () => ({
+  useAuth: vi.fn(() => ({
     user: { id: '1', username: 'testuser' },
     isAuthenticated: true,
     token: 'mock-jwt-token',
-    logout: jest.fn(),
+    logout: vi.fn(),
   })),
-  getAuthState: jest.fn(() => ({
+  getAuthState: vi.fn(() => ({
     user: { id: '1', username: 'testuser' },
     isAuthenticated: true,
     token: 'mock-jwt-token',
   })),
-  isAuthenticated: jest.fn(() => true),
+  isAuthenticated: vi.fn(() => true),
 }));
 
 describe('API Integration Tests', () => {
@@ -641,7 +641,7 @@ describe('API Integration Tests', () => {
 
   describe('API Request Optimization', () => {
     test('implements request caching', async () => {
-      const requestSpy = jest.fn();
+      const requestSpy = vi.fn();
       
       server.use(
         rest.get('/api/works/:id', (req, res, ctx) => {
@@ -667,7 +667,7 @@ describe('API Integration Tests', () => {
     });
 
     test('implements request deduplication', async () => {
-      const requestSpy = jest.fn();
+      const requestSpy = vi.fn();
       
       server.use(
         rest.get('/api/works', (req, res, ctx) => {

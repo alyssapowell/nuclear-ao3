@@ -1,14 +1,15 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import KudosButton from '../KudosButton';
 import { giveKudos } from '@/lib/api';
 
 // Mock the API function
-jest.mock('@/lib/api', () => ({
-  giveKudos: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  giveKudos: vi.fn(),
 }));
 
-const mockGiveKudos = giveKudos as jest.MockedFunction<typeof giveKudos>;
+const mockGiveKudos = giveKudos as MockedFunction<typeof giveKudos>;
 
 describe('KudosButton', () => {
   const defaultProps = {

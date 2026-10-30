@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import { Comment, CommentCreateRequest } from '@/types/comment';
 import { useConversationNavigation } from '@/hooks/useConversationNavigation';

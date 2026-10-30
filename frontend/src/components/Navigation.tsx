@@ -1,8 +1,5 @@
-'use client';
-
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
 import { Search, Menu, X, User, Bell, LogOut, Settings, ChevronDown, BookOpen, Library, FolderOpen, Plus, Bookmark, Heart, LayoutDashboard } from 'lucide-react';
 import { NotificationBell } from './notifications';
 
@@ -71,8 +68,8 @@ export default function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const router = useRouter();
-  const pathname = usePathname();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   // Check for authentication and listen for changes
   useEffect(() => {
@@ -127,13 +124,13 @@ export default function Navigation() {
     }
     setUser(null);
     setIsUserMenuOpen(false);
-    router.push('/');
+    navigate('/');
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
     }
   };
@@ -170,7 +167,7 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2 group">
+            <Link to="/" className="flex items-center space-x-2 group">
               <div className="text-2xl">🚀</div>
               <div className="hidden sm:block">
                 <h1 className="text-xl font-bold text-gray-900 group-hover:text-orange-700 transition-colors">
@@ -206,7 +203,7 @@ export default function Navigation() {
           <div className="hidden md:flex items-center space-x-6">
             {/* Search Link (standalone) */}
             <Link
-              href="/search"
+              to="/search"
               className={`text-sm font-medium transition-colors hover:text-orange-700 ${
                 isActive('/search') 
                   ? 'text-orange-700 border-b-2 border-orange-600 pb-4 -mb-4' 
@@ -225,7 +222,7 @@ export default function Navigation() {
               {browseLinks.map((link) => (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  to={link.href}
                   className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                     isActive(link.href)
                       ? 'text-orange-700 bg-orange-50'
@@ -248,7 +245,7 @@ export default function Navigation() {
                 {createLinks.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    to={link.href}
                     className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                       isActive(link.href)
                         ? 'text-orange-700 bg-orange-50'
@@ -272,7 +269,7 @@ export default function Navigation() {
                 {libraryLinks.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    to={link.href}
                     className={`flex items-center space-x-2 px-4 py-2 text-sm transition-colors ${
                       isActive(link.href)
                         ? 'text-orange-700 bg-orange-50'
@@ -308,7 +305,7 @@ export default function Navigation() {
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <Link
-                      href="/profile"
+                      to="/profile"
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setIsUserMenuOpen(false)}
                     >
@@ -316,7 +313,7 @@ export default function Navigation() {
                       Profile Settings
                     </Link>
                     <Link
-                      href="/profile/privacy"
+                      to="/profile/privacy"
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       onClick={() => setIsUserMenuOpen(false)}
                     >
@@ -338,13 +335,13 @@ export default function Navigation() {
             ) : (
               <div className="flex items-center space-x-4">
                 <Link
-                  href="/auth/login"
+                  to="/auth/login"
                   className="text-sm font-medium text-gray-700 hover:text-orange-700 transition-colors"
                 >
                   Log In
                 </Link>
                 <Link
-                  href="/auth/register"
+                  to="/auth/register"
                   className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors"
                 >
                   Sign Up
@@ -394,7 +391,7 @@ export default function Navigation() {
           <div className="px-4 py-2 space-y-1">
             {/* Search */}
             <Link
-              href="/search"
+              to="/search"
               className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                 isActive('/search')
                   ? 'text-orange-700 bg-orange-50'
@@ -414,7 +411,7 @@ export default function Navigation() {
               {browseLinks.map((link) => (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  to={link.href}
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                     isActive(link.href)
                       ? 'text-orange-700 bg-orange-50'
@@ -439,7 +436,7 @@ export default function Navigation() {
                     {createLinks.map((link) => (
                       <Link
                         key={link.href}
-                        href={link.href}
+                        to={link.href}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                           isActive(link.href)
                             ? 'text-orange-700 bg-orange-50'
@@ -463,7 +460,7 @@ export default function Navigation() {
                     {libraryLinks.map((link) => (
                       <Link
                         key={link.href}
-                        href={link.href}
+                        to={link.href}
                         className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                           isActive(link.href)
                             ? 'text-orange-700 bg-orange-50'
@@ -488,7 +485,7 @@ export default function Navigation() {
                     <span className="text-base font-medium text-gray-900">{user.username}</span>
                   </div>
                   <Link
-                    href="/profile"
+                    to="/profile"
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
@@ -508,14 +505,14 @@ export default function Navigation() {
               <>
                 <hr className="my-2" />
                 <Link
-                  href="/auth/login"
+                  to="/auth/login"
                   className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Log In
                 </Link>
                 <Link
-                  href="/auth/register"
+                  to="/auth/register"
                   className="block px-3 py-2 rounded-md text-base font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >

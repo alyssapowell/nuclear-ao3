@@ -4,16 +4,16 @@ import '@testing-library/jest-dom';
 import PrivacyWizard from './PrivacyWizard';
 
 // Mock the API module
-jest.mock('@/lib/api', () => ({
-  updatePrivacySettings: jest.fn(() => Promise.resolve({ updated_at: '2023-01-01T00:00:00Z' })),
-  getPrivacySettings: jest.fn(() => Promise.reject(new Error('API not available'))),
+vi.mock('@/lib/api', () => ({
+  updatePrivacySettings: vi.fn(() => Promise.resolve({ updated_at: '2023-01-01T00:00:00Z' })),
+  getPrivacySettings: vi.fn(() => Promise.reject(new Error('API not available'))),
 }));
 
 // Mock localStorage
 const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  clear: vi.fn(),
 };
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
@@ -101,7 +101,7 @@ describe('PrivacyWizard', () => {
   });
 
   test('calls onComplete when wizard is finished', async () => {
-    const mockOnComplete = jest.fn();
+    const mockOnComplete = vi.fn();
     localStorageMock.getItem.mockReturnValue('fake-auth-token');
     
     render(<PrivacyWizard onComplete={mockOnComplete} />);
@@ -125,7 +125,7 @@ describe('PrivacyWizard', () => {
   });
 
   test('saves settings to localStorage when API is not available', async () => {
-    const mockOnComplete = jest.fn();
+    const mockOnComplete = vi.fn();
     localStorageMock.getItem.mockReturnValue(null); // No auth token
     
     render(<PrivacyWizard onComplete={mockOnComplete} />);

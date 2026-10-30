@@ -175,3 +175,6 @@ tools/*-data.json
 frontend/playwright-report*/
 frontend/test-results*.json
 frontend/accessibility-validation-results.json
+
+# Browser-automation scratch files
+.playwright-mcp/

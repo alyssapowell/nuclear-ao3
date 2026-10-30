@@ -34,7 +34,7 @@ test.describe('Enhanced User Dashboard', () => {
     userId = loginData.user.id;
     
     // Set auth token in browser
-    await page.goto('http://localhost:3002');
+    await page.goto('http://localhost:3001');
     await page.evaluate((token) => {
       localStorage.setItem('auth_token', token);
       localStorage.setItem('token', token);
@@ -99,7 +99,7 @@ test.describe('Enhanced User Dashboard', () => {
   }
 
   test('should display dashboard with user statistics', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify dashboard loads
     await expect(page.locator('h1')).toContainText('Dashboard');
@@ -119,7 +119,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should display recent works section', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify recent works section
     await expect(page.locator('[data-testid="recent-works-section"]')).toBeVisible();
@@ -137,7 +137,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should provide quick actions for works', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Wait for works to load
     await expect(page.locator('text=Completed Test Work')).toBeVisible();
@@ -159,7 +159,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should show activity feed', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify activity section exists
     await expect(page.locator('[data-testid="activity-section"]')).toBeVisible();
@@ -170,7 +170,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should display work statistics correctly', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify stat cards have proper structure
     const totalWorksCard = page.locator('[data-testid="total-works-stat"]');
@@ -222,7 +222,7 @@ test.describe('Enhanced User Dashboard', () => {
       localStorage.setItem('token', token);
     }, emptyAuthToken);
 
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify dashboard shows zero statistics
     await expect(page.locator('[data-testid="total-works-stat"]')).toContainText('0');
@@ -236,7 +236,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should navigate to work creation from dashboard', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Find and click the "Create New Work" button
     const createButton = page.locator('a:has-text("Create New Work")');
@@ -249,7 +249,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should show work progress for multi-chapter works', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Verify the in-progress work shows chapter progress
     const inProgressWork = page.locator('text=In Progress Test Work').locator('..');
@@ -259,7 +259,7 @@ test.describe('Enhanced User Dashboard', () => {
   test('should handle responsive layout', async ({ page }) => {
     // Test mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Dashboard should still be functional on mobile
     await expect(page.locator('h1')).toContainText('Dashboard');
@@ -272,7 +272,7 @@ test.describe('Enhanced User Dashboard', () => {
   });
 
   test('should update statistics in real-time', async ({ page }) => {
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Get initial work count
     const initialCount = await page.locator('[data-testid="total-works-stat"] .stat-number').textContent();
@@ -310,7 +310,7 @@ test.describe('Enhanced User Dashboard', () => {
     });
     
     // Try to access dashboard
-    await page.goto('http://localhost:3002/dashboard');
+    await page.goto('http://localhost:3001/dashboard');
     
     // Should redirect to login or show login required message
     const currentUrl = page.url();

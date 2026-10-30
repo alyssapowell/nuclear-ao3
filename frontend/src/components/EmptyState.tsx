@@ -1,6 +1,4 @@
-'use client';
-
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { Search, BookOpen, PlusCircle, FileText, Users, Folder, Inbox, Filter } from 'lucide-react';
 
 export type EmptyStateType = 
@@ -166,7 +164,7 @@ export default function EmptyState({
                 return (
                   <Link
                     key={index}
-                    href={action.href}
+                    to={action.href}
                     className={`${baseClasses} ${variantClasses}`}
                   >
                     {action.label}

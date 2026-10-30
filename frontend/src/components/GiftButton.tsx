@@ -1,7 +1,5 @@
-'use client'
-
 import { useState } from 'react'
-import { useAuth } from '@/lib/auth'
+import { useAuth } from '@/utils/auth'
 import { giftWork, CreateGiftRequest } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { 

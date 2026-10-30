@@ -58,7 +58,7 @@ make service-status
 ```
 
 **Frontend Application:**
-- **Nuclear AO3 Web App**: http://localhost:3000 - **Fully accessible Next.js frontend**
+- **Website**: https://localhost through Caddy, or http://localhost:3001 with `make frontend-dev` (reloads as you edit). It's a Vite + React single-page app built to plain files; there's no Node server in production.
 
 **Service Endpoints:**
 
@@ -66,7 +66,7 @@ make service-status
 - **Database**: localhost:5432 - PostgreSQL 
 - **Cache**: localhost:6379 - Redis
 - **Search Engine**: http://localhost:9200 - Elasticsearch
-- **Monitoring**: http://localhost:3001 - Grafana (admin/admin)
+- **Monitoring**: http://localhost:3002 - Grafana (admin/admin)
 
 ### 🎯 Take It for a Test Drive
 
@@ -147,7 +147,7 @@ make dev-setup
 # Run benchmarks
 make performance-test
 
-# View metrics at http://localhost:3001
+# View metrics at http://localhost:3002
 ```
 
 **4. Database/Content Management:**
@@ -194,7 +194,7 @@ nuclear-ao3/
 │   ├── tag-service/           # Tag taxonomy and relationships
 │   ├── search-service/        # Elasticsearch integration
 │   └── shared/                # Common models and middleware
-├── frontend/                  # Next.js React application
+├── frontend/                  # The website: Vite + React + React Router
 ├── backend/migrations/       # Database schema, applied by the app itself
 ├── monitoring/               # Prometheus & Grafana config
 ├── docker-compose.yml        # Development environment
@@ -384,7 +384,7 @@ The search service provides powerful querying capabilities:
 
 ## 📊 Monitoring
 
-Access monitoring at http://localhost:3001 (Grafana):
+Access monitoring at http://localhost:3002 (Grafana):
 - API response times and error rates
 - Database performance metrics
 - Search query performance

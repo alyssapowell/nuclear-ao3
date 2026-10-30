@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 /**
  * Authentication utilities
  * This provides authentication functions that work with localStorage-based auth
@@ -97,14 +99,24 @@ export function logout(): void {
 }
 
 /**
- * Mock useAuth hook for tests
- * This replaces the non-existent AuthContext
+ * The logged-in user and their token, for use in components.
+ *
+ * It returns the same objects until someone logs in or out (in this tab or
+ * another), so it's safe to list `user` or `token` in a useEffect's
+ * dependencies without the effect running on every render.
  */
 export function useAuth(): AuthState & { logout: () => void } {
-  const authState = getAuthState();
-  
-  return {
-    ...authState,
-    logout
-  };
+  const [authState, setAuthState] = useState(getAuthState);
+
+  useEffect(() => {
+    const refresh = () => setAuthState(getAuthState());
+    window.addEventListener('authChange', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('authChange', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  return { ...authState, logout };
 }

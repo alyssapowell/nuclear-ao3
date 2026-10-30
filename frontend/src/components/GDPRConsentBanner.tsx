@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { Cookie, Shield, Info, X, Settings } from 'lucide-react';
 

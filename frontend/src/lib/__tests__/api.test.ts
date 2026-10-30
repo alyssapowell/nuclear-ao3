@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { 
   searchWorks, 
   searchUsers, 
@@ -10,12 +11,12 @@ import {
 } from '../api'
 
 // Mock fetch
-global.fetch = jest.fn()
-const mockFetch = fetch as jest.MockedFunction<typeof fetch>
+global.fetch = vi.fn()
+const mockFetch = fetch as MockedFunction<typeof fetch>
 
 describe('Search API Functions', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   describe('searchWorks', () => {

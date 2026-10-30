@@ -6,31 +6,20 @@
  */
 
 import { render, screen, act } from '@testing-library/react';
-import { useRouter } from 'next/navigation';
 import { ReactElement } from 'react';
+import fs from 'node:fs';
+import path from 'node:path';
 
-// Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(),
-  usePathname: jest.fn(() => '/'),
-  useSearchParams: jest.fn(() => ({
-    get: jest.fn(() => null),
-    has: jest.fn(() => false),
-    getAll: jest.fn(() => []),
-    keys: jest.fn(() => []),
-    values: jest.fn(() => []),
-    entries: jest.fn(() => []),
-    forEach: jest.fn(),
-    toString: jest.fn(() => ''),
-  })),
-}));
+const mockPush = vi.fn();
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({ useNavigate: () => mockPush }));
 
 // Mock localStorage for SSR safety
 const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
 };
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock
@@ -47,17 +36,8 @@ const testPageComponent = async (importFn: () => Promise<{ default: React.Compon
 };
 
 describe('Route Health Checks', () => {
-  const mockPush = jest.fn();
-  const mockReplace = jest.fn();
-
   beforeEach(() => {
-    jest.clearAllMocks();
-    (useRouter as jest.Mock).mockReturnValue({
-      push: mockPush,
-      replace: mockReplace,
-      back: jest.fn(),
-      forward: jest.fn(),
-    });
+    vi.clearAllMocks();
     
     // Clear localStorage mocks
     localStorageMock.getItem.mockReturnValue(null);
@@ -65,7 +45,7 @@ describe('Route Health Checks', () => {
 
   describe('Public Routes', () => {
     test('Home page (/) renders without errors', async () => {
-      const HomePage = await testPageComponent(() => import('../app/page'));
+      const HomePage = await testPageComponent(() => import('../pages/Home'));
       
       render(
         <>
@@ -78,7 +58,7 @@ describe('Route Health Checks', () => {
     });
 
     test('Login page (/auth/login) renders without errors', async () => {
-      const LoginPage = await testPageComponent(() => import('../app/auth/login/page'));
+      const LoginPage = await testPageComponent(() => import('../pages/Login'));
       
       render(
         <>
@@ -91,7 +71,7 @@ describe('Route Health Checks', () => {
     });
 
     test('Register page (/auth/register) renders without errors', async () => {
-      const RegisterPage = await testPageComponent(() => import('../app/auth/register/page'));
+      const RegisterPage = await testPageComponent(() => import('../pages/Register'));
       
       render(
         <>
@@ -109,7 +89,7 @@ describe('Route Health Checks', () => {
     });
 
     test('Search page (/search) renders without errors', async () => {
-      const SearchPage = await testPageComponent(() => import('../app/search/page'));
+      const SearchPage = await testPageComponent(() => import('../pages/Search'));
       
       render(
         <>
@@ -124,7 +104,7 @@ describe('Route Health Checks', () => {
 
   describe('Protected Routes (Should Redirect When Unauthenticated)', () => {
     test('Profile page (/profile) redirects to login when unauthenticated', async () => {
-      const ProfilePage = await testPageComponent(() => import('../app/profile/page'));
+      const ProfilePage = await testPageComponent(() => import('../pages/Profile'));
       
       render(<ProfilePage />);
       
@@ -135,7 +115,7 @@ describe('Route Health Checks', () => {
     });
 
     test('Dashboard page (/dashboard) redirects when unauthenticated', async () => {
-      const DashboardPage = await testPageComponent(() => import('../app/dashboard/page'));
+      const DashboardPage = await testPageComponent(() => import('../pages/Dashboard'));
       
       render(<DashboardPage />);
       
@@ -145,7 +125,7 @@ describe('Route Health Checks', () => {
     });
 
     test('Onboarding page (/onboarding) renders privacy wizard', async () => {
-      const OnboardingPage = await testPageComponent(() => import('../app/onboarding/page'));
+      const OnboardingPage = await testPageComponent(() => import('../pages/Onboarding'));
       
       render(<OnboardingPage />);
       
@@ -157,14 +137,14 @@ describe('Route Health Checks', () => {
   describe('Component Import Safety', () => {
     test('All critical page components can be imported', async () => {
       const criticalPages = [
-        () => import('../app/page'),
-        () => import('../app/auth/login/page'),
-        () => import('../app/auth/register/page'),
-        () => import('../app/profile/page'),
-        () => import('../app/dashboard/page'),
-        () => import('../app/onboarding/page'),
-        () => import('../app/works/page'),
-        () => import('../app/search/page'),
+        () => import('../pages/Home'),
+        () => import('../pages/Login'),
+        () => import('../pages/Register'),
+        () => import('../pages/Profile'),
+        () => import('../pages/Dashboard'),
+        () => import('../pages/Onboarding'),
+        () => import('../pages/WorkList'),
+        () => import('../pages/Search'),
       ];
 
       // All imports should succeed
@@ -189,16 +169,13 @@ describe('Route Health Checks', () => {
   });
 
   describe('Route Configuration Validation', () => {
-    test('Package.json dev script includes Turbopack', () => {
-      const packageJson = require('../../package.json');
-      
-      expect(packageJson.scripts.dev).toContain('next dev');
-    });
-
-    test('Next.js config exists and is valid', () => {
-      expect(() => {
-        require('../../next.config.js');
-      }).not.toThrow();
+    test('Every page in src/pages has a route in App.tsx', () => {
+      const pagesDir = path.resolve(__dirname, '../pages');
+      const app = fs.readFileSync(path.resolve(__dirname, '../App.tsx'), 'utf8');
+      const missing = fs.readdirSync(pagesDir)
+        .map((file) => file.replace(/\.tsx$/, ''))
+        .filter((page) => !app.includes(`import('@/pages/${page}')`) || !app.includes(`<${page} />`));
+      expect(missing).toEqual([]);
     });
   });
 });

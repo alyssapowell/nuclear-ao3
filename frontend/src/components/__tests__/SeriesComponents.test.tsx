@@ -1,31 +1,27 @@
+import type { MockedFunction } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mock the API functions
-jest.mock('@/lib/api', () => ({
-  getSeries: jest.fn(),
-  getSeriesWorks: jest.fn(),
-  createSeries: jest.fn(),
-  updateSeries: jest.fn(),
-  deleteSeries: jest.fn(),
-  searchSeries: jest.fn(),
-  getMySeries: jest.fn(),
-  getUserSeries: jest.fn(),
-  addWorkToSeries: jest.fn(),
-  removeWorkFromSeries: jest.fn(),
-  getMyWorks: jest.fn(),
+vi.mock('@/lib/api', () => ({
+  getSeries: vi.fn(),
+  getSeriesWorks: vi.fn(),
+  createSeries: vi.fn(),
+  updateSeries: vi.fn(),
+  deleteSeries: vi.fn(),
+  searchSeries: vi.fn(),
+  getMySeries: vi.fn(),
+  getUserSeries: vi.fn(),
+  addWorkToSeries: vi.fn(),
+  removeWorkFromSeries: vi.fn(),
+  getMyWorks: vi.fn(),
 }));
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    back: jest.fn(),
-  }),
-  useParams: () => ({
-    id: 'test-series-id',
-  }),
-}));
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useParams: () => ({ id: 'test-series-id', }),
+  }));
 
 import { 
   getSeries, 
@@ -43,23 +39,23 @@ import {
 
 // Mock localStorage
 const mockLocalStorage = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
 };
 Object.defineProperty(window, 'localStorage', { value: mockLocalStorage });
 
-const mockGetSeries = getSeries as jest.MockedFunction<typeof getSeries>;
-const mockGetSeriesWorks = getSeriesWorks as jest.MockedFunction<typeof getSeriesWorks>;
-const mockCreateSeries = createSeries as jest.MockedFunction<typeof createSeries>;
-const mockUpdateSeries = updateSeries as jest.MockedFunction<typeof updateSeries>;
-const mockDeleteSeries = deleteSeries as jest.MockedFunction<typeof deleteSeries>;
-const mockSearchSeries = searchSeries as jest.MockedFunction<typeof searchSeries>;
-const mockGetMySeries = getMySeries as jest.MockedFunction<typeof getMySeries>;
-const mockGetUserSeries = getUserSeries as jest.MockedFunction<typeof getUserSeries>;
-const mockAddWorkToSeries = addWorkToSeries as jest.MockedFunction<typeof addWorkToSeries>;
-const mockRemoveWorkFromSeries = removeWorkFromSeries as jest.MockedFunction<typeof removeWorkFromSeries>;
-const mockGetMyWorks = getMyWorks as jest.MockedFunction<typeof getMyWorks>;
+const mockGetSeries = getSeries as MockedFunction<typeof getSeries>;
+const mockGetSeriesWorks = getSeriesWorks as MockedFunction<typeof getSeriesWorks>;
+const mockCreateSeries = createSeries as MockedFunction<typeof createSeries>;
+const mockUpdateSeries = updateSeries as MockedFunction<typeof updateSeries>;
+const mockDeleteSeries = deleteSeries as MockedFunction<typeof deleteSeries>;
+const mockSearchSeries = searchSeries as MockedFunction<typeof searchSeries>;
+const mockGetMySeries = getMySeries as MockedFunction<typeof getMySeries>;
+const mockGetUserSeries = getUserSeries as MockedFunction<typeof getUserSeries>;
+const mockAddWorkToSeries = addWorkToSeries as MockedFunction<typeof addWorkToSeries>;
+const mockRemoveWorkFromSeries = removeWorkFromSeries as MockedFunction<typeof removeWorkFromSeries>;
+const mockGetMyWorks = getMyWorks as MockedFunction<typeof getMyWorks>;
 
 // Sample test data
 const mockSeries = {
@@ -136,7 +132,7 @@ const mockPagination = {
 
 describe('Series API Integration', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockLocalStorage.getItem.mockReturnValue('test-auth-token');
   });
 
@@ -352,7 +348,7 @@ describe('Series API Integration', () => {
 
 describe('Series Error Handling', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockLocalStorage.getItem.mockReturnValue(null);
   });
 

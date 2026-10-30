@@ -122,11 +122,7 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Run linting
-        working-directory: frontend
-        run: npm run lint || echo "⚠️ Frontend linting completed with warnings"
-
-      - name: Run type checking
+      - name: Type-check and build
         working-directory: frontend
         run: npm run build
 
@@ -157,26 +153,18 @@ jobs:
           echo "🐳 Testing Frontend Docker build..."
           docker build -t nuclear-ao3/frontend:test frontend/
 
-      - name: Test Frontend container startup
+      - name: Serve the site with the real Caddyfile
         run: |
-          echo "🧪 Testing Frontend container startup..."
-          # Start container in background
-          docker run -d \
-            --name test-frontend \
-            -p 3333:3000 \
-            -e NODE_ENV=production \
-            -e NEXT_PUBLIC_API_URL=http://localhost:8080 \
+          docker run -d --name test-web -p 3333:80 \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile" \
+            -e DOMAIN=:80 -e MONITORING_DOMAIN=:8081 \
             nuclear-ao3/frontend:test
-          
-          # Wait for startup
-          sleep 15
-          
-          # Test if it responds (will likely fail but container should start)
-          curl -f http://localhost:3333 || echo "Frontend response test (expected to fail without backend)"
-          
-          # Cleanup
-          docker stop test-frontend
-          docker rm test-frontend
+          sleep 3
+          # The home page, and a deep link, must both return the app.
+          curl -fsS http://localhost:3333/ | grep -q '<div id="root">'
+          curl -fsS http://localhost:3333/works/some-id | grep -q '<div id="root">'
+          docker logs test-web
+          docker rm -f test-web
 
   # Test complete docker-compose stack
   test-docker-compose:
@@ -327,8 +315,8 @@ jobs:
           curl -f http://localhost:8083/health || echo "Tag service health check failed"
           curl -f http://localhost:8084/health || echo "Search service health check failed"
           
-          # Test frontend
-          curl -f http://localhost:3000 || echo "Frontend health check failed"
+          # Test the website (served by Caddy)
+          curl -fk https://localhost/ || echo "Website check failed"
           
           echo "✅ Basic integration tests passed"
 

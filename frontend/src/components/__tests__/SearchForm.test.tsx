@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
@@ -5,14 +6,14 @@ import SearchForm from '../SearchForm';
 import { searchWorks } from '@/lib/api';
 
 // Mock debounced search
-jest.mock('lodash.debounce', () => jest.fn((fn) => fn));
+vi.mock('lodash.debounce', () => vi.fn((fn) => fn));
 
 // SearchForm calls the REST API through lib/api; tests control what it returns.
-jest.mock('@/lib/api', () => ({ searchWorks: jest.fn() }));
-const mockedSearchWorks = searchWorks as jest.MockedFunction<typeof searchWorks>;
+vi.mock('@/lib/api', () => ({ searchWorks: vi.fn() }));
+const mockedSearchWorks = searchWorks as MockedFunction<typeof searchWorks>;
 
-const mockOnResults = jest.fn();
-const mockOnRecommendations = jest.fn();
+const mockOnResults = vi.fn();
+const mockOnRecommendations = vi.fn();
 
 const mockSearchWorksMocks = {
   total: 1,
@@ -47,7 +48,7 @@ const renderSearchForm = (props = {}, response: object | Error = defaultMocks) =
 
 describe('SearchForm - Accessibility-First Implementation', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('Accessibility Structure', () => {

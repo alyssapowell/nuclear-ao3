@@ -1,5 +1,3 @@
-'use client'
-
 import { useState, useEffect, useRef, useId } from 'react'
 import { getSearchSuggestions } from '@/lib/api'
 

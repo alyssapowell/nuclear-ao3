@@ -1,5 +1,3 @@
-'use client'
-
 import React, { useState, useEffect, useRef, useId, useCallback, useMemo } from 'react'
 import { searchTags } from '@/lib/api'
 // Temporarily disable render profiler to fix loading issues

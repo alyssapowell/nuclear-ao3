@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 // Test utilities for Nuclear AO3 PWA tests
 import { render, RenderOptions } from '@testing-library/react';
 import { ReactElement } from 'react';
@@ -5,25 +6,25 @@ import { ReactElement } from 'react';
 // Mock service worker registration
 export const mockServiceWorkerRegistration = {
   active: {
-    postMessage: jest.fn(),
-    addEventListener: jest.fn(),
+    postMessage: vi.fn(),
+    addEventListener: vi.fn(),
     state: 'activated'
   },
   installing: null,
   waiting: null,
-  addEventListener: jest.fn(),
-  update: jest.fn().mockResolvedValue(undefined),
-  unregister: jest.fn().mockResolvedValue(true)
+  addEventListener: vi.fn(),
+  update: vi.fn().mockResolvedValue(undefined),
+  unregister: vi.fn().mockResolvedValue(true)
 };
 
 // Mock navigator.serviceWorker
 export const mockServiceWorker = {
   ready: Promise.resolve(mockServiceWorkerRegistration),
   controller: mockServiceWorkerRegistration.active,
-  addEventListener: jest.fn(),
-  removeEventListener: jest.fn(),
-  getRegistration: jest.fn().mockResolvedValue(mockServiceWorkerRegistration),
-  register: jest.fn().mockResolvedValue(mockServiceWorkerRegistration)
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  getRegistration: vi.fn().mockResolvedValue(mockServiceWorkerRegistration),
+  register: vi.fn().mockResolvedValue(mockServiceWorkerRegistration)
 };
 
 // Mock storage estimate
@@ -35,9 +36,9 @@ export const mockStorageEstimate = {
 
 // Mock navigator.storage
 export const mockStorage = {
-  estimate: jest.fn().mockResolvedValue(mockStorageEstimate),
-  persist: jest.fn().mockResolvedValue(true),
-  persisted: jest.fn().mockResolvedValue(false)
+  estimate: vi.fn().mockResolvedValue(mockStorageEstimate),
+  persist: vi.fn().mockResolvedValue(true),
+  persisted: vi.fn().mockResolvedValue(false)
 };
 
 // Mock offline work data
@@ -85,34 +86,34 @@ export const mockWorkData = {
 
 // Mock install prompt event
 export const mockInstallPromptEvent = {
-  prompt: jest.fn().mockResolvedValue(undefined),
+  prompt: vi.fn().mockResolvedValue(undefined),
   userChoice: Promise.resolve({ outcome: 'accepted' }),
-  preventDefault: jest.fn()
+  preventDefault: vi.fn()
 };
 
 // Mock message channel
 export class MockMessageChannel {
   port1: {
     onmessage: ((event: MessageEvent) => void) | null;
-    postMessage: jest.Mock;
-    close: jest.Mock;
+    postMessage: Mock;
+    close: Mock;
   };
   port2: {
     onmessage: ((event: MessageEvent) => void) | null;
-    postMessage: jest.Mock;
-    close: jest.Mock;
+    postMessage: Mock;
+    close: Mock;
   };
 
   constructor() {
     this.port1 = {
       onmessage: null,
-      postMessage: jest.fn(),
-      close: jest.fn()
+      postMessage: vi.fn(),
+      close: vi.fn()
     };
     this.port2 = {
       onmessage: null,
-      postMessage: jest.fn(),
-      close: jest.fn()
+      postMessage: vi.fn(),
+      close: vi.fn()
     };
   }
 }
@@ -137,22 +138,22 @@ export const setupGlobalMocks = () => {
 
   // Mock window
   Object.defineProperty(global.window, 'addEventListener', {
-    value: jest.fn(),
+    value: vi.fn(),
     writable: true
   });
 
   Object.defineProperty(global.window, 'removeEventListener', {
-    value: jest.fn(),
+    value: vi.fn(),
     writable: true
   });
 
   Object.defineProperty(global.window, 'matchMedia', {
-    value: jest.fn().mockReturnValue({
+    value: vi.fn().mockReturnValue({
       matches: false,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn()
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
     }),
     writable: true
   });
@@ -162,10 +163,10 @@ export const setupGlobalMocks = () => {
 
   // Mock localStorage
   const localStorageMock = {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    clear: jest.fn()
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn()
   };
   Object.defineProperty(global, 'localStorage', {
     value: localStorageMock,
@@ -173,19 +174,19 @@ export const setupGlobalMocks = () => {
   });
 
   // Mock fetch
-  global.fetch = jest.fn();
+  global.fetch = vi.fn();
 
   return {
     mockServiceWorker,
     mockStorage,
     localStorageMock,
-    fetchMock: global.fetch as jest.Mock
+    fetchMock: global.fetch as Mock
   };
 };
 
 // Reset all mocks
 export const resetMocks = () => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockServiceWorkerRegistration.active.postMessage.mockClear();
   mockServiceWorkerRegistration.addEventListener.mockClear();
   mockServiceWorker.addEventListener.mockClear();
@@ -231,7 +232,7 @@ export const simulateNetworkStatus = (isOnline: boolean) => {
   const event = new Event(eventType);
   
   // Find and call event listeners
-  const calls = (global.window.addEventListener as jest.Mock).mock.calls;
+  const calls = (global.window.addEventListener as Mock).mock.calls;
   const listeners = calls.filter(call => call[0] === eventType);
   
   listeners.forEach(([, listener]) => {

@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { DevicePhoneMobileIcon, ArrowDownTrayIcon, XMarkIcon, Cog8ToothIcon } from '@heroicons/react/24/outline';
 

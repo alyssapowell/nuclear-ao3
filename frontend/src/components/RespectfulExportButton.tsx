@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { ArrowDownTrayIcon, Cog6ToothIcon, DocumentArrowDownIcon, DevicePhoneMobileIcon, XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import ExportModal from './ExportModal';

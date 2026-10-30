@@ -1,7 +1,4 @@
-'use client';
-
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
 interface BreadcrumbItem {
@@ -16,7 +13,7 @@ interface BreadcrumbsProps {
 }
 
 export default function Breadcrumbs({ items, className = '' }: BreadcrumbsProps) {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   // Auto-generate breadcrumbs from pathname if no items provided
   const generateBreadcrumbs = (): BreadcrumbItem[] => {
@@ -107,7 +104,7 @@ export default function Breadcrumbs({ items, className = '' }: BreadcrumbsProps)
                 </span>
               ) : (
                 <Link
-                  href={item.href}
+                  to={item.href}
                   className="flex items-center space-x-1 hover:text-orange-700 transition-colors"
                 >
                   {item.icon}

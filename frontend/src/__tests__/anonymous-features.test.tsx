@@ -1,39 +1,39 @@
+import type { Mocked } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { jest } from '@jest/globals';
 
 // Mock the API functions
-jest.mock('../lib/api', () => ({
-  giveKudos: jest.fn(),
-  createComment: jest.fn(),
-  searchWorks: jest.fn(),
-  getPopularSearches: jest.fn(),
-  getTrendingSearches: jest.fn(),
+vi.mock('../lib/api', () => ({
+  giveKudos: vi.fn(),
+  createComment: vi.fn(),
+  searchWorks: vi.fn(),
+  getPopularSearches: vi.fn(),
+  getTrendingSearches: vi.fn(),
 }));
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => ({
-    get: jest.fn(() => ''),
-  }),
-}));
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  }));
 
-import SearchPage from '../app/search/page';
+import SearchPage from '../pages/Search';
 import * as api from '../lib/api';
 
-const mockApi = api as jest.Mocked<typeof api>;
+const mockApi = api as Mocked<typeof api>;
 
 describe('Anonymous Features', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Clear localStorage to simulate logged out state
     Object.defineProperty(window, 'localStorage', {
       value: {
-        getItem: jest.fn(() => null),
-        setItem: jest.fn(),
-        removeItem: jest.fn(),
-        clear: jest.fn(),
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
       },
       writable: true,
     });
@@ -295,10 +295,10 @@ describe('Anonymous Features', () => {
       // Simulate corrupted token in localStorage
       Object.defineProperty(window, 'localStorage', {
         value: {
-          getItem: jest.fn(() => 'invalid-token-data'),
-          setItem: jest.fn(),
-          removeItem: jest.fn(),
-          clear: jest.fn(),
+          getItem: vi.fn(() => 'invalid-token-data'),
+          setItem: vi.fn(),
+          removeItem: vi.fn(),
+          clear: vi.fn(),
         },
         writable: true,
       });

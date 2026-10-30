@@ -2,13 +2,6 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import WorkCard from '../WorkCard';
 
-// Mock Next.js Link component
-jest.mock('next/link', () => {
-  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
-    return <a href={href}>{children}</a>;
-  };
-});
-
 describe('WorkCard', () => {
   const mockWork = {
     id: 'work-123',

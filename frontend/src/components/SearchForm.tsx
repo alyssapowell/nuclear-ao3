@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useRef, useId, useCallback, useMemo } from 'react';
 import { Search, Filter, X, AlertCircle, Loader2 } from 'lucide-react';
 import { searchWorks } from '@/lib/api';

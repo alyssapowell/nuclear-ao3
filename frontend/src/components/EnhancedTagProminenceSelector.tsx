@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { Switch } from '@headlessui/react';
 import TagInput from './TagInput';
@@ -157,7 +155,7 @@ export default function EnhancedTagProminenceSelector({
 
   return (
     <div className={`enhanced-tag-prominence-selector ${className}`}>
-      <style jsx>{`
+      <style>{`
         .enhanced-tag-prominence-selector {
           space-y: 1.5rem;
         }

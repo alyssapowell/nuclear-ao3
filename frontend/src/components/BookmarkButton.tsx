@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import { createBookmark, deleteBookmark, isWorkBookmarked, type CreateBookmarkRequest } from '@/lib/api';

@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import TagProminenceSelector from '../TagProminenceSelector';
 
 describe('TagProminenceSelector', () => {
-  const mockOnTagsChange = jest.fn();
+  const mockOnTagsChange = vi.fn();
   
   const sampleTags = [
     {

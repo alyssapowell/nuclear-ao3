@@ -1,39 +1,34 @@
+import type { Mock } from 'vitest';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { jest } from '@jest/globals';
 
 // Mock the router with actual push behavior
-const mockPush = jest.fn();
-const mockReplace = jest.fn();
+const mockPush = vi.fn();
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: mockReplace,
-    back: jest.fn(),
-  }),
-  useSearchParams: () => ({
-    get: jest.fn(() => null),
-  }),
-}));
+vi.mock('react-router-dom', async () =>
+  (await import('@/test/router-mock')).routerMock({
+    useNavigate: () => mockPush,
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  }));
 
-import LoginPage from '../app/auth/login/page';
+import LoginPage from '../pages/Login';
 
 describe('Login Navigation Error', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock localStorage
     Object.defineProperty(window, 'localStorage', {
       value: {
-        getItem: jest.fn((key) => {
+        getItem: vi.fn((key) => {
           if (key === 'auth_token') return null;
           return null;
         }),
-        setItem: jest.fn(),
-        removeItem: jest.fn(),
-        clear: jest.fn(),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn(),
       },
       writable: true,
     });
@@ -45,7 +40,7 @@ describe('Login Navigation Error', () => {
     });
 
     // Mock successful login response
-    global.fetch = jest.fn(() =>
+    global.fetch = vi.fn(() =>
       Promise.resolve({
         ok: true,
         json: () => Promise.resolve({ 
@@ -57,11 +52,11 @@ describe('Login Navigation Error', () => {
           }
         }),
       })
-    ) as jest.Mock;
+    ) as Mock;
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('should handle successful login and navigation without hooks error', async () => {
