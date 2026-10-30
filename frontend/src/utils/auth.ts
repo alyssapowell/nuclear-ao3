@@ -132,7 +132,11 @@ export function safeRedirect(raw: string | null): string {
   try {
     const url = new URL(raw, window.location.origin);
     if (url.origin !== window.location.origin) return '/';
-    return url.pathname + url.search + url.hash;
+    const path = url.pathname + url.search + url.hash;
+    // Tidying "/.//other.site" gives "//other.site", which browsers read as
+    // another site, so the result must start with exactly one slash.
+    if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return '/';
+    return path;
   } catch {
     return '/';
   }

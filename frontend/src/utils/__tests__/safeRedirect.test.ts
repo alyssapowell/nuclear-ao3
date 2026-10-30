@@ -12,6 +12,9 @@ describe('safeRedirect', () => {
     ['javascript:alert(document.cookie)', '/'],
     ['JaVaScRiPt:alert(1)', '/'],
     ['data:text/html,<script>alert(1)</script>', '/'],
+    ['/.//evil.example', '/'],
+    ['/%2e//evil.example', '/'],
+    ['/..//evil.example/x', '/'],
   ])('%s -> %s', (raw, expected) => {
     expect(safeRedirect(raw)).toBe(expected);
   });
