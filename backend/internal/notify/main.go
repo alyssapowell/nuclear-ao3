@@ -105,6 +105,14 @@ func New(db *sql.DB) *NotificationService {
 		allowedOrigins[strings.TrimSpace(o)] = true
 	}
 
+	coreNotificationSvc.SetBlockChecker(func(ctx context.Context, recipient, actor uuid.UUID) bool {
+		var blocked bool
+		err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM user_blocks
+			WHERE blocker_id = $1 AND blocked_id = $2 AND block_type IN ('full', 'comments'))`,
+			recipient, actor).Scan(&blocked)
+		return err != nil || blocked // if we can't tell, don't notify
+	})
+
 	return &NotificationService{
 		db: db,
 		notificationSvc: &NotificationServiceExtended{

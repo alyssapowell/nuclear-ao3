@@ -138,7 +138,7 @@ Found while fixing the database setup:
 - ~~The built-in `orphan_account` also had the password `password123`~~, so anyone could log in as it and edit every orphaned work. **Fixed:** it has a password hash that can never match.
 - ~~Postgres (with its default password), Redis, mail and monitoring ports were published on every network interface~~, which on a server puts them on the internet (Docker bypasses the `ufw` firewall). **Fixed:** everything but Caddy is bound to `127.0.0.1`.
 - ~~Commenting as another user's pseud~~ (see Kudos and comments).
-- ~~A reply could name a comment on a different work~~, which attached it to an unrelated thread and notified that comment's author even if they had blocked the replier. **Fixed:** replies must be to a comment on the same work, and nobody is notified of comments from someone they've blocked.
+- ~~A reply could name a comment on a different work~~, which attached it to an unrelated thread and notified that comment's author even if they had blocked the replier. **Fixed:** replies must be to a comment on the same work, and nobody is notified about anything done by someone they've blocked, including through subscriptions. The block check is in the shared notification service, so it covers every event.
 - ~~Works restricted to logged-in users were readable by anyone logged out.~~ The app stores the setting in `works.restricted`, but the database's visibility check read `restricted_to_users`, which nothing writes. **Fixed** in migration 027 (it checks both); the smoke test covers it.
 
 Found while merging the services:

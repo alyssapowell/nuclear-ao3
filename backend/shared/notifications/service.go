@@ -23,6 +23,15 @@ type NotificationService struct {
 	ruleEngine       *RuleEngine
 	batchProcessor   *BatchProcessor
 	smartFilter      *SmartFilter
+	hasBlocked       func(ctx context.Context, recipient, actor uuid.UUID) bool
+}
+
+// SetBlockChecker tells the service how to find out whether a recipient has
+// blocked the person who caused an event. Anyone who has is never notified
+// about that person's actions, whether they subscribed or were named as a
+// recipient.
+func (ns *NotificationService) SetBlockChecker(f func(ctx context.Context, recipient, actor uuid.UUID) bool) {
+	ns.hasBlocked = f
 }
 
 // NotificationServiceConfig configures the notification service
@@ -101,12 +110,15 @@ func (ns *NotificationService) ProcessEvent(ctx context.Context, event *EventDat
 		notified[userID] = true
 		subscriptions = append(subscriptions, &models.Subscription{ID: uuid.New(), UserID: userID, IsActive: true})
 	}
-	// A subscriber who caused the event doesn't hear about it either.
+	// Nobody hears about their own actions, or about the actions of someone
+	// they've blocked.
 	kept := subscriptions[:0]
 	for _, sub := range subscriptions {
-		if event.ActorID == nil || sub.UserID != *event.ActorID {
-			kept = append(kept, sub)
+		if event.ActorID != nil && (sub.UserID == *event.ActorID ||
+			(ns.hasBlocked != nil && ns.hasBlocked(ctx, sub.UserID, *event.ActorID))) {
+			continue
 		}
+		kept = append(kept, sub)
 	}
 	subscriptions = kept
 
