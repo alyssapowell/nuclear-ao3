@@ -91,8 +91,8 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 			w.restricted, w.restricted_to_adults, w.comment_policy, w.moderate_comments, w.disable_comments,
 			w.is_anonymous, w.in_anon_collection, w.in_unrevealed_collection,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
 		FROM works w
 		WHERE w.id = $1`
 
@@ -102,7 +102,7 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 	}
 
 	// Execute query
-	err = ws.db.QueryRow(query, workID).Scan(
+	err = ws.db.QueryRow(query, workID, userUUID).Scan(
 		&work.ID, &legacyID, &work.Title, &summary,
 		&work.Language, &work.Rating, &categoryStr, &warningsStr,
 		&fandoms, &characters, &relationships, &freeformTags,
@@ -687,8 +687,8 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 			w.word_count, w.chapter_count, w.expected_chapters, w.is_complete, 
 			CASE WHEN w.is_draft THEN 'draft' WHEN w.is_complete THEN 'complete' ELSE 'in_progress' END as status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks`
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $1::uuid) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $1::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks`
 	// The rows and the total are counted from the same FROM and WHERE, so the
 	// total is every matching work, not just this page.
 	fromWhere := `
@@ -809,6 +809,18 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	}
 	if !allowedSort[sortBy] {
 		sortBy = "updated_at"
+	}
+	// Sorting by kudos or comments uses the public count. The selected
+	// "kudos" and "comments" columns include the viewer's own shadowed items,
+	// and ORDER BY would pick those up by name. Sorting by the adjusted value
+	// would order the viewer's list differently from everyone else's and tell
+	// a silently blocked person something. The trade-off: the order they see
+	// is not computed from the count shown to them.
+	switch sortBy {
+	case "kudos":
+		sortBy = "w.kudos_count"
+	case "comments":
+		sortBy = "w.comment_count"
 	}
 	if sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "desc"
@@ -1660,10 +1672,12 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 	// Get client IP for guest kudos checking
 	clientIP := c.ClientIP()
 
-	// First, get total kudos count
+	// First, get total kudos count. A silently blocked person's own shadowed
+	// kudos are counted in their view, so the total moves when they give
+	// kudos like it does for anyone else. Everyone else sees the public count.
 	var totalCount int
-	countQuery := `SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND NOT shadowed`
-	err = ws.db.QueryRow(countQuery, workID).Scan(&totalCount)
+	countQuery := `SELECT COUNT(*) + own_shadowed_kudos($1, $2::uuid) FROM kudos WHERE work_id = $1 AND NOT shadowed`
+	err = ws.db.QueryRow(countQuery, workID, userUUID).Scan(&totalCount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos count"})
 		return
@@ -1699,15 +1713,16 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 		return
 	}
 
-	// Get recent kudos for display (limit to 20 most recent)
+	// Get recent kudos for display (limit to 20 most recent). The viewer's own
+	// shadowed kudos are listed as a normal entry, in their view only.
 	rows, err := ws.db.Query(`
 		SELECT k.id, k.created_at, p.id, p.name
 		FROM kudos k
 		JOIN pseuds p ON p.user_id = k.user_id AND p.is_default
-		WHERE k.work_id = $1 AND NOT k.shadowed
+		WHERE k.work_id = $1 AND (NOT k.shadowed OR k.user_id = $2::uuid)
 		  AND (NOT work_hides_creator(k.work_id) OR NOT is_work_creator(k.work_id, k.user_id))
 		ORDER BY k.created_at DESC
-		LIMIT 20`, workID)
+		LIMIT 20`, workID, userUUID)
 	if err != nil {
 		log.Printf("kudos list for work %s: %v", workID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos list"})
@@ -1958,10 +1973,10 @@ func (ws *WorkService) GetStats(c *gin.Context) {
 	err = ws.db.QueryRow(`
 		SELECT w.id, w.title, w.published_at, w.updated_at, w.word_count, w.chapter_count, 
 			w.max_chapters, w.is_complete,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
 		FROM works w 
-		WHERE w.id = $1`, workID).Scan(
+		WHERE w.id = $1`, workID, userUUID).Scan(
 		&stats.WorkID, &stats.Title, &publishedAt, &stats.UpdatedAt,
 		&stats.WordCount, &stats.ChapterCount, &maxChapters, &stats.IsComplete,
 		&stats.Hits, &stats.Kudos, &stats.Comments, &stats.Bookmarks)
@@ -2235,8 +2250,8 @@ func (ws *WorkService) GetSeriesWorks(c *gin.Context) {
 			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
 			w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
 			sw.position
 		FROM works w
 		JOIN series_works sw ON w.id = sw.work_id
@@ -2988,8 +3003,8 @@ func (ws *WorkService) GetCollectionWorks(c *gin.Context) {
 			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
 			w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $4::uuid) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $4::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
 			ci.added_at, ci.is_approved
 		FROM works w
 		JOIN collection_items ci ON w.id = ci.work_id

@@ -105,10 +105,12 @@ func (ws *WorkService) GetPseudWorks(c *gin.Context) {
 			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
 			w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0), COALESCE(w.kudos_count, 0),
-			COALESCE(w.comment_count, 0), COALESCE(w.bookmark_count, 0)`+from+where+
+			COALESCE(w.hit_count, 0),
+			COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $`+strconv.Itoa(n+3)+`::uuid),
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $`+strconv.Itoa(n+3)+`::uuid),
+			COALESCE(w.bookmark_count, 0)`+from+where+
 		` ORDER BY w.updated_at DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2),
-		append(args, limit, offset)...)
+		append(args, limit, offset, viewer)...)
 	if err != nil {
 		log.Printf("pseud works: list for pseud %s: %v", pseud.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pseud works"})
@@ -264,8 +266,10 @@ func (ws *WorkService) GetPseudBookmarks(c *gin.Context) {
 			w.title, COALESCE(w.summary, ''), w.rating, w.fandoms, w.characters, w.relationships,
 			w.freeform_tags, w.word_count, w.chapter_count, w.is_complete, w.status,
 			w.published_at, w.updated_at,
-			COALESCE(w.hit_count, 0), COALESCE(w.kudos_count, 0),
-			COALESCE(w.comment_count, 0), COALESCE(w.bookmark_count, 0)
+			COALESCE(w.hit_count, 0),
+			COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid),
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid),
+			COALESCE(w.bookmark_count, 0)
 		FROM bookmarks b JOIN works w ON w.id = b.work_id`+where+
 		` ORDER BY b.created_at DESC LIMIT $3 OFFSET $4`, pseud.ID, viewer, limit, offset)
 	if err != nil {

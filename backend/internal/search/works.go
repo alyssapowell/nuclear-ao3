@@ -243,6 +243,11 @@ func (q WorkQuery) build(viewer *uuid.UUID) (b sqlBuilder, textArg string) {
 	if q.WordCountMax > 0 {
 		b.add(fmt.Sprintf("w.word_count <= %s", b.arg(q.WordCountMax)))
 	}
+	// Filtering by kudos or comments, like sorting by them, uses the public
+	// count, not the count the viewer sees (which includes their own shadowed
+	// items). It is a trade-off: a silently blocked person can still see the
+	// filter treat them as absent, but a filter's cut-off is a blunt tool and
+	// not a precise way to detect a block.
 	if q.KudosMin > 0 {
 		b.add(fmt.Sprintf("w.kudos_count >= %s", b.arg(q.KudosMin)))
 	}
@@ -385,22 +390,26 @@ UNION ALL (SELECT 'freeform_tags', t, count(*) FROM m, unnest(m.freeform_tags) t
 		return nil, err
 	}
 
+	// The counts shown include the viewer's own shadowed kudos and comments.
+	// (The sort above and the filters in build() keep the public counts.)
+	viewerArg := b.arg(viewer)
 	pageSQL := fmt.Sprintf(`SELECT w.id, w.title, coalesce(w.summary, ''), w.rating,
   %s, %s, w.language,
   coalesce(w.fandoms, '{}'), coalesce(w.characters, '{}'), coalesce(w.relationships, '{}'), coalesce(w.freeform_tags, '{}'),
   w.word_count, w.chapter_count, coalesce(w.max_chapters, w.expected_chapters), coalesce(w.is_complete, false),
-  w.kudos_count, w.hit_count, w.comment_count, w.bookmark_count, w.published_at, w.updated_at,
+  w.kudos_count + own_shadowed_kudos(w.id, %[7]s::uuid), w.hit_count,
+  w.comment_count + own_shadowed_comments(w.id, %[7]s::uuid), w.bookmark_count, w.published_at, w.updated_at,
   coalesce(w.is_anonymous, false) OR coalesce(w.in_anon_collection, false) AS anonymous,
   CASE WHEN coalesce(w.is_anonymous, false) OR coalesce(w.in_anon_collection, false) THEN '[]'::json
   ELSE (SELECT coalesce(json_agg(json_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::json)
         FROM creatorships c JOIN pseuds p ON p.id = c.pseud_id
         WHERE c.creation_id = w.id AND c.creation_type = 'Work' AND c.approved) END
 FROM works w
-WHERE %s
-ORDER BY %s
-LIMIT %d OFFSET %d`,
+WHERE %[3]s
+ORDER BY %[4]s
+LIMIT %[5]d OFFSET %[6]d`,
 		textList("w.warnings"), textList("w.category"), where, q.orderBy(textArg),
-		q.Limit, (q.Page-1)*q.Limit)
+		q.Limit, (q.Page-1)*q.Limit, viewerArg)
 	rows, err = s.db.Query(pageSQL, b.args...)
 	if err != nil {
 		return nil, fmt.Errorf("fetch results: %w", err)
@@ -514,9 +523,14 @@ func (s *Service) Suggestions(c *gin.Context) {
 	b := sqlBuilder{}
 	b.add("w.status <> 'draft' AND w.is_draft = false")
 	b.add("NOT coalesce(w.in_unrevealed_collection, false)")
-	b.add(fmt.Sprintf("can_user_view_work(w.id, %s)", b.arg(viewerFrom(c))))
+	viewer := viewerFrom(c)
+	viewerArg := b.arg(viewer)
+	b.add(fmt.Sprintf("can_user_view_work(w.id, %s)", viewerArg))
 	b.add(fmt.Sprintf("w.search_vector @@ to_tsquery('english', %s)", b.arg(tsq)))
-	rows, err := s.db.Query(`SELECT w.id, w.title, w.kudos_count FROM works w WHERE `+
+	// The count shown includes the viewer's own shadowed kudos; the order
+	// uses the public count.
+	rows, err := s.db.Query(`SELECT w.id, w.title, w.kudos_count + own_shadowed_kudos(w.id, `+viewerArg+`::uuid)
+		FROM works w WHERE `+
 		strings.Join(b.where, " AND ")+` ORDER BY w.kudos_count DESC, w.id LIMIT 5`, b.args...)
 	if err != nil {
 		fail(err)

@@ -156,15 +156,23 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		// Nobody can reply to a comment by an account they're blocked with
 		// (AO3 comment.rb:40-46). Both ways, though a blocker can't see the
 		// blocked person's comments, so that case already ended above.
-		if userID != nil && !silent {
-			var replyBlocked bool
-			if err := ws.db.QueryRow(`SELECT accounts_blocked(c.user_id, $2) FROM comments c WHERE c.id = $1`,
-				req.ParentCommentID, *userID).Scan(&replyBlocked); err != nil {
+		// Replying to someone who blocked you. On a work that hides its
+		// creator, the reply is always kept to yourself instead of refused,
+		// whether or not the hidden creator has blocked you too: refusing in
+		// one case and not the other would tell you which it is.
+		if userID != nil {
+			var replyBlocked, hidesCreator bool
+			if err := ws.db.QueryRow(`SELECT accounts_blocked(c.user_id, $2), work_hides_creator($3)
+				FROM comments c WHERE c.id = $1`,
+				req.ParentCommentID, *userID, *req.WorkID).Scan(&replyBlocked, &hidesCreator); err != nil {
 				log.Printf("create comment: reply block: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 				return
 			}
-			if replyBlocked {
+			switch {
+			case replyBlocked && hidesCreator:
+				silent = true
+			case replyBlocked:
 				c.JSON(http.StatusForbidden, gin.H{"error": "replies_disabled", "message": "You can't reply to this comment."})
 				return
 			}
@@ -227,7 +235,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	}
 
 	// Retrieve the created comment with details
-	comment, err := ws.getCommentByID(commentID)
+	comment, err := ws.getCommentByID(commentID, userID)
 	if err != nil {
 		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Comment created but failed to retrieve details"})
@@ -378,7 +386,7 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 		return
 	}
 
-	updatedComment, err := ws.getCommentByID(commentID)
+	updatedComment, err := ws.getCommentByID(commentID, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Comment updated but failed to retrieve details"})
 		return
@@ -459,13 +467,19 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Comment deleted successfully"})
 }
 
-// Helper function to get a comment by ID with all details
-func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithDetails, error) {
+// Helper function to get a comment by ID with all details, as the viewer
+// sees it. The reply count includes the viewer's own shadowed replies to the
+// comment, so a silently blocked person's reply doesn't go uncounted.
+func (ws *WorkService) getCommentByID(commentID uuid.UUID, viewer *uuid.UUID) (*models.CommentWithDetails, error) {
 	query := `
 		SELECT 
 			c.id, c.work_id, c.chapter_id, c.user_id, c.pseudonym_id, c.parent_comment_id,
 			c.content, c.guest_name, c.guest_email, c.is_deleted, c.is_moderated, c.is_spam,
-			c.thread_level, c.kudos_count, c.reply_count, c.created_at, c.updated_at, c.edited_at,
+			c.thread_level, c.kudos_count,
+			c.reply_count + (SELECT COUNT(*) FROM comments r
+				WHERE r.parent_comment_id = c.id AND r.shadowed AND NOT r.is_deleted
+				  AND r.user_id = $2::uuid),
+			c.created_at, c.updated_at, c.edited_at,
 			CASE WHEN ` + creatorHiddenSQL + ` THEN '` + anonymousCreatorLabel + `'
 			     ELSE COALESCE(up.name, c.guest_name) END as author_name,
 			u.id as author_user_id,
@@ -491,7 +505,7 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 	var editedAt sql.NullTime
 	var creatorHidden bool
 
-	err := ws.db.QueryRow(query, commentID).Scan(
+	err := ws.db.QueryRow(query, commentID, viewer).Scan(
 		&comment.ID, &comment.WorkID, &chapterID, &userID, &pseudonymID, &parentCommentID,
 		&comment.Content, &comment.GuestName, &comment.GuestEmail, &comment.IsDeleted,
 		&comment.IsModerated, &comment.IsSpam, &comment.ThreadLevel, &comment.KudosCount,

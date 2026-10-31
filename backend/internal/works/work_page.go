@@ -37,7 +37,8 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 		return
 	}
 
-	work, err := ws.fetchWorkFromDB(ctx, workID)
+	userID := ws.getUserIDFromContext(c)
+	work, err := ws.fetchWorkFromDB(ctx, workID, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
@@ -48,7 +49,6 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	}
 
 	// Apply privacy filters
-	userID := ws.getUserIDFromContext(c)
 	if !ws.canViewWork(ctx, workID, userID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
@@ -98,7 +98,7 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 		return
 	}
 
-	stats, err := ws.fetchWorkStatsFromDB(ctx, workID)
+	stats, err := ws.fetchWorkStatsFromDB(ctx, workID, viewer)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work stats"})
 		return
@@ -134,7 +134,11 @@ func (ws *WorkService) parseWorkID(workIDParam string) (workID uuid.UUID, isRedi
 	return uuid.Nil, false, "", false
 }
 
-func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*models.Work, error) {
+// fetchWorkFromDB loads a work for the given viewer (nil for a guest). The
+// kudos and comment counts include the viewer's own shadowed kudos and
+// comments, so a silently blocked person never sees their own post go
+// uncounted.
+func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID, viewer *uuid.UUID) (*models.Work, error) {
 	var work models.Work
 
 	// Handle nullable fields with sql.NullString or use database default values
@@ -169,12 +173,14 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 			COALESCE(w.freeform_tags, '{}') as freeform_tags,
 			w.published_at, w.updated_at, w.created_at,
 			w.hidden_by_admin, w.spam,
-			COALESCE(w.hit_count, 0), COALESCE(w.kudos_count, 0),
-			COALESCE(w.comment_count, 0), COALESCE(w.bookmark_count, 0)
+			COALESCE(w.hit_count, 0),
+			COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid),
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid),
+			COALESCE(w.bookmark_count, 0)
 		FROM works w
 		JOIN users u ON w.user_id = u.id
 		WHERE w.id = $1
-	`, workID).Scan(
+	`, workID, viewer).Scan(
 		&work.ID, &legacyID, &work.Title, &work.Summary, &work.Notes,
 		&work.UserID, &work.Username, &work.Language, &work.Rating,
 		&work.WordCount, &work.ChapterCount, &maxChapters, &work.Status,
@@ -253,7 +259,9 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 	return authors, nil
 }
 
-func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUID) (map[string]interface{}, error) {
+// fetchWorkStatsFromDB returns a work's counts as the viewer sees them: the
+// public counts plus the viewer's own shadowed kudos and comments.
+func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUID, viewer *uuid.UUID) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	// Fetch various stats
@@ -261,12 +269,12 @@ func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUI
 	err := ws.db.QueryRowContext(ctx, `
 		SELECT 
 			COALESCE(hit_count, 0) as hits,
-			COALESCE(kudos_count, 0) as kudos,
-			COALESCE(comment_count, 0) as comments,
+			COALESCE(kudos_count, 0) + own_shadowed_kudos(id, $2::uuid) as kudos,
+			COALESCE(comment_count, 0) + own_shadowed_comments(id, $2::uuid) as comments,
 			COALESCE(bookmark_count, 0) as bookmarks
 		FROM works 
 		WHERE id = $1
-	`, workID).Scan(&hits, &kudos, &comments, &bookmarks)
+	`, workID, viewer).Scan(&hits, &kudos, &comments, &bookmarks)
 
 	if err != nil {
 		return nil, err

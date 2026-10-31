@@ -165,8 +165,8 @@ func TestBlockIsSilentOnWorksThatHideTheirCreator(t *testing.T) {
 				t.Errorf("the public kudos list shows the shadowed kudos: %s", kl)
 			}
 			own := e.expect(200, "GET", "/api/v1/work/"+w.work.String()+"/kudos", w.blockedTok, nil)
-			if !strings.Contains(own, `"has_given_kudos":true`) || !strings.Contains(own, `"total_count":1`) {
-				t.Errorf("the giver should see kudos as given, with the public count: %s", own)
+			if !strings.Contains(own, `"has_given_kudos":true`) || !strings.Contains(own, `"total_count":2`) {
+				t.Errorf("the giver should see kudos as given, counted once more than the public count: %s", own)
 			}
 			if code, _ := e.do("POST", "/api/v1/works/"+w.work.String()+"/kudos", w.blockedTok, nil); code != 409 {
 				t.Errorf("second kudos = %d, want the normal 409", code)

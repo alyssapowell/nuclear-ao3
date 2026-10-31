@@ -562,7 +562,8 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 	// Get works that use this tag with prominence information
 	query := fmt.Sprintf(`
 		SELECT 
-			w.id, w.title, w.summary, w.word_count, w.chapter_count, w.kudos_count,
+			w.id, w.title, w.summary, w.word_count, w.chapter_count,
+			w.kudos_count + own_shadowed_kudos(w.id, $4::uuid),
 			w.created_at, w.updated_at, wt.prominence, wt.prominence_score
 		FROM works w
 		JOIN work_tags wt ON w.id = wt.work_id
