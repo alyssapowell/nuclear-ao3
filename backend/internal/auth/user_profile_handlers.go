@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 )
 
@@ -166,7 +167,7 @@ func (s *AuthService) UpdateUserProfile(c *gin.Context) {
 	}
 	if req.Bio != nil {
 		setParts = append(setParts, "bio = $"+strconv.Itoa(argCount))
-		args = append(args, *req.Bio)
+		args = append(args, html.Clean(*req.Bio))
 		argCount++
 	}
 	if req.Location != nil {
@@ -293,7 +294,7 @@ func (s *AuthService) CreateUserPseudonym(c *gin.Context) {
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 	`
 
-	_, err = s.db.Exec(query, pseudonymID, userID, req.Name, isDefault, req.Description, req.IconURL)
+	_, err = s.db.Exec(query, pseudonymID, userID, req.Name, isDefault, html.CleanPtr(req.Description), req.IconURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create pseudonym"})
 		return

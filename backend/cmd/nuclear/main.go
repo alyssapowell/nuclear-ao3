@@ -72,6 +72,7 @@ import (
 
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/export"
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
@@ -213,6 +214,13 @@ func startWorkers(db *sql.DB, mail *email.Config) (stop func()) {
 			return err
 		}
 		return mail.Send(ctx, m)
+	})
+	// Queued once by migration 031: cleans HTML that was saved before it was
+	// cleaned on write. Safe to run again.
+	q.Handle("clean-html", func(ctx context.Context, _ json.RawMessage) error {
+		changed, err := html.CleanStored(ctx, db)
+		log.Printf("clean-html: rewrote %d rows", changed)
+		return err
 	})
 
 	n, err := strconv.Atoi(platform.Env("JOB_WORKERS", "2"))

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Info
 } from 'lucide-react';
+import { SafeHtml } from '../lib/safeHtml';
 
 interface Work {
   id: string;
@@ -417,10 +418,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                 {/* Summary */}
                 {work.summary && (
                   <div className="mb-4">
-                    <div 
+                    <SafeHtml
                       id={`work-${work.id}-summary`}
                       className={`text-gray-700 ${!isExpanded ? 'line-clamp-3' : ''}`}
-                      dangerouslySetInnerHTML={{ __html: work.summary }}
+                      html={work.summary}
                     />
                     
                     {work.summary.length > 200 && (

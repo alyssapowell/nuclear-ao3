@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 )
 
@@ -64,7 +65,7 @@ func (ts *TagService) CreateTag(c *gin.Context) {
 	_, err = tx.Exec(`
 		INSERT INTO tags (id, name, canonical_name, type, description, is_canonical, is_filterable, use_count, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, tagID, req.Name, req.CanonicalName, req.Type, req.Description, req.IsCanonical, req.IsFilterable, 0, now, now)
+	`, tagID, req.Name, req.CanonicalName, req.Type, html.CleanPtr(req.Description), req.IsCanonical, req.IsFilterable, 0, now, now)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
@@ -1475,6 +1476,9 @@ func (ts *TagService) UpdateTag(c *gin.Context) {
 
 	if description, exists := req["description"]; exists {
 		setParts = append(setParts, fmt.Sprintf("description = $%d", argIndex))
+		if text, ok := description.(string); ok {
+			description = html.Clean(text)
+		}
 		args = append(args, description)
 		argIndex++
 	}

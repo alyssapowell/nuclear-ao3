@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, FileText, Code, AlignLeft, Edit3, Image, Video, Music, Link } from 'lucide-react';
+import { SafeHtml } from '../lib/safeHtml';
 
 export type ContentFormat = 'html' | 'markdown' | 'plain' | 'richtext';
 
@@ -93,7 +94,7 @@ export default function ContentFormatEditor({
   const renderPreview = () => {
     switch (format) {
       case 'html':
-        return <div dangerouslySetInnerHTML={{ __html: value }} />;
+        return <SafeHtml html={value} />;
       
       case 'markdown':
         // Basic markdown preview (in production, use a proper markdown parser)
@@ -110,14 +111,14 @@ export default function ContentFormatEditor({
           processed = '<p>' + processed + '</p>';
         }
         
-        return <div dangerouslySetInnerHTML={{ __html: processed }} />;
+        return <SafeHtml html={processed} />;
       
       case 'plain':
         return <div className="whitespace-pre-wrap">{value}</div>;
       
       case 'richtext':
         // For now, treat richtext like HTML
-        return <div dangerouslySetInnerHTML={{ __html: value }} />;
+        return <SafeHtml html={value} />;
       
       default:
         return <div className="whitespace-pre-wrap">{value}</div>;

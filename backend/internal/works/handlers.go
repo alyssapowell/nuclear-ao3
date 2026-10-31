@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -234,12 +235,12 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 	}
 	if req.Summary != nil {
 		updates = append(updates, fmt.Sprintf("summary = $%d", argIndex))
-		args = append(args, *req.Summary)
+		args = append(args, html.Clean(*req.Summary))
 		argIndex++
 	}
 	if req.Notes != nil {
 		updates = append(updates, fmt.Sprintf("notes = $%d", argIndex))
-		args = append(args, *req.Notes)
+		args = append(args, html.Clean(*req.Notes))
 		argIndex++
 	}
 	if req.Rating != nil {
@@ -1170,17 +1171,18 @@ func (ws *WorkService) CreateChapter(c *gin.Context) {
 	// Create chapter
 	chapterID := uuid.New()
 	now := time.Now()
-	wordCount := countWords(req.Content)
+	content := html.Clean(req.Content)
+	wordCount := countWords(content)
 
 	chapter := &models.Chapter{
 		ID:        chapterID,
 		WorkID:    workID,
 		Number:    nextNumber,
 		Title:     req.Title,
-		Summary:   req.Summary,
-		Notes:     req.Notes,
-		EndNotes:  req.EndNotes,
-		Content:   req.Content,
+		Summary:   html.Clean(req.Summary),
+		Notes:     html.Clean(req.Notes),
+		EndNotes:  html.Clean(req.EndNotes),
+		Content:   content,
 		WordCount: wordCount,
 		Status:    req.Status,
 		CreatedAt: now,
@@ -1310,25 +1312,26 @@ func (ws *WorkService) UpdateChapter(c *gin.Context) {
 	}
 	if req.Summary != nil {
 		updates = append(updates, fmt.Sprintf("summary = $%d", argIndex))
-		args = append(args, *req.Summary)
+		args = append(args, html.Clean(*req.Summary))
 		argIndex++
 	}
 	if req.Notes != nil {
 		updates = append(updates, fmt.Sprintf("notes = $%d", argIndex))
-		args = append(args, *req.Notes)
+		args = append(args, html.Clean(*req.Notes))
 		argIndex++
 	}
 	if req.EndNotes != nil {
 		updates = append(updates, fmt.Sprintf("end_notes = $%d", argIndex))
-		args = append(args, *req.EndNotes)
+		args = append(args, html.Clean(*req.EndNotes))
 		argIndex++
 	}
 	if req.Content != nil {
 		updates = append(updates, fmt.Sprintf("content = $%d", argIndex))
-		args = append(args, *req.Content)
+		content := html.Clean(*req.Content)
+		args = append(args, content)
 		argIndex++
 		// Recalculate word count when content changes
-		wordCount := countWords(*req.Content)
+		wordCount := countWords(content)
 		updates = append(updates, fmt.Sprintf("word_count = $%d", argIndex))
 		args = append(args, wordCount)
 		argIndex++
@@ -2362,8 +2365,8 @@ func (ws *WorkService) CreateSeries(c *gin.Context) {
 	series := &models.Series{
 		ID:         seriesID,
 		Title:      req.Title,
-		Summary:    req.Summary,
-		Notes:      req.Notes,
+		Summary:    html.Clean(req.Summary),
+		Notes:      html.Clean(req.Notes),
 		UserID:     userUUID,
 		IsComplete: req.IsComplete,
 		WorkCount:  len(req.WorkIDs),
@@ -2459,7 +2462,7 @@ func (ws *WorkService) UpdateSeries(c *gin.Context) {
 		UPDATE series 
 		SET title = $1, description = $2, notes = $3, is_complete = $4, updated_at = $5
 		WHERE id = $6`,
-		req.Title, req.Summary, req.Notes, req.IsComplete, now, seriesID)
+		req.Title, html.Clean(req.Summary), html.Clean(req.Notes), req.IsComplete, now, seriesID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update series"})
@@ -3112,7 +3115,7 @@ func (ws *WorkService) CreateCollection(c *gin.Context) {
 		ID:          collectionID,
 		Name:        req.Name,
 		Title:       req.Title,
-		Description: req.Description,
+		Description: html.Clean(req.Description),
 		UserID:      userUUID,
 		IsOpen:      req.IsOpen,
 		IsModerated: req.IsModerated,
@@ -3209,7 +3212,7 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 	}
 	if req.Description != nil {
 		updates = append(updates, fmt.Sprintf("description = $%d", argIndex))
-		args = append(args, *req.Description)
+		args = append(args, html.Clean(*req.Description))
 		argIndex++
 	}
 	if req.IsOpen != nil {
@@ -3989,7 +3992,7 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 		ID:        bookmarkID,
 		WorkID:    workID,
 		UserID:    userUUID,
-		Notes:     req.Notes,
+		Notes:     html.Clean(req.Notes),
 		Tags:      req.Tags,
 		IsPrivate: req.IsPrivate,
 		CreatedAt: now,
@@ -4102,7 +4105,7 @@ func (ws *WorkService) UpdateBookmark(c *gin.Context) {
 
 	// Update fields if provided
 	if req.Notes != nil {
-		existingBookmark.Notes = *req.Notes
+		existingBookmark.Notes = html.Clean(*req.Notes)
 	}
 	if req.Tags != nil {
 		existingBookmark.Tags = req.Tags

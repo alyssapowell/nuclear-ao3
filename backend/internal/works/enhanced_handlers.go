@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 )
 
@@ -47,13 +48,14 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 	defer tx.Rollback()
 
 	now := time.Now()
-	wordCount := countWords(req.ChapterContent)
+	chapterContent := html.Clean(req.ChapterContent)
+	wordCount := countWords(chapterContent)
 	work := &models.Work{
 		ID:            uuid.New(),
 		UserID:        userID,
 		Title:         req.Title,
-		Summary:       req.Summary,
-		Notes:         req.Notes,
+		Summary:       html.Clean(req.Summary),
+		Notes:         html.Clean(req.Notes),
 		SeriesID:      req.SeriesID,
 		Language:      req.Language,
 		Rating:        req.Rating,
@@ -107,10 +109,10 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 		WorkID:    work.ID,
 		Number:    1,
 		Title:     req.ChapterTitle,
-		Summary:   req.ChapterSummary,
-		Notes:     req.ChapterNotes,
-		EndNotes:  req.ChapterEndNotes,
-		Content:   req.ChapterContent,
+		Summary:   html.Clean(req.ChapterSummary),
+		Notes:     html.Clean(req.ChapterNotes),
+		EndNotes:  html.Clean(req.ChapterEndNotes),
+		Content:   chapterContent,
 		WordCount: wordCount,
 		Status:    "draft",
 		CreatedAt: now,

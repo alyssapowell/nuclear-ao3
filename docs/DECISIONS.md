@@ -8,6 +8,14 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: User HTML follows AO3's allowlist, is cleaned when saved, and cleaned again in the browser
+
+**Decision:** The tags, attributes and link protocols users may use in summaries, notes, chapters, comments and profiles are AO3's (`config/initializers/gem-plugin_config/sanitizer_config.rb`): no scripts, event handlers, `style`, `iframe`, `object`, `embed` or `form`, and links get `rel="nofollow noopener"`. One Go policy, `internal/html`, cleans every such field when it is created or updated, so the database only ever holds clean HTML. Rows saved before that are cleaned by a background job queued by migration 031. The job rewrites a row only if cleaning changes it, and does not touch `updated_at` or send notifications: the triggers that do those things skip work while the job's transaction has `nuclear.maintenance` set. The browser cleans again with DOMPurify, configured with the same list, in `frontend/src/lib/safeHtml.ts`; every place that shows HTML goes through it, and a test fails if any other file uses `dangerouslySetInnerHTML`.
+
+**Why:** A summary with `<img onerror=...>` ran for every visitor to the works list. Cleaning on write fixes the data once, instead of relying on every page that shows it. Using AO3's list, and not our own, keeps the same stories rendering the same way and avoids inventing rules. The second layer covers old rows until the job has run, text built in the browser, and mistakes in the first layer. Titles, tag names, pseud names and usernames are plain text and are not cleaned; React escapes them.
+
+**Cost:** Two copies of the allowlist (Go and TypeScript) must be kept in step. Text is cleaned once when saved, so a future change to the list needs another cleanup job. Embeds, CSS classes and `ftp:` links, which AO3 allows in some fields, are not supported.
+
 ## 2026-10-30: The login signing key is a file the admin holds
 
 **Decision:** One RSA key signs logins. The admin creates it with `nuclear keys generate`, keeps a copy outside the server, and points the app at it with `SIGNING_KEY_FILE`. It is never stored in the database. To change it, set `SIGNING_KEY_FILE` to a new file; for a planned change, list the old file in `SIGNING_KEY_PREVIOUS_FILES` for 14 days (the longest a login lasts) so people stay logged in. Each key's ID is its RFC 7638 thumbprint, tokens carry it, and a token with an unknown ID is refused. The app won't start without a valid key (RSA, at least 2048 bits) and never makes one itself.

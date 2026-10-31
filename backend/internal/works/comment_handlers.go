@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -235,7 +236,7 @@ func (ws *WorkService) CreateGuestComment(c *gin.Context) {
 
 	_, err = ws.db.Exec(query,
 		commentID, req.WorkID, req.ChapterID, nil, nil, req.ParentCommentID,
-		req.Content, req.GuestName, req.GuestEmail, ipParam,
+		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam,
 	)
 
 	if err != nil {
@@ -360,7 +361,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 
 	_, err := ws.db.Exec(query,
 		commentID, req.WorkID, req.ChapterID, userID, pseudonymID, req.ParentCommentID,
-		req.Content, req.GuestName, req.GuestEmail, ipParam,
+		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam,
 	)
 
 	if err != nil {
@@ -474,7 +475,7 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 		WHERE id = $2
 	`
 
-	_, err = ws.db.Exec(updateQuery, req.Content, commentID)
+	_, err = ws.db.Exec(updateQuery, html.Clean(req.Content), commentID)
 	if err != nil {
 		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update comment"})

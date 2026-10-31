@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, BookmarkIcon, ShareIcon, AdjustmentsHorizontalIcon, HeartIcon, CloudArrowDownIcon, WifiIcon } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolidIcon, HeartIcon as HeartSolidIcon, CloudArrowDownIcon as CloudArrowDownSolidIcon } from '@heroicons/react/24/solid';
+import { SafeHtml } from '../lib/safeHtml';
 
 interface MobileReadingInterfaceProps {
   work: {
@@ -452,7 +453,7 @@ export default function MobileReadingInterface({
           {currentChapterData?.notes && (
             <div className="text-sm opacity-75 mb-4 p-3 bg-gray-100 rounded-lg">
               <div className="font-medium mb-1">Chapter Notes:</div>
-              <div dangerouslySetInnerHTML={{ __html: currentChapterData.notes }} />
+              <SafeHtml html={currentChapterData.notes} />
             </div>
           )}
 
@@ -467,11 +468,9 @@ export default function MobileReadingInterface({
 
         {/* Chapter Content */}
         <div className={`${getFontClasses()} py-6`}>
-          <div 
+          <SafeHtml
             className="prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ 
-              __html: currentChapterData?.content || 'Chapter content loading...' 
-            }}
+            html={currentChapterData?.content || 'Chapter content loading...'}
           />
         </div>
 
@@ -480,7 +479,7 @@ export default function MobileReadingInterface({
           <div className={`${getFontClasses()} py-4 border-t border-gray-200`}>
             <div className="text-sm opacity-75 p-3 bg-gray-100 rounded-lg">
               <div className="font-medium mb-1">End Notes:</div>
-              <div dangerouslySetInnerHTML={{ __html: currentChapterData.end_notes }} />
+              <SafeHtml html={currentChapterData.end_notes} />
             </div>
           </div>
         )}

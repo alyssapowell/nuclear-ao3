@@ -147,7 +147,7 @@ func TestRegisterWithoutMail(t *testing.T) {
 	if n != 1 {
 		t.Errorf("%d tokens", n)
 	}
-	e.as.db.QueryRow(`SELECT count(*) FROM jobs`).Scan(&n)
+	e.as.db.QueryRow(`SELECT count(*) FROM jobs WHERE kind = 'email'`).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d jobs", n)
 	}
@@ -265,7 +265,7 @@ func TestPasswordResetEdges(t *testing.T) {
 		t.Errorf("unknown address: %d", c)
 	}
 	var n int
-	e.as.db.QueryRow(`SELECT count(*) FROM jobs`).Scan(&n)
+	e.as.db.QueryRow(`SELECT count(*) FROM jobs WHERE kind = 'email'`).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d jobs queued for an unknown address", n)
 	}

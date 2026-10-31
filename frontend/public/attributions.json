@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-30T07:20:43.899Z",
+  "generatedAt": "2026-10-31T02:32:47.034Z",
   "dependencies": [
     {
       "name": "@headlessui/react",
@@ -62,6 +62,14 @@
       "version": "4.1.0",
       "licenses": "MIT",
       "repository": "https://www.npmjs.com/package/date-fns",
+      "publisher": "Unknown",
+      "description": "Package description would be fetched from npm API"
+    },
+    {
+      "name": "dompurify",
+      "version": "3.4.17",
+      "licenses": "MIT",
+      "repository": "https://www.npmjs.com/package/dompurify",
       "publisher": "Unknown",
       "description": "Package description would be fetched from npm API"
     },

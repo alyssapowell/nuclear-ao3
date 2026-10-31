@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { type ContentFormat } from './ContentFormatEditor';
+import { SafeHtml } from '../lib/safeHtml';
 
 interface ContentRendererProps {
   content: string;
@@ -99,18 +100,14 @@ export default function ContentRenderer({
   if (format === 'plain') {
     return (
       <div className={`${getBaseClasses()} ${className}`}>
-        <div dangerouslySetInnerHTML={{ __html: processedContent }} />
+        <SafeHtml html={processedContent} />
       </div>
     );
   }
 
   return (
     <div className={`${getBaseClasses()} ${className}`}>
-      <div 
-        dangerouslySetInnerHTML={{ 
-          __html: wrapContent(processedContent) 
-        }} 
-      />
+      <SafeHtml html={wrapContent(processedContent)} />
     </div>
   );
 }

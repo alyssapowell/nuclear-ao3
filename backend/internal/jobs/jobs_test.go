@@ -12,6 +12,17 @@ import (
 	"nuclear-ao3/internal/testdb"
 )
 
+// newDB is a migrated database with an empty queue: migrations may queue
+// jobs of their own (031 queues the HTML cleanup), which these tests don't want.
+func newDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db := testdb.New(t)
+	if _, err := db.Exec(`DELETE FROM jobs`); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 type state struct {
 	attempts       int
 	done, failed   bool
@@ -33,7 +44,7 @@ func jobState(t *testing.T, db *sql.DB, kind string) state {
 }
 
 func TestAJobRunsOnceAndIsMarkedDone(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	q := New(db)
 	var got struct{ To string }
@@ -57,7 +68,7 @@ func TestAJobRunsOnceAndIsMarkedDone(t *testing.T) {
 }
 
 func TestAFailingJobIsRetriedThenGivenUpOnThenRetriedByHand(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	q := New(db)
 	q.Handle("flaky", func(context.Context, json.RawMessage) error { return errors.New("mail server down") })
@@ -96,7 +107,7 @@ func TestAFailingJobIsRetriedThenGivenUpOnThenRetriedByHand(t *testing.T) {
 }
 
 func TestAPanickingOrUnknownJobDoesNotStopTheQueue(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	q := New(db)
 	q.Handle("boom", func(context.Context, json.RawMessage) error { panic("bad data") })
@@ -117,7 +128,7 @@ func TestAPanickingOrUnknownJobDoesNotStopTheQueue(t *testing.T) {
 }
 
 func TestAJobFromARolledBackTransactionNeverExists(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	tx, _ := db.Begin()
 	Enqueue(ctx, tx, "email", nil)
@@ -130,7 +141,7 @@ func TestAJobFromARolledBackTransactionNeverExists(t *testing.T) {
 }
 
 func TestWorkersNeverRunTheSameJobTwice(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	const n = 40
 	for i := 0; i < n; i++ {
@@ -170,7 +181,7 @@ func TestWorkersNeverRunTheSameJobTwice(t *testing.T) {
 }
 
 func TestAJobWhoseWorkerDiedIsPickedUpAgain(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	Enqueue(ctx, db, "export", nil)
 	// A worker claimed it and then the server went away.
@@ -189,7 +200,7 @@ func TestAJobWhoseWorkerDiedIsPickedUpAgain(t *testing.T) {
 }
 
 func TestSummary(t *testing.T) {
-	db := testdb.New(t)
+	db := newDB(t)
 	ctx := context.Background()
 	Enqueue(ctx, db, "email", nil)
 	Enqueue(ctx, db, "email", nil)
