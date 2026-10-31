@@ -52,6 +52,7 @@ func (suite *DebugTestSuite) TestDebugClientCredentials() {
 	reqBody, _ := json.Marshal(clientReq)
 	req := httptest.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.authService, req))
 	w := httptest.NewRecorder()
 	suite.router.ServeHTTP(w, req)
 

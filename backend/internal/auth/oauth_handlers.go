@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -133,14 +134,20 @@ func (as *AuthService) RegisterClient(c *gin.Context) {
 		clientSecret = secret
 	}
 
-	// Get owner (if authenticated)
+	// The route only lets admins through; the admin owns the client.
 	var ownerID *uuid.UUID
-	if userID, exists := c.Get("user_id"); exists {
-		uid := userID.(uuid.UUID)
-		ownerID = &uid
+	if uid, ok := c.Get("user_uuid"); ok {
+		id := uid.(uuid.UUID)
+		ownerID = &id
 	}
 
-	// Set defaults
+	// Set defaults (the table refuses empty lists for these)
+	if len(req.GrantTypes) == 0 {
+		req.GrantTypes = []string{"authorization_code"}
+	}
+	if len(req.ResponseTypes) == 0 {
+		req.ResponseTypes = []string{"code"}
+	}
 	if req.AccessTokenTTL == 0 {
 		req.AccessTokenTTL = 86400 // 24 hours (dev-friendly)
 	}
@@ -199,6 +206,7 @@ func (as *AuthService) RegisterClient(c *gin.Context) {
 		client.RefreshTokenTTL, client.IsActive, client.CreatedAt, client.UpdatedAt)
 
 	if err != nil {
+		log.Printf("register client: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":             "server_error",
 			"error_description": "Failed to register client",

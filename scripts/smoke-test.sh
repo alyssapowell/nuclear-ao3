@@ -81,10 +81,7 @@ check "site is up" 200 "$(code "$BASE/health")"
 if [ "${SMOKE_READ_ONLY:-}" = "1" ]; then
 	check "works list answers" 200 "$(code "$B/works?limit=1")"
 	check "search answers" 200 "$(code "$B/search/works?q=the&limit=1")"
-	# Check the content, not only the status: a front door that doesn't send
-	# this address to the app would answer 200 with the website's page.
-	check "login keys are published" yes "$(curl -s "$BASE/auth/jwks" | json "'yes' if d.get('keys') else 'no'")"
-	check "OpenID discovery is published" yes "$(curl -s "$BASE/.well-known/openid-configuration" | json "'yes' if d.get('jwks_uri') else 'no'")"
+
 	BAD_LOGIN='{"login":"no-such-account-smoke","password":"not-a-real-password"}'
 	check "login rejects a wrong password" 401 "$(code -X POST "$B/auth/login" -H 'Content-Type: application/json' -d "$BAD_LOGIN")"
 	check "logged-out requests are refused" 401 "$(code "$B/auth/sessions")"

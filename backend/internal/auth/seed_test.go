@@ -46,3 +46,21 @@ func signIn(as *AuthService, req *http.Request, userID uuid.UUID) error {
 	req.Header.Set("Authorization", "Bearer "+token)
 	return nil
 }
+
+// signInAsAdmin signs a request in as an admin, creating the admin account
+// on first use. Registering OAuth apps is admin-only.
+func signInAsAdmin(as *AuthService, req *http.Request) error {
+	var id uuid.UUID
+	err := as.db.QueryRow(`SELECT u.id FROM users u JOIN user_roles r ON r.user_id = u.id
+		WHERE r.role = 'admin' AND r.revoked_at IS NULL AND u.username = 'client_admin'`).Scan(&id)
+	if err == sql.ErrNoRows {
+		u, err := seedUser(as.db, "client_admin", "client-admin@nuclear-ao3.test", "admin-pass", "admin")
+		if err != nil {
+			return err
+		}
+		id = u.ID
+	} else if err != nil {
+		return err
+	}
+	return signIn(as, req, id)
+}

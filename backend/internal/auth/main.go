@@ -90,7 +90,9 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		oauth.POST("/revoke", authService.Revoke)
 
 		// Client registration (Dynamic Client Registration)
-		oauth.POST("/register-client", authService.RegisterClient)
+		// Only admins register apps: an open registration would let anyone
+		// create a client with any scope (including admin) or grant type.
+		oauth.POST("/register-client", d.RequireUser, d.ActiveAccount, d.RequireRole(), authService.RegisterClient)
 
 		// JWKS endpoint for token verification
 		oauth.GET("/jwks", authService.GetJWKS)

@@ -109,6 +109,7 @@ func (suite *OIDCTestSuite) createOIDCClient() {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 	suite.router.ServeHTTP(w, req)
 

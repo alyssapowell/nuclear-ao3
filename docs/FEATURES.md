@@ -31,7 +31,7 @@ Status key:
 - **OAuth2 / OpenID Connect provider**: third-party apps can "Sign in with Nuclear AO3" and call the API on a user's behalf, with consent screens and app revocation.
   - Intent _(inferred)_: let readers' tools (readers, downloaders, rec bots) use the archive without scraping or sharing passwords.
   - Status: Unverified. This is a large surface area (about 2k lines) for a feature that may not be needed at launch. **Revisit: keep or defer?**
-  - ~~The front door (Caddy) only sent `/api`, `/health` and `/ws` to the app~~, so the OAuth and OpenID addresses (`/auth/authorize`, `/auth/token`, `/auth/jwks`, `/.well-known/...`) got the website page instead, and no other app could sign in. **Fixed 2026-10-31:** Caddy sends exactly those addresses to the app; the website keeps its own `/auth/login` and other account pages. The read-only smoke test now checks the content of `/auth/jwks` and the discovery document, so it would catch this.
+  - The OAuth and OpenID addresses (`/auth/authorize`, `/auth/token`, `/auth/jwks`, `/.well-known/...`) are **deliberately not published** through Caddy (decided 2026-10-31): AO3 has no such feature, and app registration had been open to anyone, with any scope (admin included) and grant type. Registration is now admin-only. Publishing these addresses waits on the keep-or-remove decision above.
 - **Admin user management**: list users and grant or revoke roles.
   - Status: **Not built.** The endpoints used to report success without doing anything; they now answer "not implemented". Roles are granted with `make grant`.
 

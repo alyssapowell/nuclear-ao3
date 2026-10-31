@@ -186,6 +186,7 @@ func (suite *OAuth2TestSuite) createTestClients() {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
+		suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 		suite.router.ServeHTTP(w, req)
 
@@ -228,6 +229,7 @@ func (suite *OAuth2TestSuite) TestClientRegistration_ConfidentialClient_Success(
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 	suite.router.ServeHTTP(w, req)
 
@@ -259,6 +261,7 @@ func (suite *OAuth2TestSuite) TestClientRegistration_PublicClient_Success() {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 	suite.router.ServeHTTP(w, req)
 
@@ -286,6 +289,7 @@ func (suite *OAuth2TestSuite) TestClientRegistration_InvalidRedirectURI() {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 	suite.router.ServeHTTP(w, req)
 
@@ -306,6 +310,7 @@ func (suite *OAuth2TestSuite) TestClientRegistration_InvalidScope() {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	suite.Require().NoError(signInAsAdmin(suite.service, req))
 
 	suite.router.ServeHTTP(w, req)
 
