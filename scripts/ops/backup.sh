@@ -5,6 +5,10 @@
 #
 # The backup holds the DATABASE ONLY. It does NOT contain secrets/ (the login
 # signing key) or .env. Keep your own copy of those somewhere safe.
+#
+# If OFFSITE_REPOSITORY is set in .env, the new file is then copied off-server
+# by offsite-push.sh. If that fails, this script exits non-zero (the local
+# backup is still kept).
 set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -39,8 +43,24 @@ done
 total=$(ls -1 "$BACKUPS_DIR"/nuclear-*.sql.gz | wc -l | tr -d ' ')
 size=$(du -h "$final" | cut -f 1)
 
-h2 "Result: OK"
+h2 "Local backup"
 bullet "Saved \`backups/$name\` ($size). Checked: not empty, readable, complete."
 bullet "$total backup(s) kept (newest $KEEP_BACKUPS); $removed old one(s) removed."
+
+# Off-server copy. A failed push makes this whole script exit non-zero (so the
+# ops-backup workflow goes red) even though the local backup above is saved.
+push_rc=0
+if [ -n "$(env_get OFFSITE_REPOSITORY)" ]; then
+	"$(dirname "${BASH_SOURCE[0]}")/offsite-push.sh" "$final" || push_rc=$?
+	if [ "$push_rc" -ne 0 ]; then
+		problem "The local backup was saved, but the off-server copy FAILED, so this run is marked as failed. Until it is fixed the newest backup exists only on this server." "off-server-backup-problems"
+	fi
+else
+	h2 "Off-server copy"
+	bullet "**WARNING: off-server backup is not set up.** Your backups exist only on this server. If the server or its disk is lost, so are they. See docs/BACKUPS.md to set it up."
+	log "WARNING: backups exist only on this server (OFFSITE_REPOSITORY is not set)"
+fi
+
 h2 "Not included"
-para "The backup has the database only. It does **not** contain \`secrets/\` (the login signing key) or \`.env\`. Keep separate copies of those; see the signing key section of the runbook. Backups also live on this same server, so copy them somewhere else now and then."
+para "The backup has the database only. It does **not** contain \`secrets/\` (the login signing key, the off-server backup password) or \`.env\`. Keep separate copies of those; see the signing key section of the runbook."
+report_problems || exit 1

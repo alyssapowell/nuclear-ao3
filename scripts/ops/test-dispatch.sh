@@ -43,6 +43,7 @@ expect_run "diagnose" "RUN [$H/diagnose.sh]"
 expect_run "emails" "RUN [$H/emails.sh]"
 expect_run "emails --retry" "RUN [$H/emails.sh] [--retry]"
 expect_run "backup" "RUN [$H/backup.sh]"
+expect_run "offsite-list" "RUN [$H/offsite-list.sh]"
 expect_run "upgrade v1.2.3" "RUN [$H/upgrade.sh] [v1.2.3]"
 expect_run "upgrade origin/main" "RUN [$H/upgrade.sh] [origin/main]"
 expect_run "restore nuclear-20260101-120000.sql.gz $FLAG" "RUN [$H/restore.sh] [$B/nuclear-20260101-120000.sql.gz] [$FLAG]"
@@ -70,6 +71,11 @@ expect_refused 'logout-user alice bob'
 expect_refused 'logout-everyone now'
 expect_refused 'diagnose extra'
 expect_refused 'emails --retry --x'
+expect_refused 'offsite-list now'
+expect_refused 'offsite-list --newest-age-hours'
+expect_refused 'offsite-fetch latest'
+expect_refused 'offsite-init'
+expect_refused 'offsite-push x'
 expect_refused 'emails --RETRY'
 expect_refused 'diagnose  '
 expect_refused 'bash -c id'

@@ -8,6 +8,7 @@
 #   diagnose
 #   emails [--retry]
 #   backup
+#   offsite-list
 #   upgrade <git-ref>
 #   restore <backup-file> --i-understand-this-replaces-the-database
 #   logout-everyone
@@ -41,6 +42,7 @@ argv=()
 case "$op" in
 diagnose) [ "$nargs" -eq 0 ] || deny; argv=("$HERE/diagnose.sh") ;;
 backup) [ "$nargs" -eq 0 ] || deny; argv=("$HERE/backup.sh") ;;
+offsite-list) [ "$nargs" -eq 0 ] || deny; argv=("$HERE/offsite-list.sh") ;;
 logout-everyone) [ "$nargs" -eq 0 ] || deny; argv=("$HERE/logout-everyone.sh") ;;
 emails)
 	if [ "$nargs" -eq 0 ]; then argv=("$HERE/emails.sh")
