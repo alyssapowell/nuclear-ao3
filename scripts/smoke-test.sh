@@ -8,8 +8,10 @@
 #   scripts/smoke-test.sh                       # against http://localhost:8088
 #   scripts/smoke-test.sh https://your.archive  # against a real site
 #
-# It creates two throwaway accounts and one work each time it runs. Needs curl
-# and python3.
+# It creates three throwaway accounts and one work each time it runs. Accounts
+# must be activated from their email, so it reads that email from MailHog (the
+# development mail catcher) at $MAILHOG_URL, http://localhost:8025 by default.
+# Needs curl and python3.
 set -u
 BASE="${1:-http://localhost:8088}"
 B="$BASE/api/v1"
@@ -24,18 +26,70 @@ try: d=json.load(sys.stdin); print($1)
 except Exception: print('')"; }
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 
+MAILHOG="${MAILHOG_URL:-http://localhost:8025}"
+
+# token_for ADDRESS PATH: the token in the newest emailed link to PATH (such
+# as /auth/activate) sent to ADDRESS. Emails go out in the background, so it
+# waits a few seconds for one.
+token_for() {
+	local i
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		curl -s "$MAILHOG/api/v2/search?kind=to&query=$1" | python3 -c "
+import sys, json, quopri, re
+try:
+    items = json.load(sys.stdin).get('items') or []
+    body = quopri.decodestring(items[0]['Content']['Body'].encode()).decode('utf-8', 'replace')
+    m = re.search(r'$2\?token=([A-Za-z0-9_-]+)', body)
+    print(m.group(1) if m else '')
+except Exception:
+    print('')" | grep . && return
+		sleep 1
+	done
+}
+
+register() { # name
+	curl -s -X POST "$B/auth/register" -H 'Content-Type: application/json' \
+		-d "{\"username\":\"$1\",\"email\":\"$1@example.org\",\"password\":\"$PW\",\"confirm_password\":\"$PW\"}"
+}
+login() { # name password -> prints the response
+	curl -s -w '\n%{http_code}' -X POST "$B/auth/login" -H 'Content-Type: application/json' \
+		-d "{\"login\":\"$1@example.org\",\"password\":\"$2\"}"
+}
+token_of() { sed '$d' | json "d.get('access_token','')"; }
+
 account() {
 	local name="smoke$RANDOM$RANDOM"
-	curl -s -X POST "$B/auth/register" -H 'Content-Type: application/json' \
-		-d "{\"username\":\"$name\",\"email\":\"$name@example.org\",\"password\":\"$PW\",\"confirm_password\":\"$PW\"}" >/dev/null
-	curl -s -X POST "$B/auth/login" -H 'Content-Type: application/json' \
-		-d "{\"email\":\"$name@example.org\",\"password\":\"$PW\"}" | json "d.get('access_token','')"
+	register "$name" >/dev/null
+	curl -s -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' \
+		-d "{\"token\":\"$(token_for "$name@example.org" /auth/activate)\"}" >/dev/null
+	login "$name" "$PW" | token_of
 }
 
 check "site is up" 200 "$(code "$BASE/health")"
 
 AUTHOR=$(account); READER=$(account)
 [ -n "$AUTHOR" ] && [ -n "$READER" ]; check "register and log in" 0 $?
+
+# The account lifecycle, on a third account.
+NAME="smoke$RANDOM$RANDOM"
+check "register returns no token" "" "$(register "$NAME" | json "d.get('access_token','')")"
+check "can't log in before activating" 403 "$(login "$NAME" "$PW" | tail -n1)"
+check "wrong password doesn't reveal the account" 401 "$(login "$NAME" "wrong-$PW" | tail -n1)"
+ACT=$(token_for "$NAME@example.org" /auth/activate)
+[ -n "$ACT" ]; check "activation email arrives" 0 $?
+check "activate the account" 204 "$(code -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' -d "{\"token\":\"$ACT\"}")"
+check "activation link works once" 400 "$(code -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' -d "{\"token\":\"$ACT\"}")"
+OLD=$(login "$NAME" "$PW" | token_of)
+[ -n "$OLD" ]; check "log in once activated" 0 $?
+NEWPW="Changed-$RANDOM-Password2"
+# The body goes in a variable first: macOS's bash 3.2 brace-expands a JSON
+# body with a comma when it's written inline inside "$(...)".
+CHANGE="{\"current_password\":\"$PW\",\"new_password\":\"$NEWPW\"}"
+check "change password" 204 "$(code -X POST "$B/auth/change-password" -H "Authorization: Bearer $OLD" -H 'Content-Type: application/json' -d "$CHANGE")"
+check "current login survives a password change" 200 "$(code "$B/auth/sessions" -H "Authorization: Bearer $OLD")"
+check "old password no longer logs in" 401 "$(login "$NAME" "$PW" | tail -n1)"
+check "new password logs in" 200 "$(login "$NAME" "$NEWPW" | tail -n1)"
+check "password reset request is accepted" 202 "$(code -X POST "$B/auth/reset-password" -H 'Content-Type: application/json' -d "{\"email\":\"$NAME@example.org\"}")"
 
 WORK=$(curl -s -X POST "$B/works" -H "Authorization: Bearer $AUTHOR" -H 'Content-Type: application/json' \
 	-d '{"title":"Smoke test","language":"en","rating":"general","fandoms":["Original Work"],"freeform_tags":["Testing"],"chapter_content":"<p>One two three four.</p>"}' |

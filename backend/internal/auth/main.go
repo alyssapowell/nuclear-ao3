@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -22,7 +23,6 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		// Public endpoints (no authentication required)
 		api.POST("/register", authService.Register)
 		api.POST("/login", authService.Login)
-		api.POST("/refresh", authService.RefreshToken)
 		api.POST("/reset-password", authService.RequestPasswordReset)
 		api.POST("/reset-password/confirm", authService.ConfirmPasswordReset)
 		api.POST("/verify-email", authService.VerifyEmail)
@@ -38,7 +38,6 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 			protected.POST("/change-password", authService.ChangePassword)
 			protected.GET("/sessions", authService.GetSessions)
 			protected.DELETE("/sessions/:session_id", authService.RevokeSession)
-			protected.GET("/security-events", authService.GetSecurityEvents)
 		}
 
 		// Admin endpoints
@@ -52,8 +51,6 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 			admin.PUT("/users/:user_id", authService.UpdateUser)
 			admin.POST("/users/:user_id/roles", authService.GrantRole)
 			admin.DELETE("/users/:user_id/roles/:role", authService.RevokeRole)
-			admin.GET("/security-events", authService.GetAllSecurityEvents)
-			admin.GET("/metrics", authService.GetAuthMetrics)
 
 			// OAuth2 client management
 			admin.GET("/oauth/clients", authService.AdminListClients)
@@ -133,19 +130,16 @@ func New(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
 	return &AuthService{db: db, redis: rdb, jwt: jwtManager}, nil
 }
 
-// SetMail turns on account emails (such as the welcome email), sent from
+// SetMail turns on account emails (activation and password reset), sent from
 // and with links to the archive described by cfg.
 func (as *AuthService) SetMail(cfg *email.Config) {
 	as.mail = cfg
 }
 
 // ValidateUserToken checks a login token and returns the user it belongs to.
-// Every other area of the app uses this through platform.Deps.
-
+// Every other area of the app uses this through platform.Deps. The token must
+// belong to a session that has not been logged out or revoked.
 func (as *AuthService) ValidateUserToken(token string) (uuid.UUID, error) {
-	claims, err := as.jwt.ValidateToken(token)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	return uuid.Parse(claims.Subject)
+	userID, _, err := as.validateSession(context.Background(), token)
+	return userID, err
 }

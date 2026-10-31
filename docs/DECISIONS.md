@@ -24,6 +24,28 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **Cost:** Migrations must never be edited once released, only added. Existing files were edited in place this once, because none of them had ever applied cleanly anywhere. A database built the old way can't be upgraded automatically (see [RUNBOOK.md](RUNBOOK.md)).
 
+## 2026-10-30: Accounts work the way AO3's do, and logins can be revoked
+
+**Decision:** Build real account security, following AO3: activation by email before the first login, log in by username or email, 6-to-40-character passwords, and password reset by an emailed link. Every login is a session stored in the database that can be ended.
+
+**Why:** Almost all of it was placeholder code that reported success. A stolen login token couldn't be cancelled, and someone who changed their password after a compromise was told they were safe when nothing had changed.
+
+**How:**
+- **Tokens:** a login token is still a signed JWT, but it names its session (`sid`), and every request checks that the session is still active. That's one indexed query per request, with no Redis needed. Logging out, changing a password (other sessions only) and resetting a password (all sessions) end sessions.
+- **Lifetime:** logins last 14 days, with no refresh tokens, which keeps the frontend and the API simple.
+- **Activation and reset links:** they carry a random secret, and only its SHA-256 hash is stored, so a database dump can't be used to take over accounts through them.
+- **Mail:** activation and reset emails are queued in the same transaction as the account change, so they can't be lost.
+
+**Cost:** existing unactivated accounts must activate (or reset their password) before they can log in again. The smoke test now needs a mail catcher with MailHog's API, which the compose setup includes.
+
+## 2026-10-30: The server refuses to run in an insecure setup
+
+**Decision:** Insecure settings stop the server at startup with a plain message, instead of relying on someone to read a checklist. The first check: `GIN_MODE=test`, which turned off rate limits and auto-approved OAuth consent.
+
+**Why:** A checklist only works if someone reads it, every time, through every change of who runs the site. A check the server does itself at every start never gets skipped.
+
+**Next:** default or weak passwords in `.env`, Grafana's admin/admin, email links pointing at localhost in production, and a signing key that isn't the one the admin saved.
+
 ## 2026-10-29: Monitoring ships ready to use
 
 **Decision:** Keep Prometheus, Grafana and Loki, but store their data sources, dashboards and alerts as files in the repo so they load automatically. There will be one "Is the archive OK?" dashboard, and every alert links to a runbook section that says what to do. Images are pinned, the admin password is generated, and the monitoring ports are bound to localhost.

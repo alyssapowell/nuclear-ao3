@@ -1,17 +1,21 @@
 import { safeRedirect } from '@/utils/auth';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, Suspense } from 'react';
+import ResendActivation from '@/components/auth/ResendActivation';
 import { login as loginRequest } from '@/lib/api';
 
 interface LoginForm {
-  email: string;
+  login: string;
   password: string;
 }
 
+const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 function LoginContent() {
-  const [form, setForm] = useState<LoginForm>({ email: '', password: '' });
+  const [form, setForm] = useState<LoginForm>({ login: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notActivated, setNotActivated] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -30,7 +34,7 @@ function LoginContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.email || !form.password) {
+    if (!form.login.trim() || !form.password) {
       setError('Please fill in all fields');
       return;
     }
@@ -38,11 +42,13 @@ function LoginContent() {
     try {
       setLoading(true);
       setError('');
+      setNotActivated(false);
 
-      const result = await loginRequest(form.email, form.password);
+      const result = await loginRequest(form.login.trim(), form.password);
 
       if (result.error) {
         setError(result.error);
+        setNotActivated(result.code === 'not_activated');
         return;
       }
 
@@ -56,7 +62,7 @@ function LoginContent() {
         }
         
         // Also set as cookie for middleware
-        document.cookie = `auth_token=${result.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        document.cookie = `auth_token=${result.token}; path=/; max-age=${14 * 24 * 60 * 60}; SameSite=Lax`;
 
         // Trigger auth state change event for navigation
         window.dispatchEvent(new Event('authChange'));
@@ -89,23 +95,30 @@ function LoginContent() {
       
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600 text-sm">{error}</p>
+          <p role="alert" className="text-red-600 text-sm">{error}</p>
+        </div>
+      )}
+
+      {notActivated && (
+        <div className="mb-4">
+          <ResendActivation email={looksLikeEmail(form.login.trim()) ? form.login.trim() : undefined} />
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
+          <label htmlFor="login" className="block text-sm font-medium text-gray-700">
+            Username or email
           </label>
           <input
-            type="email"
-            id="email"
+            type="text"
+            id="login"
             data-testid="username"
-            value={form.email}
-            onChange={(e) => handleInputChange('email', e.target.value)}
+            autoComplete="username"
+            value={form.login}
+            onChange={(e) => handleInputChange('login', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-            placeholder="Enter your email"
+            placeholder="Enter your username or email"
             disabled={loading}
             required
           />
@@ -146,6 +159,12 @@ function LoginContent() {
       </form>
       
       <p className="mt-4 text-center text-sm text-gray-700">
+        <a href="/auth/forgot-password" className="text-orange-700 hover:text-orange-500">
+          Forgot password?
+        </a>
+      </p>
+
+      <p className="mt-2 text-center text-sm text-gray-700">
         Don't have an account?{' '}
         <a 
           href={`/auth/register${searchParams.get('redirect') ? `?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : ''}`}

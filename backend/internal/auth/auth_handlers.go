@@ -1,11 +1,12 @@
 package auth
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
-	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -15,248 +16,111 @@ import (
 
 // Basic auth handlers for testing OAuth2/OIDC functionality
 
-// Register handles user registration
-func (as *AuthService) Register(c *gin.Context) {
-	var req models.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
-		return
-	}
+// dummyHash is compared against when no user matches, so that an unknown
+// login takes about as long as a wrong password.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("not a real password"), bcrypt.DefaultCost)
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-		return
-	}
-
-	// Create user
-	userID := uuid.New()
-	now := time.Now()
-
-	// Insert user into database
-	query := `
-		INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, true, false, $6, $7)`
-
-	// The account and its welcome email are saved together: the email is
-	// sent if and only if the account exists.
-	tx, err := as.db.BeginTx(c, nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-		return
-	}
-	defer tx.Rollback()
-	if _, err = tx.Exec(query, userID, req.Username, req.Email, string(hashedPassword), req.DisplayName, now, now); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "user_exists"})
-		return
-	}
-	if as.mail != nil {
-		msg, err := as.mail.Welcome(req.Email, req.Username)
-		if err == nil {
-			err = jobs.Enqueue(c, tx, "email", msg)
-		}
-		if err != nil {
-			log.Printf("register: queue welcome email: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-			return
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-		return
-	}
-
-	// Generate tokens
-	accessToken, err := as.jwt.GenerateToken(userID, LoginAudience, []string{"user"}, 30*24*time.Hour) // 30 days
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
-		return
-	}
-
-	// Return user and tokens
-	user := &models.User{
-		ID:          userID,
-		Username:    req.Username,
-		Email:       req.Email,
-		DisplayName: req.DisplayName,
-		IsActive:    true,
-		IsVerified:  false,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
-
-	c.JSON(http.StatusCreated, models.AuthResponse{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: "dummy_refresh_token", // For testing
-		TokenType:    "Bearer",
-		ExpiresAt:    time.Now().Add(30 * 24 * time.Hour).Unix(), // 30 days
-	})
-}
-
-// Login handles user authentication
+// Login handles user authentication. The login may be a username or an
+// email address, in either case.
 func (as *AuthService) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
-
-	// Find user
-	var user models.User
-	var passwordHash string
-	query := `
-		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at
-		FROM users WHERE email = $1`
-
-	err := as.db.QueryRow(query, req.Email).Scan(
-		&user.ID, &user.Username, &user.Email, &passwordHash, &user.DisplayName,
-		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt)
-
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
-		return
+	login := strings.TrimSpace(req.Login)
+	if login == "" {
+		login = strings.TrimSpace(req.Email)
 	}
-
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
-		return
-	}
-
-	// Generate access token
-	accessToken, err := as.jwt.GenerateToken(user.ID, LoginAudience, []string{"user"}, 30*24*time.Hour) // 30 days
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
-		return
-	}
-
-	c.JSON(http.StatusOK, models.AuthResponse{
-		User:         &user,
-		AccessToken:  accessToken,
-		RefreshToken: "dummy_refresh_token",
-		TokenType:    "Bearer",
-		ExpiresAt:    time.Now().Add(30 * 24 * time.Hour).Unix(), // 30 days
-	})
-}
-
-// RefreshToken handles token refresh for session extension
-func (as *AuthService) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if login == "" || req.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
 
-	// For now, since we're using dummy refresh tokens, we'll implement a simple validation
-	// In production, refresh tokens should be stored in database with expiration
-	if req.RefreshToken != "dummy_refresh_token" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_refresh_token"})
+	var user models.User
+	var passwordHash string
+	err := as.db.QueryRowContext(c, `
+		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at
+		FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)
+		ORDER BY (lower(email) = lower($1)) DESC LIMIT 1`, login).Scan(
+		&user.ID, &user.Username, &user.Email, &passwordHash, &user.DisplayName,
+		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt)
+	if err == sql.ErrNoRows {
+		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
-
-	// Extract user ID from the current token context (simplified)
-	// In production, you'd validate the refresh token against the database
-	userIDStr, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_user"})
+		log.Printf("login: find user: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
 
-	// Generate new access token (shorter TTL since it can be refreshed)
-	accessToken, err := as.jwt.GenerateToken(userID, LoginAudience, []string{"user"}, 15*time.Minute)
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil || !user.IsActive {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
+		return
+	}
+
+	if !user.IsVerified {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not_activated", "message": "This account has not been activated yet. Use the link in the activation email."})
+		return
+	}
+
+	accessToken, expiresAt, err := as.startSession(c, user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "token_generation_failed"})
+		log.Printf("login: start session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"access_token":  accessToken,
-		"refresh_token": "dummy_refresh_token", // In production, generate new refresh token
-		"token_type":    "Bearer",
-		"expires_in":    900, // 15 minutes in seconds
+	c.JSON(http.StatusOK, models.AuthResponse{
+		User:        &user,
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresAt:   expiresAt,
 	})
 }
 
-func (as *AuthService) RequestPasswordReset(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "password reset requested"})
+// notImplemented answers endpoints that exist in the API but are not built
+// yet, rather than pretending to succeed.
+func notImplemented(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "not_implemented"})
 }
 
-func (as *AuthService) ConfirmPasswordReset(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "password reset confirmed"})
-}
-
-func (as *AuthService) VerifyEmail(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "email verified"})
-}
-
-func (as *AuthService) ResendVerification(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "verification resent"})
-}
-
-func (as *AuthService) Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
-}
-
+// GetProfile returns the logged-in user's own account details.
 func (as *AuthService) GetProfile(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	c.JSON(http.StatusOK, gin.H{"user_id": userID})
+	userID, ok := currentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var u struct {
+		ID          uuid.UUID `json:"id"`
+		Username    string    `json:"username"`
+		Email       string    `json:"email"`
+		DisplayName string    `json:"display_name"`
+		IsVerified  bool      `json:"is_verified"`
+		CreatedAt   time.Time `json:"created_at"`
+	}
+	err := as.db.QueryRowContext(c, `
+		SELECT id, username, email, COALESCE(display_name, ''), is_verified, created_at
+		FROM users WHERE id = $1`, userID).Scan(&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.IsVerified, &u.CreatedAt)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
+		return
+	}
+	if err != nil {
+		log.Printf("get profile: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
-func (as *AuthService) UpdateProfile(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "profile updated"})
-}
+func (as *AuthService) UpdateProfile(c *gin.Context) { notImplemented(c) }
 
-func (as *AuthService) ChangePassword(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "password changed"})
-}
-
-func (as *AuthService) GetSessions(c *gin.Context) {
-	c.JSON(http.StatusOK, []models.UserSession{})
-}
-
-func (as *AuthService) RevokeSession(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "session revoked"})
-}
-
-func (as *AuthService) GetSecurityEvents(c *gin.Context) {
-	c.JSON(http.StatusOK, []models.SecurityEvent{})
-}
-
-func (as *AuthService) ListUsers(c *gin.Context) {
-	c.JSON(http.StatusOK, []models.User{})
-}
-
-func (as *AuthService) GetUser(c *gin.Context) {
-	c.JSON(http.StatusOK, models.User{})
-}
-
-func (as *AuthService) UpdateUser(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "user updated"})
-}
-
-func (as *AuthService) GrantRole(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "role granted"})
-}
-
-func (as *AuthService) RevokeRole(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "role revoked"})
-}
-
-func (as *AuthService) GetAllSecurityEvents(c *gin.Context) {
-	c.JSON(http.StatusOK, []models.SecurityEvent{})
-}
-
-func (as *AuthService) GetAuthMetrics(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"metrics": "data"})
-}
+func (as *AuthService) ListUsers(c *gin.Context)  { notImplemented(c) }
+func (as *AuthService) GetUser(c *gin.Context)    { notImplemented(c) }
+func (as *AuthService) UpdateUser(c *gin.Context) { notImplemented(c) }
+func (as *AuthService) GrantRole(c *gin.Context)  { notImplemented(c) }
+func (as *AuthService) RevokeRole(c *gin.Context) { notImplemented(c) }

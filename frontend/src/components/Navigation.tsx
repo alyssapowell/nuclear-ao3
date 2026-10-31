@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { logout } from '@/utils/auth';
 import { useState, useEffect, useRef } from 'react';
 import { Search, Menu, X, User, Bell, LogOut, Settings, ChevronDown, BookOpen, Library, FolderOpen, Plus, Bookmark, Heart, LayoutDashboard } from 'lucide-react';
 import { NotificationBell } from './notifications';
@@ -110,18 +111,9 @@ export default function Navigation() {
     };
   }, []);
 
-  const handleSignOut = () => {
-    // Safe localStorage cleanup
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('auth_token');
-        document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      } catch (error) {
-        console.warn('Could not clear localStorage during signout:', error);
-      }
-    }
+  const handleSignOut = async () => {
+    // Ends the login on the server, then clears it from this browser.
+    await logout();
     setUser(null);
     setIsUserMenuOpen(false);
     navigate('/');
@@ -319,6 +311,14 @@ export default function Navigation() {
                     >
                       <Settings className="w-4 h-4 mr-2" />
                       Privacy Settings
+                    </Link>
+                    <Link
+                      to="/profile/password"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Password and Sessions
                     </Link>
                     <hr className="my-1" />
                     <button

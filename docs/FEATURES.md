@@ -17,16 +17,22 @@ Status key:
 
 - **Register, log in, log out, password reset, email verification**
   - Intent: standard accounts that work without JavaScript tricks or third-party login.
-  - Status: Works (verified 2026-10-29 against a local database: register, log in, authenticated requests).
-  - Welcome emails were **never sent** before the merge: registration posted to a `/api/events` route that didn't exist. Since 2026-10-30 the welcome email is queued with the new account and sent through SMTP (verified against a local mail server). The username is escaped in it, and its link uses `SITE_URL`. AO3 itself sends an activation email instead; this becomes that when email verification is built.
-- **Sessions and security log**: see and revoke your active sessions, and see recent security events.
-  - Intent _(inferred)_: let users notice and stop account takeover themselves.
-  - Status: Unverified.
+  - Status: Works (verified 2026-10-30 by the smoke test and in a headless browser, against a local database and mail server). Follows AO3:
+    - A new account must be activated from its email before it can log in. The link lasts 14 days, and a new one can be requested.
+    - Log in with a username or an email.
+    - Passwords are 6 to 40 characters.
+    - Forgotten passwords are reset by an emailed link that works once and lasts 6 hours. Resetting logs the account out everywhere.
+    - Changing a password needs the current one, and logs out every other session.
+    - Asking for an activation or reset email never reveals whether an address has an account, and sends at most one email per account every 5 minutes.
+  - Before 2026-10-30 almost all of this was placeholder code that reported success without doing anything. Change password said it worked and changed nothing, logout revoked nothing, and no email was ever sent.
+- **Sessions**: every login is a session that can be ended. Logging out ends it on the server, so the token stops working at once, not when it expires. A user can see their active sessions (when, where from, which browser) and log any of them out. Logins last 14 days.
+  - Intent: let users notice and stop account takeover themselves.
+  - Status: Works (verified 2026-10-30). The "security events" log was removed; AO3 has no such page.
 - **OAuth2 / OpenID Connect provider**: third-party apps can "Sign in with Nuclear AO3" and call the API on a user's behalf, with consent screens and app revocation.
   - Intent _(inferred)_: let readers' tools (readers, downloaders, rec bots) use the archive without scraping or sharing passwords.
   - Status: Unverified. This is a large surface area (about 2k lines) for a feature that may not be needed at launch. **Revisit: keep or defer?**
 - **Admin user management**: list users and grant or revoke roles.
-  - Status: Unverified.
+  - Status: **Not built.** The endpoints used to report success without doing anything; they now answer "not implemented". Roles are granted with `make grant`.
 
 ## Works and reading
 
@@ -132,6 +138,11 @@ Status key:
 
 ## Security findings (found and fixed 2026-10-29)
 
+Found and fixed 2026-10-30:
+- ~~Logins couldn't be revoked~~: tokens lasted 30 days and logout did nothing, so a stolen token worked until it expired. **Fixed:** every token belongs to a server-side session that logout, a password change or a reset ends.
+- ~~Change password and password reset reported success without doing anything.~~ **Fixed.**
+- ~~A request header (`X-Test-User-ID`) logged anyone in as any user when the server ran in test mode~~, and test mode also turned off rate limits and approved OAuth app access without asking the user. One environment setting (`GIN_MODE=test`) made all of that live. **Fixed:** the header is gone, and the server refuses to start in test mode.
+
 Found while fixing the database setup:
 
 - ~~Every install created an `admin` account with the password `password123`~~, plus three other accounts with that password. **Fixed:** sample accounts live in `backend/migrations/dev/seed.sql`, loaded only by `make seed`. The first admin is made with `nuclear grant <username> admin`.
@@ -165,14 +176,6 @@ These were fixed by merging the backend into one program with one login check (`
 - ~~The login and sign-up pages followed any `?redirect=` address~~, so a crafted link could send people to another site after they logged in, or run code in their session with `javascript:`. **Fixed 2026-10-30:** only addresses on this site are followed (`safeRedirect` in `frontend/src/utils/auth.ts`).
 
 ### Still open
-
-- **Most account security is placeholder code that reports success without doing anything** (found 2026-10-30, `backend/internal/auth/auth_handlers.go`):
-  - Password reset, reset confirmation, email verification and resend do nothing, and no email is sent. Someone who forgets their password can't get back in.
-  - **Change password says it worked but doesn't change anything.** Someone who thinks their account is compromised would believe they'd secured it.
-  - Logout revokes nothing. Login tokens last 30 days and can't be cancelled, so a stolen token works until it expires.
-  - Token refresh always fails (it checks for the literal string `dummy_refresh_token`, then needs a login the route doesn't have).
-  - Profile view/edit, session list/revoke, security events, and the admin user and role endpoints are stubs. Granting roles works only through `nuclear grant`.
-  - Plan: build these for real after background jobs, because reset and verification emails need delivery that retries.
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
 - **The works service logs SQL details and other debug output** at startup and on every request.

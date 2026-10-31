@@ -287,6 +287,13 @@ export default function ProfilePage() {
                   <p className="text-sm text-slate-600">Update your privacy preferences</p>
                 </div>
               </Link>
+
+              <Link to="/profile/password" className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-orange-300 transition-colors">
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-900 mb-2">Password and Sessions</h3>
+                  <p className="text-sm text-slate-600">Change your password and see where you are logged in</p>
+                </div>
+              </Link>
             </div>
           </>
         ) : (

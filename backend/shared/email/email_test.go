@@ -160,19 +160,31 @@ func TestSendGivesUpOnASilentServer(t *testing.T) {
 	}
 }
 
-func TestWelcomeEscapesTheUsername(t *testing.T) {
+func TestAccountEmails(t *testing.T) {
 	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
-	m, err := c.Welcome("new@example.org", `<script>alert(1)</script>`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(m.HTML, "<script>") {
-		t.Error("the username went into the HTML unescaped")
-	}
-	if !strings.Contains(m.HTML, "https://archive.example.org/dashboard") || !strings.Contains(m.Text, "https://archive.example.org/dashboard") {
-		t.Error("the dashboard link should use SITE_URL")
-	}
-	if m.To != "new@example.org" || m.Subject != "Welcome to Test Archive!" {
-		t.Errorf("%+v", m)
+	for _, tc := range []struct {
+		name    string
+		build   func(to, username, token string) (Message, error)
+		subject string
+		link    string
+	}{
+		{"activation", c.Activation, "Activate your account", "https://archive.example.org/auth/activate?token=abc-_123"},
+		{"reset", c.PasswordReset, "Reset your password", "https://archive.example.org/auth/reset-password?token=abc-_123"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := tc.build("new@example.org", `<script>alert(1)</script>`, "abc-_123")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(m.HTML, "<script>") {
+				t.Error("the username went into the HTML unescaped")
+			}
+			if !strings.Contains(m.HTML, tc.link) || !strings.Contains(m.Text, tc.link) {
+				t.Errorf("missing link %s", tc.link)
+			}
+			if m.To != "new@example.org" || m.Subject != tc.subject {
+				t.Errorf("%+v", m)
+			}
+		})
 	}
 }

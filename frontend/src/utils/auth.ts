@@ -83,17 +83,32 @@ export function getAuthToken(): string | null {
 }
 
 /**
- * Logout user (clear local storage)
+ * Log out: tell the server to end this login (so the token stops working
+ * everywhere), then clear it from this browser. A network failure doesn't
+ * stop the local logout.
  */
-export function logout(): void {
+export async function logout(): Promise<void> {
   if (typeof window === 'undefined') return;
-  
+
+  const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+  if (token) {
+    try {
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // Offline or server down: still log out here.
+    }
+  }
+
   localStorage.removeItem('auth_token');
+  localStorage.removeItem('token');
   localStorage.removeItem('user');
-  
+
   // Clear auth cookie
   document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  
+
   // Trigger storage event for other tabs
   window.dispatchEvent(new Event('authChange'));
 }
@@ -105,7 +120,7 @@ export function logout(): void {
  * another), so it's safe to list `user` or `token` in a useEffect's
  * dependencies without the effect running on every render.
  */
-export function useAuth(): AuthState & { logout: () => void } {
+export function useAuth(): AuthState & { logout: () => Promise<void> } {
   const [authState, setAuthState] = useState(getAuthState);
 
   useEffect(() => {

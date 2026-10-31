@@ -2523,37 +2523,104 @@ export interface AuthResult {
   token?: string;
   user?: AuthUser;
   error?: string;
+  /** The server's error code, e.g. "not_activated". */
+  code?: string;
 }
+
+/** Result of any account call: ok, or an error with its code and a message to show. */
+export interface AccountResult<T = undefined> {
+  ok: boolean;
+  data?: T;
+  code?: string;
+  error?: string;
+}
+
+export interface Session {
+  id: string;
+  created_at: string;
+  last_seen: string;
+  ip_address: string;
+  user_agent: string;
+  current: boolean;
+}
+
+export const PASSWORD_MIN = 6;
+export const PASSWORD_MAX = 40;
 
 const AUTH_ERRORS: Record<string, string> = {
-  invalid_credentials: 'Incorrect email or password.',
+  invalid_credentials: 'Incorrect username/email or password.',
   invalid_request: 'Please check the form and try again.',
+  not_activated: "This account hasn't been activated yet. Check your email for the activation link.",
+  user_exists: 'That username or email is already in use.',
+  weak_password: `Passwords must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters long.`,
+  wrong_password: 'Your current password is not correct.',
+  invalid_token: 'This link is invalid or has expired.',
+  not_found: 'That session no longer exists.',
 };
 
-async function authRequest(path: string, body: object): Promise<AuthResult> {
+async function accountCall<T = undefined>(
+  path: string,
+  method: 'GET' | 'POST' | 'DELETE',
+  body?: object,
+  token?: string | null,
+): Promise<AccountResult<T>> {
+  const headers: Record<string, string> = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const response = await fetch(`${API_GATEWAY_URL}/api/v1/auth/${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const code = data.error as string | undefined;
-    return { error: (code && AUTH_ERRORS[code]) || data.error_description || data.message || 'Something went wrong. Please try again.' };
+    const data = await response.json().catch(() => ({}));
+    const code = typeof data.error === 'string' ? (data.error as string) : undefined;
+    return {
+      ok: false,
+      code,
+      error: (code && AUTH_ERRORS[code]) || data.message || 'Something went wrong. Please try again.',
+    };
   }
-  return { token: data.access_token, user: data.user };
+  const data = response.status === 204 ? undefined : await response.json().catch(() => undefined);
+  return { ok: true, data };
 }
 
-export function login(email: string, password: string): Promise<AuthResult> {
-  return authRequest('login', { email, password });
+/** `login` is a username or an email address. */
+export async function login(loginName: string, password: string): Promise<AuthResult> {
+  const r = await accountCall<{ access_token?: string; user?: AuthUser }>('login', 'POST', { login: loginName, password });
+  if (!r.ok) return { error: r.error, code: r.code };
+  return { token: r.data?.access_token, user: r.data?.user };
 }
 
-export function register(username: string, email: string, password: string): Promise<AuthResult> {
-  return authRequest('register', {
-    username,
-    email,
-    password,
-    confirm_password: password,
-    accept_tos: true,
-  });
+/** On success the account still has to be activated from the email; there is no token. */
+export function register(username: string, email: string, password: string): Promise<AccountResult> {
+  return accountCall('register', 'POST', { username, email, password });
+}
+
+export function verifyEmail(token: string): Promise<AccountResult> {
+  return accountCall('verify-email', 'POST', { token });
+}
+
+export function resendVerification(email: string): Promise<AccountResult> {
+  return accountCall('resend-verification', 'POST', { email });
+}
+
+export function requestPasswordReset(email: string): Promise<AccountResult> {
+  return accountCall('reset-password', 'POST', { email });
+}
+
+export function confirmPasswordReset(token: string, password: string): Promise<AccountResult> {
+  return accountCall('reset-password/confirm', 'POST', { token, password });
+}
+
+export function changePassword(currentPassword: string, newPassword: string, token: string | null): Promise<AccountResult> {
+  return accountCall('change-password', 'POST', { current_password: currentPassword, new_password: newPassword }, token);
+}
+
+export function getSessions(token: string | null): Promise<AccountResult<Session[]>> {
+  return accountCall<Session[]>('sessions', 'GET', undefined, token);
+}
+
+export function revokeSession(id: string, token: string | null): Promise<AccountResult> {
+  return accountCall(`sessions/${encodeURIComponent(id)}`, 'DELETE', undefined, token);
 }

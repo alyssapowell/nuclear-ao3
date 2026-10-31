@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -212,15 +211,6 @@ func (rlm *RateLimitManager) checkLimitWithConfig(key string, config RateLimitCo
 // JWTAuthMiddleware validates JWT tokens
 func JWTAuthMiddleware(authService *AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Check for test user header (for testing only)
-		if testUserID := c.GetHeader("X-Test-User-ID"); testUserID != "" && gin.Mode() == gin.TestMode {
-			if userID, err := uuid.Parse(testUserID); err == nil {
-				c.Set("user_id", userID)
-				c.Next()
-				return
-			}
-		}
-
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -241,7 +231,7 @@ func JWTAuthMiddleware(authService *AuthService) gin.HandlerFunc {
 			return
 		}
 
-		claims, err := authService.jwt.ValidateToken(tokenString)
+		userID, sessionID, err := authService.validateSession(c, tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":             "invalid_token",
@@ -251,19 +241,9 @@ func JWTAuthMiddleware(authService *AuthService) gin.HandlerFunc {
 			return
 		}
 
-		userID, err := uuid.Parse(claims.Subject)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":             "invalid_token",
-				"error_description": "Invalid user ID in token",
-			})
-			c.Abort()
-			return
-		}
-
 		c.Set("user_id", userID)
 		c.Set("user_uuid", userID)
-		c.Set("token_claims", claims)
+		c.Set("session_id", sessionID)
 
 		c.Next()
 	}

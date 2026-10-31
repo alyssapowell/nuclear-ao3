@@ -108,6 +108,11 @@ func main() {
 	exportSvc.Start()
 	searchSvc := search.New(db)
 
+	// Test mode skips rate limits and approves OAuth consent by itself, so a
+	// real server must never run in it.
+	if os.Getenv("GIN_MODE") == gin.TestMode {
+		log.Fatalf("startup: GIN_MODE=test turns off security checks and is only for automated tests; unset it")
+	}
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}

@@ -18,9 +18,9 @@ type AuthClaims struct {
 
 // LoginRequest represents a login request
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
+	Login    string `json:"login"` // username or email
+	Email    string `json:"email"` // alias of Login for old clients
 	Password string `json:"password" validate:"required"`
-	Remember bool   `json:"remember"` // For longer-lived refresh tokens
 }
 
 // RegisterRequest represents a registration request
@@ -35,16 +35,10 @@ type RegisterRequest struct {
 
 // AuthResponse represents successful authentication response
 type AuthResponse struct {
-	User         *User  `json:"user"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
-	TokenType    string `json:"token_type"`
-}
-
-// RefreshTokenRequest for token refresh
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
+	User        *User  `json:"user"`
+	AccessToken string `json:"access_token"`
+	ExpiresAt   int64  `json:"expires_at"`
+	TokenType   string `json:"token_type"`
 }
 
 // ChangePasswordRequest for password changes
@@ -132,13 +126,13 @@ func HasPermission(userRoles []string, resource, action, scope string) bool {
 		if !exists {
 			continue
 		}
-		
+
 		for _, perm := range permissions {
 			// Check for wildcard permissions (admin)
 			if perm.Resource == "*" && perm.Action == "*" && perm.Scope == "*" {
 				return true
 			}
-			
+
 			// Check specific permissions
 			if (perm.Resource == resource || perm.Resource == "*") &&
 				(perm.Action == action || perm.Action == "*") &&

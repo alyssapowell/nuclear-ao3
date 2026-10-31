@@ -273,7 +273,6 @@ func (suite *AuthServiceTestSuite) TestRegister_Success() {
 	assert.Equal(suite.T(), "newuser", response.User.Username)
 	assert.Equal(suite.T(), "newuser@nuclear-ao3.test", response.User.Email)
 	assert.NotEmpty(suite.T(), response.AccessToken)
-	assert.NotEmpty(suite.T(), response.RefreshToken)
 	assert.False(suite.T(), response.User.IsVerified) // Should start unverified
 }
 
@@ -339,7 +338,6 @@ func (suite *AuthServiceTestSuite) TestLogin_Success() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "testuser", response.User.Username)
 	assert.NotEmpty(suite.T(), response.AccessToken)
-	assert.NotEmpty(suite.T(), response.RefreshToken)
 	assert.Equal(suite.T(), "Bearer", response.TokenType)
 }
 
@@ -378,60 +376,6 @@ func (suite *AuthServiceTestSuite) TestLogin_UnverifiedUser() {
 	var response models.AuthResponse
 	json.Unmarshal(w.Body.Bytes(), &response)
 	assert.False(suite.T(), response.User.IsVerified)
-}
-
-// Test token refresh
-func (suite *AuthServiceTestSuite) TestRefreshToken_Success() {
-	// First login to get refresh token
-	loginReq := models.LoginRequest{
-		Email:    "test@nuclear-ao3.test",
-		Password: "password123",
-	}
-
-	loginBody, _ := json.Marshal(loginReq)
-	loginW := httptest.NewRecorder()
-	loginReq_, _ := http.NewRequest("POST", "/api/v1/auth/login", bytes.NewBuffer(loginBody))
-	loginReq_.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(loginW, loginReq_)
-
-	var loginResp models.AuthResponse
-	json.Unmarshal(loginW.Body.Bytes(), &loginResp)
-
-	// Now use refresh token
-	refreshReq := models.RefreshTokenRequest{
-		RefreshToken: loginResp.RefreshToken,
-	}
-
-	refreshBody, _ := json.Marshal(refreshReq)
-	refreshW := httptest.NewRecorder()
-	refreshReq_, _ := http.NewRequest("POST", "/api/v1/auth/refresh", bytes.NewBuffer(refreshBody))
-	refreshReq_.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(refreshW, refreshReq_)
-
-	assert.Equal(suite.T(), http.StatusOK, refreshW.Code)
-
-	var refreshResp models.AuthResponse
-	err := json.Unmarshal(refreshW.Body.Bytes(), &refreshResp)
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), refreshResp.AccessToken)
-	assert.NotEqual(suite.T(), loginResp.AccessToken, refreshResp.AccessToken) // Should be new token
-}
-
-func (suite *AuthServiceTestSuite) TestRefreshToken_InvalidToken() {
-	refreshReq := models.RefreshTokenRequest{
-		RefreshToken: "invalid.refresh.token",
-	}
-
-	refreshBody, _ := json.Marshal(refreshReq)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/v1/auth/refresh", bytes.NewBuffer(refreshBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusUnauthorized, w.Code)
 }
 
 // Test profile retrieval
@@ -544,18 +488,6 @@ func (suite *AuthServiceTestSuite) TestGrantRole_Success() {
 	w := suite.authenticatedRequest("POST", fmt.Sprintf("/api/v1/auth/admin/users/%s/roles", userID), grantBody, "testadmin")
 
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
-}
-
-// Test security events
-func (suite *AuthServiceTestSuite) TestGetSecurityEvents_Success() {
-	w := suite.authenticatedRequest("GET", "/api/v1/auth/security-events", nil, "testuser")
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-
-	var events []models.SecurityEvent
-	err := json.Unmarshal(w.Body.Bytes(), &events)
-	assert.NoError(suite.T(), err)
-	// Should have login events at minimum
 }
 
 // Test concurrent authentication requests

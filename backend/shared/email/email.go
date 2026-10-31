@@ -23,6 +23,7 @@ import (
 	"net/mail"
 	"net/smtp"
 	"net/textproto"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -215,48 +216,55 @@ func domain(addr string) string {
 	return "localhost"
 }
 
-var welcomeHTML = template.Must(template.New("welcome").Parse(`<!DOCTYPE html>
+// linkHTML is the body of the two account emails: a greeting, a sentence,
+// a button and the plain link. html/template escapes everything in it.
+var linkHTML = template.Must(template.New("link").Parse(`<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <h2>Hello {{.Username}}!</h2>
-  <p>Your account has been created. You can now:</p>
-  <ul>
-    <li>Browse and search works</li>
-    <li>Post your own works</li>
-    <li>Bookmark works you love</li>
-    <li>Subscribe to creators, works and series</li>
-    <li>Leave comments and kudos</li>
-  </ul>
-  <p><a href="{{.Dashboard}}" style="display: inline-block; padding: 12px 24px; background: #ea580c; color: white; text-decoration: none; border-radius: 6px;">Visit your dashboard</a></p>
+  <p>{{.Intro}}</p>
+  <p><a href="{{.Link}}" style="display: inline-block; padding: 12px 24px; background: #990000; color: white; text-decoration: none; border-radius: 6px;">{{.Button}}</a></p>
+  <p>If the button doesn't work, copy this address into your browser:<br>{{.Link}}</p>
+  <p>{{.Outro}}</p>
   <p style="color: #6b7280; font-size: 12px;">This is an automated message. Please do not reply to it.</p>
 </body>
 </html>`))
 
-// Welcome is the email sent to a new account.
-func (c *Config) Welcome(to, username string) (Message, error) {
+// linkEmail builds an email whose point is one link.
+func (c *Config) linkEmail(to, username, subject, intro, button, path, token, outro string) (Message, error) {
 	username = strings.TrimSpace(username)
-	dashboard := c.SiteURL + "/dashboard"
+	link := c.SiteURL + path + "?token=" + url.QueryEscape(token)
 	var html bytes.Buffer
-	if err := welcomeHTML.Execute(&html, map[string]string{"Username": username, "Dashboard": dashboard}); err != nil {
+	err := linkHTML.Execute(&html, map[string]string{
+		"Username": username, "Intro": intro, "Button": button, "Link": link, "Outro": outro,
+	})
+	if err != nil {
 		return Message{}, err
 	}
 	return Message{
 		To:      to,
-		Subject: "Welcome to " + c.FromName + "!",
-		Text: fmt.Sprintf(`Hello %s!
-
-Your account has been created. You can now:
-- Browse and search works
-- Post your own works
-- Bookmark works you love
-- Subscribe to creators, works and series
-- Leave comments and kudos
-
-Visit your dashboard: %s
-
-This is an automated message. Please do not reply to it.
-`, username, dashboard),
+		Subject: subject,
+		Text: fmt.Sprintf("Hello %s!\n\n%s\n\n%s\n\n%s\n\nThis is an automated message. Please do not reply to it.\n",
+			username, intro, link, outro),
 		HTML: html.String(),
 	}, nil
+}
+
+// Activation is the email that lets a new account be activated. The link is
+// good for 14 days.
+func (c *Config) Activation(to, username, token string) (Message, error) {
+	return c.linkEmail(to, username, "Activate your account",
+		"Welcome to "+c.FromName+"! Use the link below to activate your account. It works for 14 days.",
+		"Activate my account", "/auth/activate", token,
+		"If you didn't sign up, you can ignore this email.")
+}
+
+// PasswordReset is the email that lets someone choose a new password. The
+// link is good for 6 hours.
+func (c *Config) PasswordReset(to, username, token string) (Message, error) {
+	return c.linkEmail(to, username, "Reset your password",
+		"Someone asked to reset the password for your account. Use the link below to choose a new one. It works for 6 hours, once.",
+		"Choose a new password", "/auth/reset-password", token,
+		"If you didn't ask for this, you can ignore this email; your password hasn't changed.")
 }

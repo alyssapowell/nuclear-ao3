@@ -105,7 +105,7 @@ curl -X POST http://localhost:8088/api/v1/works \
 curl "http://localhost:8088/api/v1/search/works?q=fanfic" | jq
 ```
 
-**📚 Complete API Testing Guide:** [backend/auth-service/API_TESTING_GUIDE.md](backend/auth-service/API_TESTING_GUIDE.md)
+**📚 Complete API Testing Guide:** [backend/internal/auth/API_TESTING_GUIDE.md](backend/internal/auth/API_TESTING_GUIDE.md)
 
 ### ⚡ Common Use Cases
 

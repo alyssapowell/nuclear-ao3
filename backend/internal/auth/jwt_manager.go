@@ -144,31 +144,63 @@ func (jm *JWTManager) GenerateToken(userID uuid.UUID, audience string, scopes []
 // archive itself. OAuth ID tokens carry the third-party app's ID instead.
 const LoginAudience = "nuclear-ao3"
 
-// ValidateToken checks that tokenString is a valid login token for this
-// archive. Tokens issued to third-party apps (such as OIDC ID tokens, which
-// are signed with the same key) are rejected because their audience differs.
-func (jm *JWTManager) ValidateToken(tokenString string) (*jwt.RegisteredClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(token *jwt.Token) (interface{}, error) {
+// loginClaims are the claims of a login token: the standard ones plus the
+// ID of the session the token belongs to.
+type loginClaims struct {
+	jwt.RegisteredClaims
+	SessionID string `json:"sid"`
+}
+
+// GenerateLoginToken creates the token for one login session. Revoking the
+// session makes the token stop working.
+func (jm *JWTManager) GenerateLoginToken(userID, sessionID uuid.UUID, expiresIn time.Duration) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":   jm.issuer,
+		"sub":   userID.String(),
+		"aud":   LoginAudience,
+		"exp":   now.Add(expiresIn).Unix(),
+		"iat":   now.Unix(),
+		"nbf":   now.Unix(),
+		"jti":   uuid.New().String(),
+		"sid":   sessionID.String(),
+		"scope": []string{"user"},
+		"typ":   "Bearer",
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = jm.keyID
+	return token.SignedString(jm.privateKey)
+}
+
+// parseLoginToken checks the signature, issuer, audience and expiry of a
+// login token. It does not check that the session is still active.
+func (jm *JWTManager) parseLoginToken(tokenString string) (*loginClaims, error) {
+	claims := &loginClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return jm.publicKey, nil
 	}, jwt.WithAudience(LoginAudience), jwt.WithIssuer(jm.issuer), jwt.WithExpirationRequired())
-
 	if err != nil {
 		return nil, err
 	}
-
 	if !token.Valid {
 		return nil, fmt.Errorf("invalid token")
 	}
-
-	claims, ok := token.Claims.(*jwt.RegisteredClaims)
-	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
-	}
-
 	return claims, nil
+}
+
+// ValidateToken checks that tokenString is a valid login token for this
+// archive. Tokens issued to third-party apps (such as OIDC ID tokens, which
+// are signed with the same key) are rejected because their audience differs.
+// It does not check the session; use AuthService.ValidateUserToken for that.
+func (jm *JWTManager) ValidateToken(tokenString string) (*jwt.RegisteredClaims, error) {
+	claims, err := jm.parseLoginToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	return &claims.RegisteredClaims, nil
 }
 
 // GetPublicKey returns the public key for token verification

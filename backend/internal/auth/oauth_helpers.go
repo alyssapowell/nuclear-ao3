@@ -91,24 +91,14 @@ func (as *AuthService) getAuthenticatedUser(c *gin.Context) *uuid.UUID {
 		return &uid
 	}
 
-	// Check for test user header (for testing OAuth flows)
-	if testUserID := c.GetHeader("X-Test-User-ID"); testUserID != "" && gin.Mode() == gin.TestMode {
-		if userID, err := uuid.Parse(testUserID); err == nil {
-			c.Set("user_id", userID)
-			return &userID
-		}
-	}
-
 	// Check Authorization header for JWT token
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		tokenString := extractBearerToken(authHeader)
 		if tokenString != "" {
-			if claims, err := as.jwt.ValidateToken(tokenString); err == nil {
-				if userID, err := uuid.Parse(claims.Subject); err == nil {
-					c.Set("user_id", userID)
-					return &userID
-				}
+			if userID, _, err := as.validateSession(c, tokenString); err == nil {
+				c.Set("user_id", userID)
+				return &userID
 			}
 		}
 	}

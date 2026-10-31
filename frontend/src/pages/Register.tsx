@@ -1,7 +1,7 @@
 import { safeRedirect } from '@/utils/auth';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, Suspense } from 'react';
-import { register as registerRequest } from '@/lib/api';
+import { register as registerRequest, PASSWORD_MIN, PASSWORD_MAX } from '@/lib/api';
 
 interface RegisterForm {
   username: string;
@@ -19,6 +19,7 @@ function RegisterContent() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
@@ -47,8 +48,8 @@ function RegisterContent() {
       return;
     }
 
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    if (form.password.length < PASSWORD_MIN || form.password.length > PASSWORD_MAX) {
+      setError(`Password must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters long`);
       return;
     }
 
@@ -56,37 +57,16 @@ function RegisterContent() {
       setLoading(true);
       setError('');
 
-      const result = await registerRequest(form.username, form.email, form.password);
+      const result = await registerRequest(form.username, form.email.trim(), form.password);
 
-      if (result.error) {
-        setError(result.error);
+      if (!result.ok) {
+        setError(result.error || 'Registration failed. Please try again.');
         return;
       }
 
-      if (result.token) {
-        // Store the token
-        localStorage.setItem('auth_token', result.token);
-        
-        // Store user data for navigation
-        if (result.user) {
-          localStorage.setItem('user', JSON.stringify(result.user));
-        }
-        
-        // Also set as cookie for middleware
-        document.cookie = `auth_token=${result.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-        // Trigger auth state change event for navigation
-        window.dispatchEvent(new Event('authChange'));
-
-        // Small delay to ensure localStorage is set before navigation
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Redirect to the intended page or home with full reload to update all components
-        const redirect = safeRedirect(searchParams.get('redirect'));
-        window.location.href = redirect;
-      } else {
-        setError('Registration failed. Please try again.');
-      }
+      // The account must be activated from the email before anyone can log in,
+      // so there is no token and we don't log in here.
+      setRegisteredEmail(form.email.trim());
     } catch (err) {
       console.error('Registration error:', err);
       setError('Registration failed. Please try again.');
@@ -100,13 +80,32 @@ function RegisterContent() {
     if (error) setError(''); // Clear error when user starts typing
   };
 
+  if (registeredEmail) {
+    return (
+      <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">Check your email to activate your account</h1>
+        <p role="status" className="text-sm text-gray-700 mb-4">
+          We've sent an activation link to <strong>{registeredEmail}</strong>. You need to follow it
+          before you can log in. The link works for 14 days.
+        </p>
+        <p className="text-sm text-gray-700">
+          Didn't get it? You can{' '}
+          <Link to="/auth/login" className="text-orange-700 hover:text-orange-500">
+            log in
+          </Link>{' '}
+          to ask for another one.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Sign Up</h1>
       
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600 text-sm">{error}</p>
+          <p role="alert" className="text-red-600 text-sm">{error}</p>
         </div>
       )}
 
@@ -159,9 +158,10 @@ function RegisterContent() {
             placeholder="Create a password"
             disabled={loading}
             required
-            minLength={6}
+            minLength={PASSWORD_MIN}
+            maxLength={PASSWORD_MAX}
           />
-          <p className="mt-1 text-xs text-gray-600">Password must be at least 6 characters long</p>
+          <p className="mt-1 text-xs text-gray-600">Password must be 6 to 40 characters long</p>
         </div>
         
         <div>
