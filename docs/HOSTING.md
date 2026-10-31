@@ -57,7 +57,53 @@ When one server isn't enough, these are the steps, in this order. Each is a chan
 1. **A separate database server.** Run Postgres on its own machine, or use a managed Postgres service, and point `DATABASE_URL` at it. This is the biggest single step. The database is what grows with the archive; the app doesn't.
 2. **More copies of the app** behind Caddy. The app keeps no state of its own, and background jobs are shared safely between copies (see "How background jobs were done" in docs/DECISIONS.md).
 3. **A read replica of the database**, for searches and reading. This needs code support that isn't written yet.
-4. **A CDN in front of Caddy**, for the website's files and public pages.
+4. **A CDN in front of Caddy**, for the website's files and public pages. For a public archive this often comes first, not last; see the next section.
+
+## Staying up when a whole data centre doesn't
+
+Growing the server handles more readers. It doesn't help when the data centre itself has a problem, or when someone floods the site. For that, the archive needs to be in more than one place. In order of value for effort:
+
+### 1. An edge network (CDN) in front
+
+A CDN (Cloudflare, Fastly, Bunny and others) answers visitors from data centres around the world and passes only what it can't answer to your server. It absorbs most floods before they reach you, and serves cached public pages quickly everywhere. Most of an archive's traffic is logged-out reading, which is exactly what a CDN is good at.
+
+Two settings matter once a CDN is in front:
+
+- **Tell Caddy to believe the CDN about who the visitor is.** Every request now arrives from the CDN's addresses. Without this, the app sees a few CDN addresses instead of real visitors: rate limits would treat everyone as one visitor, and logs lose real addresses. In the `Caddyfile`, add a global block listing your CDN's published address ranges and its visitor header. For Cloudflare, for example:
+
+  ```
+  {
+      servers {
+          trusted_proxies static 173.245.48.0/20 103.21.244.0/22 ...
+          client_ip_headers CF-Connecting-IP
+      }
+  }
+  ```
+
+  Copy the full, current list from the CDN's own page of published address ranges (they change now and then), and don't add anything else. The app already trusts only Caddy (`TRUSTED_PROXIES`), so the real address is carried all the way through.
+- **Only let the CDN reach the server.** In the server's firewall, accept ports 80 and 443 only from the CDN's ranges. Otherwise someone who finds the server's own address can go around the CDN.
+
+What still needs code: API answers to logged-out visitors don't yet tell the CDN they may be cached, so only the website's files are cached today. Marking public answers cacheable for a minute or two, and never anything personal, is planned.
+
+### 2. A warm standby in another region
+
+A second server in a different region, with a copy of the database that Postgres keeps up to date by itself (streaming replication, usually a few seconds behind), and the app ready to run. If the main region fails, switch to the standby. The archive is back in minutes, with at most the last few seconds of changes lost.
+
+This needs:
+
+- Streaming replication from the main Postgres to the standby.
+- A failover step that promotes the standby, points the app and the CDN at it, and refuses to run while the old main is still accepting writes (two databases both taking changes is the one mistake that can't be cleaned up). This should be an **ops-failover** workflow like the others, not a page of instructions. It isn't written yet.
+- Practising it, like the monthly restore drill. A failover that has never been done is a plan, not a standby.
+
+Off-server backups (docs/BACKUPS.md) are the fallback when even the standby is lost: slower to restore, but in a third place.
+
+### 3. Copies in several regions, for speed
+
+Read-only copies of the database near readers in other parts of the world. Only worth doing once measurements show distant readers are slow even with the CDN, and it needs code support that isn't written yet (see "When to grow").
+
+### What isn't recommended
+
+Running the archive "active-active", accepting changes in several regions at once. Postgres has one place that accepts writes, by design. Systems that accept writes everywhere have to settle conflicting changes forever after, and that is a full-time specialist job. A CDN, a warm standby and backups in a third place cover nearly all of the same failures.
 
 ## What hasn't been measured
 
