@@ -226,7 +226,7 @@ func (s *Service) SetCommentSpam(ctx context.Context, actor audit.Actor, id uuid
 		return fmt.Errorf("%w: a reason is required to mark spam", ErrBadInput)
 	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE comments SET is_spam = $2 WHERE id = $1 AND is_spam <> $2`, id, spam)
+		res, err := tx.ExecContext(ctx, `UPDATE comments SET is_spam = $2, spam_by_admin = $2 WHERE id = $1 AND (is_spam <> $2 OR spam_by_admin <> $2)`, id, spam)
 		if err != nil {
 			return err
 		}
@@ -245,7 +245,7 @@ func (s *Service) SetCommentSpam(ctx context.Context, actor audit.Actor, id uuid
 // shows to everyone (AO3's "approve" and "review", comments_controller.rb:430-490).
 func (s *Service) ApproveComment(ctx context.Context, actor audit.Actor, id uuid.UUID, reason string) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `UPDATE comments SET unreviewed = false, is_spam = false
+		res, err := tx.ExecContext(ctx, `UPDATE comments SET unreviewed = false, is_spam = false, spam_by_admin = false
 			WHERE id = $1 AND (unreviewed OR is_spam)`, id)
 		if err != nil {
 			return err

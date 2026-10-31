@@ -199,11 +199,12 @@ These were fixed by merging the backend into one program with one login check (`
 - ~~**Backups stayed on the server**~~, so losing the server lost them. **Fixed 2026-10-30:** each daily backup is encrypted and copied to any S3-compatible or B2 storage with restic (14 daily, 8 weekly and 12 monthly copies kept, a weekly read-back check). A failed copy turns the run red. The repository password is generated once and held by the admin. See docs/BACKUPS.md. Not yet run against a real repository.
 - ~~Redis was still required.~~ The app wouldn't start without it, though it only held rate limits, OAuth consent prompts and two caches. **Fixed 2026-10-30:** Redis is gone; rate limits are counted in memory (per copy of the app), OAuth state is in Postgres, and the caches were removed. See docs/DECISIONS.md.
 - ~~Most services' logs had no size limit~~, which on a small disk eventually stops the database. **Fixed 2026-10-30:** every service keeps at most 5 files of 20 MB.
-- **Older bugs found while adding moderation (2026-10-30), not yet fixed:**
-  - A creator's public works list (`GetUserWorks`) filters on `status = 'posted'`, which the table never allows (it uses `published`), so other people always see an empty list.
-  - Editing a comment (`PUT /comments/:id`) reads the wrong URL parameter and always fails.
-  - The works list's page totals count only the current page.
-  - Deleting a work that has tags fails on a `work_tag_summaries` foreign key.
+- **Older bugs found while adding moderation (2026-10-30):**
+  - ~~A creator's public works list (`GetUserWorks`) filters on `status = 'posted'`~~, which the table never allows (it uses `published`), so other people always saw an empty list. **Fixed:** the list, the profile and dashboard counts and the site statistics now use `published` (the API still accepts `"posted"` and stores `published`). An author viewing their own list also got a 500 error; fixed.
+  - ~~Editing a comment (`PUT /comments/:id`) read the wrong URL parameter~~ and always failed. **Fixed:** only the author can edit; the text is cleaned; frozen comments, comments with replies (AO3: "Comments with replies cannot be edited") and comments hidden by an admin are refused; banned and suspended accounts are refused.
+  - ~~The works list's page totals counted only the current page.~~ **Fixed:** the total is counted with the same visibility rule and filters as the list.
+  - ~~Deleting a work that had tags failed on a `work_tag_summaries` foreign key.~~ **Fixed** in migration 035: the tag summary trigger re-created a summary for a work that was being deleted. Deleting also drops the tags' use counts. The delete handler also no longer tries to clear two tables that don't exist.
+  - ~~A work's creator could clear a spam mark an administrator had set~~ (`PUT /comments/:id/moderate`). **Fixed** in migration 035: `comments.spam_by_admin` records who marked it, and only an administrator can clear it. Creators can still approve and reject comments, as in AO3; the route now refuses banned and suspended accounts.
 - **The works service logs SQL details and other debug output** at startup and on every request.
 - **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
 - **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.

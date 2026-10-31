@@ -632,7 +632,7 @@ func (as *AuthService) getUserStats(userID uuid.UUID) (*UserStats, error) {
 	stats := &UserStats{}
 
 	// Get work count
-	workQuery := `SELECT COUNT(*) FROM works WHERE user_id = $1 AND status = 'posted'`
+	workQuery := `SELECT COUNT(*) FROM works WHERE user_id = $1 AND status = 'published'`
 	as.db.QueryRow(workQuery, userID).Scan(&stats.WorkCount)
 
 	// Get bookmark count

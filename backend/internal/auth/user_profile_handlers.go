@@ -655,7 +655,7 @@ func (s *AuthService) GetUserDashboard(c *gin.Context) {
 		SELECT 
 			u.id, u.username, u.display_name,
 			COUNT(DISTINCT n.id) FILTER (WHERE n.is_read = false) as unread_notifications,
-			COUNT(DISTINCT w.id) FILTER (WHERE w.status = 'posted') as published_works,
+			COUNT(DISTINCT w.id) FILTER (WHERE w.status = 'published') as published_works,
 			COUNT(DISTINCT w2.id) FILTER (WHERE w2.status = 'draft') as draft_works,
 			COUNT(DISTINCT b.id) as bookmarks,
 			COUNT(DISTINCT s.id) as series,

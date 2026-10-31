@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -475,9 +474,9 @@ func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDet
 
 // UpdateComment updates an existing comment
 func (ws *WorkService) UpdateComment(c *gin.Context) {
-	commentID := c.Param("commentId")
-	if commentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Comment ID is required"})
+	commentID, err := uuid.Parse(c.Param("comment_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid comment ID"})
 		return
 	}
 
@@ -486,62 +485,70 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
+	content := html.Clean(req.Content)
+	if strings.TrimSpace(content) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Comment cannot be empty"})
+		return
+	}
 
-	// Get user information from context
-	userIDStr := c.GetString("user_id")
-	if userIDStr == "" {
+	userID := ws.getUserIDFromContext(c)
+	if userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 		return
 	}
 
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Verify the comment exists and user owns it
-	var existingComment models.Comment
-	query := `SELECT id, user_id, content FROM comments WHERE id = $1 AND is_deleted = false`
-
-	err = ws.db.QueryRow(query, commentID).Scan(
-		&existingComment.ID, &existingComment.UserID, &existingComment.Content,
-	)
-
+	var authorID sql.NullString
+	var iced, hidden bool
+	var visible, hasReplies bool
+	err = ws.db.QueryRowContext(c.Request.Context(), `
+		SELECT c.user_id, c.iced, c.hidden_by_admin,
+		       can_user_view_comment(c.id, $2),
+		       EXISTS (SELECT 1 FROM comments r WHERE r.parent_comment_id = c.id AND NOT r.is_deleted)
+		FROM comments c WHERE c.id = $1 AND NOT c.is_deleted`,
+		commentID, *userID).Scan(&authorID, &iced, &hidden, &visible, &hasReplies)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
 	}
 	if err != nil {
-		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify comment"})
 		return
 	}
 
-	// Check if user owns the comment
-	if existingComment.UserID == nil || *existingComment.UserID != userID {
+	// A comment the viewer cannot see does not exist to them.
+	if !visible {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
+		return
+	}
+	// AO3 check_ownership: only the comment's own author may edit.
+	if !authorID.Valid || authorID.String != userID.String() {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only edit your own comments"})
 		return
 	}
+	// AO3 check_permission_to_edit (comments_controller.rb:207): a frozen
+	// comment cannot be edited, and neither can one that has replies.
+	if iced {
+		c.JSON(http.StatusForbidden, gin.H{"error": "comment_frozen", "message": "This comment is frozen and cannot be edited."})
+		return
+	}
+	if hasReplies {
+		c.JSON(http.StatusForbidden, gin.H{"error": "comment_has_replies", "message": "Comments with replies cannot be edited."})
+		return
+	}
+	if hidden {
+		c.JSON(http.StatusForbidden, gin.H{"error": "comment_hidden", "message": "This comment has been hidden by an admin and cannot be edited."})
+		return
+	}
 
-	// Update the comment
-	updateQuery := `
-		UPDATE comments 
-		SET content = $1, edited_at = NOW(), updated_at = NOW()
-		WHERE id = $2
-	`
-
-	_, err = ws.db.Exec(updateQuery, html.Clean(req.Content), commentID)
-	if err != nil {
-		// Log error
+	if _, err = ws.db.ExecContext(c.Request.Context(), `
+		UPDATE comments SET content = $1, edited_at = NOW(), updated_at = NOW()
+		WHERE id = $2`, content, commentID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update comment"})
 		return
 	}
 
-	// Retrieve the updated comment
-	updatedComment, err := ws.getCommentByID(uuid.MustParse(commentID))
+	updatedComment, err := ws.getCommentByID(commentID)
 	if err != nil {
-		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Comment updated but failed to retrieve details"})
 		return
 	}
@@ -549,9 +556,11 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedComment)
 }
 
-// DeleteComment soft-deletes a comment
+// DeleteComment soft-deletes a comment. As in AO3, the comment's author and
+// the creators of the work it is on may delete it. Staff delete through the
+// admin endpoint instead, which records the action in the audit log.
 func (ws *WorkService) DeleteComment(c *gin.Context) {
-	commentID := c.Param("commentId")
+	commentID := c.Param("comment_id")
 	if commentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Comment ID is required"})
 		return
@@ -570,21 +579,13 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 		return
 	}
 
-	// Check user roles for moderation permissions
-	userRoles := c.GetStringSlice("user_roles")
-	isModerator := false
-	for _, role := range userRoles {
-		if role == "moderator" || role == "admin" {
-			isModerator = true
-			break
-		}
-	}
-
-	// Verify the comment exists
+	// Verify the comment exists, and whether the caller created its work.
 	var existingComment models.Comment
-	query := `SELECT id, user_id FROM comments WHERE id = $1 AND is_deleted = false`
+	var ownsWork bool
+	query := `SELECT id, user_id, COALESCE(is_work_creator(work_id, $2), false)
+		FROM comments WHERE id = $1 AND is_deleted = false`
 
-	err = ws.db.QueryRow(query, commentID).Scan(&existingComment.ID, &existingComment.UserID)
+	err = ws.db.QueryRow(query, commentID, userID).Scan(&existingComment.ID, &existingComment.UserID, &ownsWork)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
@@ -596,10 +597,9 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 		return
 	}
 
-	// Check permissions: user owns comment OR user is moderator
-	canDelete := isModerator || (existingComment.UserID != nil && *existingComment.UserID == userID)
+	canDelete := ownsWork || (existingComment.UserID != nil && *existingComment.UserID == userID)
 	if !canDelete {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only delete your own comments"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "You can only delete your own comments, or comments on your own works"})
 		return
 	}
 
@@ -614,109 +614,6 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Comment deleted successfully"})
-}
-
-// GiveCommentKudos allows a user to give kudos to a comment
-func (ws *WorkService) GiveCommentKudos(c *gin.Context) {
-	commentID := c.Param("commentId")
-	if commentID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Comment ID is required"})
-		return
-	}
-
-	// Get user information from context
-	userIDStr := c.GetString("user_id")
-	var userID *uuid.UUID
-	var pseudonymID *uuid.UUID
-	var guestSession *string
-
-	if userIDStr != "" {
-		// Authenticated user
-		parsedUserID, err := uuid.Parse(userIDStr)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-			return
-		}
-		userID = &parsedUserID
-
-		// Get the user's default pseudonym
-		var defaultPseudonymID uuid.UUID
-		err = ws.db.QueryRow(
-			"SELECT id FROM user_pseudonyms WHERE user_id = $1 AND is_default = true LIMIT 1",
-			userID,
-		).Scan(&defaultPseudonymID)
-		if err == nil {
-			pseudonymID = &defaultPseudonymID
-		}
-	} else {
-		// Guest user - create a session identifier
-		sessionID := fmt.Sprintf("guest_%s_%d", c.ClientIP(), time.Now().Unix())
-		guestSession = &sessionID
-	}
-
-	// Verify the comment exists
-	var exists bool
-	err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM comments WHERE id = $1 AND is_deleted = false)", commentID).Scan(&exists)
-	if err != nil || !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
-		return
-	}
-
-	// Check if user already gave kudos to this comment
-	checkQuery := `
-		SELECT EXISTS(
-			SELECT 1 FROM comment_kudos 
-			WHERE comment_id = $1 AND (
-				(user_id = $2 AND $2 IS NOT NULL) OR 
-				(guest_session = $3 AND $3 IS NOT NULL)
-			)
-		)
-	`
-
-	var alreadyGaveKudos bool
-	err = ws.db.QueryRow(checkQuery, commentID, userID, guestSession).Scan(&alreadyGaveKudos)
-	if err != nil {
-		// Log error
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify kudos status"})
-		return
-	}
-
-	if alreadyGaveKudos {
-		c.JSON(http.StatusConflict, gin.H{"error": "You have already given kudos to this comment"})
-		return
-	}
-
-	// Give kudos
-	kudosID := uuid.New()
-	ipAddress := c.ClientIP()
-
-	// Handle empty IP address for test environments
-	var ipParam interface{}
-	if ipAddress == "" {
-		ipParam = nil
-	} else {
-		ipParam = ipAddress
-	}
-
-	insertQuery := `
-		INSERT INTO comment_kudos (
-			id, comment_id, user_id, pseudonym_id, guest_session, ip_address, created_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, NOW()
-		)
-	`
-
-	_, err = ws.db.Exec(insertQuery, kudosID, commentID, userID, pseudonymID, guestSession, ipParam)
-	if err != nil {
-		// Log error
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to give kudos"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Kudos given successfully",
-		"kudos_id": kudosID,
-	})
 }
 
 // Helper function to get a comment by ID with all details

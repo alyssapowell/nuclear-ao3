@@ -116,7 +116,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			protected.DELETE("/collections/:collection_id/works/:work_id", workService.RemoveWorkFromCollection) // DELETE /api/v1/collections/123/works/456
 
 			// Comment moderation
-			protected.PUT("/comments/:comment_id/moderate", workService.ModerateComment)                  // PUT /api/v1/comments/123/moderate
+			protected.PUT("/comments/:comment_id/moderate", d.ActiveAccount, workService.ModerateComment) // PUT /api/v1/comments/123/moderate
 			protected.PUT("/comments/:comment_id/freeze", d.ActiveAccount, workService.FreezeComment)     // PUT /api/v1/comments/123/freeze
 			protected.PUT("/comments/:comment_id/unfreeze", d.ActiveAccount, workService.UnfreezeComment) // PUT /api/v1/comments/123/unfreeze
 

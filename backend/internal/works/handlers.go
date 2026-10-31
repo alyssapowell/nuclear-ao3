@@ -458,8 +458,8 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// Delete related data (cascading)
-	tables := []string{"gifts", "creatorships", "work_comments", "work_kudos", "bookmarks", "work_statistics", "chapters", "works"}
+	// Delete related data. Comments, kudos and the rest cascade from works.
+	tables := []string{"gifts", "creatorships", "bookmarks", "work_statistics", "chapters", "works"}
 	for _, table := range tables {
 		var query string
 		if table == "works" {
@@ -476,6 +476,7 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 
 		_, err = tx.Exec(query, workID)
 		if err != nil {
+			log.Printf("delete work %s: %s: %v", workID, query, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete work data"})
 			return
 		}
@@ -674,6 +675,12 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
 	if limit > 100 {
 		limit = 100
 	}
@@ -684,14 +691,17 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 
 	// Build SQL query - only show published works, not drafts
 	// Note: Remove the empty array columns, we'll load tags separately from work_tags table
-	baseQuery := `
+	selectClause := `
 		SELECT w.id, w.title, w.summary, w.user_id, u.username, w.language, w.rating,
 			w.category, w.archive_warning,
 			w.word_count, w.chapter_count, w.expected_chapters, w.is_complete, 
 			CASE WHEN w.is_draft THEN 'draft' WHEN w.is_complete THEN 'complete' ELSE 'in_progress' END as status,
 			w.published_at, w.updated_at, w.created_at,
 			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
+			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks`
+	// The rows and the total are counted from the same FROM and WHERE, so the
+	// total is every matching work, not just this page.
+	fromWhere := `
 		FROM works w
 		JOIN users u ON w.user_id = u.id
 		WHERE w.is_draft = false AND w.published_at IS NOT NULL`
@@ -701,7 +711,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	// page uses.
 	args := []interface{}{viewer}
 	argIndex := 2
-	baseQuery += " AND can_user_view_work(w.id, $1::uuid)"
+	fromWhere += " AND can_user_view_work(w.id, $1::uuid)"
 
 	conditions := []string{}
 
@@ -799,7 +809,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	}
 
 	if len(conditions) > 0 {
-		baseQuery += " AND " + strings.Join(conditions, " AND ")
+		fromWhere += " AND " + strings.Join(conditions, " AND ")
 	}
 
 	// Add ordering
@@ -814,7 +824,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 		sortOrder = "desc"
 	}
 
-	baseQuery += fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d", sortBy, sortOrder, argIndex, argIndex+1)
+	baseQuery := selectClause + fromWhere + fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d", sortBy, sortOrder, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
 	fmt.Printf("FINAL QUERY: %s\n", baseQuery)
@@ -883,12 +893,9 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	}
 	fmt.Printf("Finished scanning. Found %d works\n", len(works))
 
-	// Get total count
-	countQuery := strings.Replace(baseQuery, "SELECT w.id, w.title, w.summary, w.user_id, u.username, w.language, w.rating, w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags, w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status, w.published_at, w.updated_at, w.created_at, COALESCE(ws.hits, 0) as hits, COALESCE(ws.kudos, 0) as kudos, COALESCE(ws.comments, 0) as comments, COALESCE(ws.bookmarks, 0) as bookmarks", "SELECT COUNT(*)", 1)
-	countQuery = strings.Split(countQuery, "ORDER BY")[0] // Remove ORDER BY and LIMIT
-
+	// Get total count: same visibility and filters, no ORDER BY, LIMIT or OFFSET.
 	var total int
-	err = ws.db.QueryRow(countQuery, args[:len(args)-2]...).Scan(&total) // Remove LIMIT and OFFSET args
+	err = ws.db.QueryRow("SELECT COUNT(*) "+fromWhere, args[:len(args)-2]...).Scan(&total)
 	if err != nil {
 		total = len(works) // Fallback
 	}
@@ -3630,12 +3637,18 @@ func (ws *WorkService) GetUserWorks(c *gin.Context) {
 	// If not viewing own profile, only show published, non-restricted works
 	// the viewer may see (not hidden or spam, not blocked).
 	if !isOwnProfile {
-		baseQuery += " AND w.status = 'posted' AND w.restricted = false AND can_user_view_work(w.id, $4::uuid)"
+		baseQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $4::uuid)"
 	}
 
 	baseQuery += " ORDER BY w.updated_at DESC LIMIT $2 OFFSET $3"
 
-	rows, err := ws.db.Query(baseQuery, targetUserID, limit, offset, viewerID)
+	// $4 (the viewer) is only in the query when someone else's list is shown;
+	// Postgres rejects a parameter that is passed but never used.
+	listArgs := []interface{}{targetUserID, limit, offset}
+	if !isOwnProfile {
+		listArgs = append(listArgs, viewerID)
+	}
+	rows, err := ws.db.Query(baseQuery, listArgs...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user works"})
 		return
@@ -3705,7 +3718,7 @@ func (ws *WorkService) GetUserWorks(c *gin.Context) {
 
 	args := []interface{}{targetUserID}
 	if !isOwnProfile {
-		countQuery += " AND w.status = 'posted' AND w.restricted = false AND can_user_view_work(w.id, $2::uuid)"
+		countQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid)"
 		args = append(args, viewerID)
 	}
 
@@ -4867,7 +4880,7 @@ func (ws *WorkService) GetMyStats(c *gin.Context) {
 	err = ws.db.QueryRow(`
 		SELECT 
 			COUNT(*) as total_works,
-			COUNT(CASE WHEN w.status = 'posted' THEN 1 END) as published_works,
+			COUNT(CASE WHEN w.status = 'published' THEN 1 END) as published_works,
 			COUNT(CASE WHEN w.status = 'draft' THEN 1 END) as draft_works,
 			COUNT(CASE WHEN w.is_complete = true THEN 1 END) as complete_works,
 			COALESCE(SUM(w.word_count), 0) as total_word_count,
@@ -4943,7 +4956,7 @@ func (ws *WorkService) GetMyStats(c *gin.Context) {
 		FROM works w
 		JOIN creatorships cr ON w.id = cr.creation_id AND cr.creation_type = 'Work'
 		JOIN pseuds p ON cr.pseud_id = p.id
-		WHERE p.user_id = $1 AND cr.approved = true AND w.status = 'posted'`, userUUID).Scan(
+		WHERE p.user_id = $1 AND cr.approved = true AND w.status = 'published'`, userUUID).Scan(
 		&firstPublished, &lastPublished, &lastUpdated)
 
 	if err == nil {
@@ -4968,7 +4981,7 @@ func (ws *WorkService) GetMyStats(c *gin.Context) {
 		FROM works w
 		JOIN creatorships cr ON w.id = cr.creation_id AND cr.creation_type = 'Work'
 		JOIN pseuds p ON cr.pseud_id = p.id
-		WHERE p.user_id = $1 AND cr.approved = true AND w.status = 'posted'
+		WHERE p.user_id = $1 AND cr.approved = true AND w.status = 'published'
 		ORDER BY (COALESCE(w.hit_count, 0) + COALESCE(w.kudos_count, 0) + 
 		         COALESCE(w.comment_count, 0) + COALESCE(w.bookmark_count, 0)) DESC
 		LIMIT 5`
@@ -5045,16 +5058,30 @@ func (ws *WorkService) ModerateComment(c *gin.Context) {
 		return
 	}
 
+	// A spam mark an administrator set is theirs to clear.
+	if req.Status == "published" {
+		var adminSpam bool
+		if err := ws.db.QueryRow(`SELECT spam_by_admin FROM comments WHERE id = $1`, commentID).Scan(&adminSpam); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to moderate comment"})
+			return
+		}
+		if adminSpam {
+			c.JSON(http.StatusForbidden, gin.H{"error": "spam_by_admin", "message": "An administrator marked this comment as spam; only an administrator can clear it."})
+			return
+		}
+	}
+
 	// Update comment status
 	now := time.Now()
 	// "published" is AO3's approve (the comment leaves review and any spam
 	// mark is cleared); "spam" is AO3's reject (comments_controller.rb:449-460).
+	// This path never touches hidden_by_admin or spam_by_admin.
 	_, err = ws.db.Exec(`
 		UPDATE comments 
 		SET status = $1, moderation_reason = $2, moderated_by = $3, moderated_at = $4, updated_at = $5,
 			unreviewed = CASE WHEN $7::text = 'published' THEN false ELSE unreviewed END,
 			is_spam = CASE WHEN $7::text = 'published' THEN false WHEN $7::text = 'spam' THEN true ELSE is_spam END
-		WHERE id = $6`,
+		WHERE id = $6 AND NOT (spam_by_admin AND $7::text = 'published')`,
 		req.Status, req.Reason, userID, now, now, commentID, req.Status)
 
 	if err != nil {
@@ -6982,7 +7009,7 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 	err = ws.db.QueryRow(`
 		SELECT 
 			COUNT(*) as total_works,
-			COUNT(CASE WHEN status = 'posted' THEN 1 END) as published_works,
+			COUNT(CASE WHEN status = 'published' THEN 1 END) as published_works,
 			COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_works,
 			COUNT(CASE WHEN is_complete = true THEN 1 END) as complete_works,
 			COUNT(CASE WHEN created_at >= date_trunc('month', CURRENT_DATE) THEN 1 END) as works_this_month,
@@ -7017,7 +7044,7 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 			COALESCE(SUM(chapter_count), 0) as total_chapters,
 			COALESCE(SUM(word_count), 0) as total_word_count,
 			COALESCE(AVG(word_count)::int, 0) as average_word_count
-		FROM works WHERE status = 'posted'`).Scan(
+		FROM works WHERE status = 'published'`).Scan(
 		&stats.TotalChapters, &stats.TotalWordCount, &stats.AverageWordCount)
 
 	if err != nil {
@@ -7032,7 +7059,7 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 			COALESCE(SUM(kudos_count), 0) as total_kudos,
 			COALESCE(SUM(comment_count), 0) as total_comments,
 			COALESCE(SUM(bookmark_count), 0) as total_bookmarks
-		FROM works WHERE status = 'posted'`).Scan(
+		FROM works WHERE status = 'published'`).Scan(
 		&stats.TotalHits, &stats.TotalKudos, &stats.TotalComments, &stats.TotalBookmarks)
 
 	if err != nil {

@@ -476,7 +476,7 @@ func (ws *WorkService) SearchWorksAdvanced(c *gin.Context) {
 // searchWorksDatabase provides fallback database search
 func (ws *WorkService) searchWorksDatabase(params map[string]interface{}) (gin.H, error) {
 	// Simplified database search as fallback
-	query := "SELECT id, title, summary, rating, status, updated_at FROM works WHERE status = 'posted'"
+	query := "SELECT id, title, summary, rating, status, updated_at FROM works WHERE status = 'published' AND can_user_view_work(id, NULL)"
 	args := []interface{}{}
 	argIndex := 1
 

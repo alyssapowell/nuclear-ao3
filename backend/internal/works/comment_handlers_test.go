@@ -60,7 +60,6 @@ func (suite *CommentHandlersTestSuite) SetupSuite() {
 		api.POST("/works/:id/comments", suite.workService.CreateComment)
 		api.PUT("/comments/:commentId", suite.workService.UpdateComment)
 		api.DELETE("/comments/:commentId", suite.workService.DeleteComment)
-		api.POST("/comments/:commentId/kudos", suite.workService.GiveCommentKudos)
 	}
 }
 
@@ -321,62 +320,6 @@ func (suite *CommentHandlersTestSuite) TestDeleteComment_Success() {
 	var isDeleted bool
 	suite.db.QueryRow("SELECT is_deleted FROM comments WHERE id = $1", comment.ID).Scan(&isDeleted)
 	assert.True(suite.T(), isDeleted)
-}
-
-func (suite *CommentHandlersTestSuite) TestGiveCommentKudos_Success() {
-	comment := suite.createTestComment("Comment to give kudos", nil)
-
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/comments/%s/kudos", comment.ID), nil)
-	w := httptest.NewRecorder()
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusCreated, w.Code)
-
-	// Verify kudos was created
-	var kudosCount int
-	suite.db.QueryRow("SELECT COUNT(*) FROM comment_kudos WHERE comment_id = $1", comment.ID).Scan(&kudosCount)
-	assert.Equal(suite.T(), 1, kudosCount)
-}
-
-func (suite *CommentHandlersTestSuite) TestGiveCommentKudos_Duplicate() {
-	comment := suite.createTestComment("Comment to give kudos", nil)
-
-	// Give kudos first time
-	req1, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/comments/%s/kudos", comment.ID), nil)
-	w1 := httptest.NewRecorder()
-	suite.router.ServeHTTP(w1, req1)
-	assert.Equal(suite.T(), http.StatusCreated, w1.Code)
-
-	// Try to give kudos again
-	req2, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/comments/%s/kudos", comment.ID), nil)
-	w2 := httptest.NewRecorder()
-	suite.router.ServeHTTP(w2, req2)
-	assert.Equal(suite.T(), http.StatusConflict, w2.Code)
-
-	// Verify only one kudos exists
-	var kudosCount int
-	suite.db.QueryRow("SELECT COUNT(*) FROM comment_kudos WHERE comment_id = $1", comment.ID).Scan(&kudosCount)
-	assert.Equal(suite.T(), 1, kudosCount)
-}
-
-func (suite *CommentHandlersTestSuite) TestGiveCommentKudos_GuestUser() {
-	comment := suite.createTestComment("Comment for guest kudos", nil)
-
-	// Remove authentication for guest test
-	router := gin.New()
-	api := router.Group("/api/v1")
-	api.POST("/comments/:commentId/kudos", suite.workService.GiveCommentKudos)
-
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/comments/%s/kudos", comment.ID), nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusCreated, w.Code)
-
-	// Verify guest kudos was created
-	var guestSession sql.NullString
-	suite.db.QueryRow("SELECT guest_session FROM comment_kudos WHERE comment_id = $1", comment.ID).Scan(&guestSession)
-	assert.True(suite.T(), guestSession.Valid)
 }
 
 func (suite *CommentHandlersTestSuite) TestCreateComment_ValidationErrors() {
