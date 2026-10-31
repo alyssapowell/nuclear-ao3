@@ -22,8 +22,10 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - Subscriptions are per pseud for the same reason. A subscription to an account would tell its subscriber that a second pseud belongs to the same person, as would a "subscribed?" check that was true for both. Deleting a pseud ends subscriptions to it instead of moving them to the default pseud, for the same reason.
 - Existing rows are moved by migration 040: bookmarks to their owner's default pseud, author subscriptions to the author's default pseud.
 
+**Confirmed as a rule (2026-10-30):** pseuds must not be connectable to each other, or to the account behind them, by anything public. Only the person's own view (and admins, where moderation needs it) may show that two pseuds belong to the same person. You subscribe to a named author, and a named author is a pseud. This is deliberately stricter than AO3, and it wins wherever the two disagree.
+
 **What it costs:**
-- There is no "everything by this person" page. If the project later decides usernames are public, as on AO3, `/users/:username/...` can be added back and return pseuds, never ids.
+- There is no "everything by this person" page, and there won't be one: it would connect a person's pseuds.
 - A subscriber follows what is posted under that pseud only. Someone who writes as two pseuds needs two subscriptions.
 - A pseud page for a person with several pseuds shows only that pseud's works. The "your works" page (`/my/works`) is still all of yours.
 - Not done here: collections still show their maintainer's `user_id` and `username` (`/collections`), muted-user lists and block/mute routes still take account ids, and `@name` mentions in comments still resolve usernames. They are listed in FEATURES.md.
