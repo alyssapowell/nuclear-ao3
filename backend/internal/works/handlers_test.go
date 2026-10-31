@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"nuclear-ao3/shared/models"
-	"nuclear-ao3/shared/server"
 	testutils "nuclear-ao3/shared/testing"
 
 	"github.com/google/uuid"
@@ -92,15 +91,6 @@ func (suite *WorkServiceTestSuite) TearDownSuite() {
 	if suite.service != nil {
 		suite.service.Close()
 	}
-}
-
-func (suite *WorkServiceTestSuite) TestHealthEndpoint() {
-	router := server.SetupBaseRouter(
-		server.ServiceInfo{Name: "work-service", Version: "1.0.0"},
-		suite.service.redis,
-	)
-
-	testutils.AssertHealthEndpoint(suite.T(), router, "work-service")
 }
 
 func (suite *WorkServiceTestSuite) TestSearchWorksEndpoint() {

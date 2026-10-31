@@ -182,7 +182,7 @@ These were fixed by merging the backend into one program with one login check (`
 ### Still open
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
-- **`shared/middleware` and `shared/server` are dead code** (only an old works test imports them). The middleware makes a throwaway signing key at every start. Remove them along with that test.
+- **Most top-level guides describe the old six-service system** (APP_EXPLORER_GUIDE, AUTHENTICATION_GUIDE, DEPLOYMENT_GUIDE, DEPLOYMENT_SETUP, DEVELOPMENT_WORKFLOW, TESTING, VOLUME_SIZING_GUIDE). To be rewritten or removed in the docs pass. SERVICES.md, which described services that no longer exist, was removed 2026-10-30, along with the unused `shared/middleware`, `shared/server`, `shared/database` and `shared/elasticsearch` code.
 - **The works service logs SQL details and other debug output** at startup and on every request.
 - **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
 - **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.
