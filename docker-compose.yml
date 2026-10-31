@@ -1,8 +1,17 @@
 version: '3.8'
 
+# Every service keeps at most 5 log files of 20 MB (about 100 MB each), so
+# logs can't fill the disk, which would stop the database.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # Database
   postgres:
+    logging: *logging
     image: postgres:15.14
     container_name: nuclear-ao3-postgres
     environment:
@@ -38,6 +47,7 @@ services:
 
   # Redis for caching and sessions
   redis:
+    logging: *logging
     image: redis:7.4.2-alpine
     container_name: nuclear-ao3-redis
     ports:
@@ -57,6 +67,7 @@ services:
   # The whole backend: accounts, works, tags, search, notifications, exports.
   # One program, one port. Only Caddy talks to it from outside.
   app:
+    logging: *logging
     build:
       context: ./backend
     container_name: nuclear-ao3-app
@@ -106,6 +117,7 @@ services:
   # Development: MailHog (catches emails, web UI at http://localhost:8025)
   # Production-like: Use the same image but it will relay emails
   smtp:
+    logging: *logging
     image: mailhog/mailhog:v1.0.1
     container_name: nuclear-ao3-smtp
     ports:
@@ -116,15 +128,11 @@ services:
       - MH_SMTP_BIND_ADDR=0.0.0.0:1025
       - MH_UI_BIND_ADDR=0.0.0.0:8025
       - MH_API_BIND_ADDR=0.0.0.0:8025
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   # Monitoring - Prometheus: collects numbers from the app and checks the alert
   # rules. See docs/MONITORING.md.
   prometheus:
+    logging: *logging
     image: prom/prometheus:v3.5.0
     container_name: nuclear-ao3-prometheus
     ports:
@@ -145,6 +153,7 @@ services:
   # Monitoring - reads the server's disk and memory, for the "disk almost
   # full" alert. Not published outside Docker.
   node-exporter:
+    logging: *logging
     image: prom/node-exporter:v1.9.1
     container_name: nuclear-ao3-node-exporter
     volumes:
@@ -156,6 +165,7 @@ services:
   # Monitoring - Grafana: dashboards. Everything it shows is set up from files
   # in ./monitoring/grafana, so there is nothing to click through on first run.
   grafana:
+    logging: *logging
     image: grafana/grafana:12.0.0
     container_name: nuclear-ao3-grafana
     ports:
@@ -189,6 +199,7 @@ services:
   # The front door: serves the website and forwards /api to the app.
   # Its image is built from frontend/ and contains the website's files.
   caddy:
+    logging: *logging
     build:
       context: ./frontend
     image: nuclear-ao3/web

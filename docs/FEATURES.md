@@ -183,6 +183,9 @@ These were fixed by merging the backend into one program with one login check (`
 
 - ~~**Grafana used admin/admin and `:latest` images**, and was published on the monitoring domain.~~ **Fixed 2026-10-30:** Compose refuses to start without `GRAFANA_ADMIN_PASSWORD`, every image is pinned, and Grafana is only on 127.0.0.1 (reached through an SSH tunnel).
 - **Most top-level guides describe the old six-service system** (APP_EXPLORER_GUIDE, AUTHENTICATION_GUIDE, DEPLOYMENT_GUIDE, DEPLOYMENT_SETUP, DEVELOPMENT_WORKFLOW, TESTING, VOLUME_SIZING_GUIDE). To be rewritten or removed in the docs pass. SERVICES.md, which described services that no longer exist, was removed 2026-10-30, along with the unused `shared/middleware`, `shared/server`, `shared/database` and `shared/elasticsearch` code.
+- **Backups stay on the server.** ops-backup keeps 14 daily copies in `backups/`, but nothing copies them anywhere else, so losing the server loses them. Needs an automated, encrypted copy to storage somewhere else, with its key held by the admin like the signing key.
+- **Redis is still required.** The app won't start without it, though it only holds rate limits, OAuth consent prompts and two caches. Making it optional (rate limits in Postgres or in memory) would remove a service from the smallest setup.
+- ~~Most services' logs had no size limit~~, which on a small disk eventually stops the database. **Fixed 2026-10-30:** every service keeps at most 5 files of 20 MB.
 - **The works service logs SQL details and other debug output** at startup and on every request.
 - **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
 - **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.
