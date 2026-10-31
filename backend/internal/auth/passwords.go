@@ -109,10 +109,10 @@ func (as *AuthService) issue(c *gin.Context, tx *sql.Tx, k tokenKind, userID uui
 		if net.ParseIP(ip) == nil {
 			ip = "0.0.0.0"
 		}
-		_, err = tx.ExecContext(c, `INSERT INTO `+k.table+` (user_id, token_hash, expires_at, ip_address)
+		_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO `+k.table+` (user_id, token_hash, expires_at, ip_address)
 			VALUES ($1, $2, $3, $4)`, userID, hash, expires, ip)
 	} else {
-		_, err = tx.ExecContext(c, `INSERT INTO `+k.table+` (user_id, token_hash, expires_at)
+		_, err = tx.ExecContext(c.Request.Context(), `INSERT INTO `+k.table+` (user_id, token_hash, expires_at)
 			VALUES ($1, $2, $3)`, userID, hash, expires)
 	}
 	if err != nil {
@@ -125,7 +125,7 @@ func (as *AuthService) issue(c *gin.Context, tx *sql.Tx, k tokenKind, userID uui
 	if err != nil {
 		return err
 	}
-	return jobs.Enqueue(c, tx, "email", msg)
+	return jobs.Enqueue(c.Request.Context(), tx, "email", msg)
 }
 
 // sendLink emails a link of the given kind to the account with this email
@@ -136,7 +136,7 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 	if address == "" {
 		return
 	}
-	tx, err := as.db.BeginTx(c, nil)
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		log.Printf("send %s link: %v", k.table, err)
 		return
@@ -146,7 +146,7 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 	var userID uuid.UUID
 	var to, username string
 	// The row lock makes two requests at once send one email, not two.
-	err = tx.QueryRowContext(c, `
+	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT u.id, u.email, u.username FROM users u
 		WHERE lower(u.email) = lower($1) AND `+k.eligible+`
 		LIMIT 1 FOR UPDATE`, address).Scan(&userID, &to, &username)
@@ -158,7 +158,7 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 		return
 	}
 	var recent bool
-	err = tx.QueryRowContext(c, `
+	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT EXISTS (SELECT 1 FROM `+k.table+` WHERE user_id = $1 AND created_at > now() - $2 * interval '1 second')`,
 		userID, resendInterval.Seconds()).Scan(&recent)
 	if err != nil {
@@ -183,7 +183,7 @@ func useToken(c *gin.Context, tx *sql.Tx, k tokenKind, token string) (userID uui
 	if token == "" {
 		return uuid.Nil, false, nil
 	}
-	err = tx.QueryRowContext(c, `
+	err = tx.QueryRowContext(c.Request.Context(), `
 		UPDATE `+k.table+` SET used_at = now()
 		WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
 		RETURNING user_id`, hashToken(token)).Scan(&userID)
@@ -237,14 +237,14 @@ func (as *AuthService) Register(c *gin.Context) {
 
 	// The account, its activation token and the email are saved together:
 	// the email is sent if and only if the account exists.
-	tx, err := as.db.BeginTx(c, nil)
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
 	defer tx.Rollback()
 	userID := uuid.New()
-	_, err = tx.ExecContext(c, `
+	_, err = tx.ExecContext(c.Request.Context(), `
 		INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified)
 		VALUES ($1, $2, $3, $4, $5, true, false)`,
 		userID, req.Username, req.Email, string(hash), req.DisplayName)
@@ -289,7 +289,7 @@ func (as *AuthService) VerifyEmail(c *gin.Context) {
 	// then log in to the account. The real owner can't activate it, but can
 	// take it over with "forgot password", which ends the other password.
 	var hash string
-	err := as.db.QueryRowContext(c, `
+	err := as.db.QueryRowContext(c.Request.Context(), `
 		SELECT u.password_hash FROM email_verification_tokens t JOIN users u ON u.id = t.user_id
 		WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()`, hashToken(req.Token)).Scan(&hash)
 	if err == sql.ErrNoRows || req.Token == "" {
@@ -306,7 +306,7 @@ func (as *AuthService) VerifyEmail(c *gin.Context) {
 			"message": "That isn't this account's password. If you didn't create this account, use \"Forgot password\" to take it over."})
 		return
 	}
-	tx, err := as.db.BeginTx(c, nil)
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
@@ -314,7 +314,7 @@ func (as *AuthService) VerifyEmail(c *gin.Context) {
 	defer tx.Rollback()
 	userID, ok, err := useToken(c, tx, activationKind, req.Token)
 	if err == nil && ok {
-		_, err = tx.ExecContext(c, `UPDATE users SET is_verified = true, updated_at = now() WHERE id = $1`, userID)
+		_, err = tx.ExecContext(c.Request.Context(), `UPDATE users SET is_verified = true, updated_at = now() WHERE id = $1`, userID)
 	}
 	if err == nil && ok {
 		err = tx.Commit()
@@ -381,7 +381,7 @@ func (as *AuthService) ConfirmPasswordReset(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
-	tx, err := as.db.BeginTx(c, nil)
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
@@ -390,8 +390,9 @@ func (as *AuthService) ConfirmPasswordReset(c *gin.Context) {
 	userID, ok, err := useToken(c, tx, resetKind, req.Token)
 	if err == nil && ok {
 		var res sql.Result
-		res, err = tx.ExecContext(c, `
-			UPDATE users SET password_hash = $2, is_verified = true, updated_at = now()
+		res, err = tx.ExecContext(c.Request.Context(), `
+			UPDATE users SET password_hash = $2, is_verified = true, updated_at = now(),
+				failed_login_attempts = 0, locked_until = NULL
 			WHERE id = $1 AND is_active`, userID, string(hash))
 		if err == nil {
 			if n, _ := res.RowsAffected(); n == 0 {
@@ -401,7 +402,7 @@ func (as *AuthService) ConfirmPasswordReset(c *gin.Context) {
 	}
 	if err == nil && ok {
 		// Any other reset links sent earlier are no good now.
-		_, err = tx.ExecContext(c, `UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
+		_, err = tx.ExecContext(c.Request.Context(), `UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
 	}
 	if err == nil && ok {
 		err = as.revokeSessions(c, tx, userID, uuid.Nil)
@@ -441,7 +442,7 @@ func (as *AuthService) ChangePassword(c *gin.Context) {
 		return
 	}
 	var current string
-	err := as.db.QueryRowContext(c, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&current)
+	err := as.db.QueryRowContext(c.Request.Context(), `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&current)
 	if err != nil {
 		log.Printf("change password: find user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
@@ -461,16 +462,16 @@ func (as *AuthService) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
-	tx, err := as.db.BeginTx(c, nil)
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(c, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(hash))
+	_, err = tx.ExecContext(c.Request.Context(), `UPDATE users SET password_hash = $2, updated_at = now(), failed_login_attempts = 0, locked_until = NULL WHERE id = $1`, userID, string(hash))
 	if err == nil {
 		// A reset link sent before the change could otherwise undo it.
-		_, err = tx.ExecContext(c, `UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
+		_, err = tx.ExecContext(c.Request.Context(), `UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
 	}
 	if err == nil {
 		err = as.revokeSessions(c, tx, userID, currentSessionID(c))

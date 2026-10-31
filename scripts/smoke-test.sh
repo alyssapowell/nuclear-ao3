@@ -12,6 +12,9 @@
 # must be activated from their email, so it reads that email from MailHog (the
 # development mail catcher) at $MAILHOG_URL, http://localhost:8025 by default.
 # Needs curl and python3.
+# Login, password reset and activation allow 20 tries per address every 5
+# minutes, and one full run uses about 13, so a second full run straight
+# after the first gets "too many requests". Wait 5 minutes between full runs.
 set -u
 BASE="${1:-http://localhost:8088}"
 B="$BASE/api/v1"

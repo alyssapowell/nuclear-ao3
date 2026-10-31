@@ -200,6 +200,25 @@ The alerts "HighErrorRate" and "SlowResponses" lead here.
 4. Check "App memory" and the disk. If the server is out of either, free some or move to a bigger server.
 5. If it began right after an upgrade, run the **ops-upgrade** workflow with the previous version to go back.
 
+### Many failed logins
+
+The alert "LoginFailuresSpike" leads here. It means the app has refused more than one login a second for 10 minutes. Ordinary typing mistakes don't add up to that; it usually means someone is trying passwords, often from a list stolen from another site.
+
+What the app already does without help:
+
+- An account that gets 50 wrong passwords is locked for 5 minutes. While it is locked it answers like a wrong password, even for the right password, so a guesser can't tell. The owner gets one email saying there were repeated failed logins and that resetting the password is safe. Resetting the password ends the lock.
+- One IP address (an IPv6 /64 counts as one address) can make 20 requests in 5 minutes to login, password reset and activation. More get "429 rate_limit_exceeded". These counts are in memory, so each app copy counts on its own and a restart starts them again.
+
+What to look at:
+
+1. On the Prometheus page (see docs/MONITORING.md), compare `nuclear_login_failures_total` with `nuclear_login_lockouts_total`. Many failures and few lockouts means the guesses are spread over many names, which is a list of stolen passwords being tried. Many lockouts means someone is going after particular accounts.
+2. In the app log (`docker-compose logs --tail 500 app`), count the lines for `POST /api/v1/auth/login` with status 429. Many 429s mean the per-address limit is already holding someone back. The app's log doesn't record addresses; the Caddy access log does, if it is on (see `Caddyfile`). If a few addresses or one network dominate, block them there.
+3. Locked accounts are `SELECT username, locked_until FROM users WHERE locked_until > now();` in the database. Don't unlock them by hand: the owner can use "Forgot password" (which clears the lock), and the lock ends by itself after 5 minutes.
+4. If a lot of accounts are locked or people write in saying their account was locked, tell them to use "Forgot password".
+5. If you see signs that guesses succeeded (people reporting activity they didn't do, logins from places they've never been), treat it as account takeover: see "Accounts are being taken over" in [INCIDENTS.md](INCIDENTS.md#accounts-are-being-taken-over).
+
+The alert clears by itself when the failures stop. If it fires every day for a busy archive with nothing wrong, raise the number in `monitoring/alerts.yml`.
+
 ### Off-server backup problems
 
 The daily **ops-backup** run went red, or **ops-diagnose** reported a problem with the off-server backup. The backup on the server is still saved; the off-server copy didn't happen. Open the run's summary: it shows restic's own message.

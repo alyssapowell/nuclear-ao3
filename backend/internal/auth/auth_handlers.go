@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,17 +38,28 @@ func (as *AuthService) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
+	if ok, wait := as.allowNameAttempt(login); !ok {
+		c.Header("Retry-After", strconv.Itoa(wait))
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":             "rate_limit_exceeded",
+			"error_description": "Too many attempts. Please try again later.",
+		})
+		return
+	}
 
 	var user models.User
 	var passwordHash string
-	err := as.db.QueryRowContext(c, `
-		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at
+	var locked bool
+	err := as.db.QueryRowContext(c.Request.Context(), `
+		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at,
+		       locked_until IS NOT NULL AND locked_until > now()
 		FROM users WHERE CASE WHEN strpos($1, '@') > 0 THEN lower(email) = lower($1) ELSE lower(username) = lower($1) END
 		LIMIT 1`, login).Scan(
 		&user.ID, &user.Username, &user.Email, &passwordHash, &user.DisplayName,
-		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt)
+		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt, &locked)
 	if err == sql.ErrNoRows {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+		as.noteUnknownFailure(login)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
@@ -57,10 +69,24 @@ func (as *AuthService) Login(c *gin.Context) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil || !user.IsActive {
+	// The password is always checked, even for a locked account, so a locked
+	// account takes as long to refuse as any other. A locked account is
+	// refused even with the right password, and with the same answer as a
+	// wrong one.
+	passwordRight := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) == nil
+	switch {
+	case locked:
+		loginFailures.Inc()
+	case !passwordRight:
+		as.recordFailedLogin(c, user.ID, user.Username, user.Email)
+	case !user.IsActive:
+		loginFailures.Inc()
+	}
+	if locked || !passwordRight || !user.IsActive {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_credentials"})
 		return
 	}
+	as.clearFailedLogins(c, user.ID)
 
 	if !user.IsVerified {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not_activated", "message": "This account has not been activated yet. Use the link in the activation email."})

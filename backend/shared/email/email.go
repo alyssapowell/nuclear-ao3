@@ -231,10 +231,14 @@ var linkHTML = template.Must(template.New("link").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
-// linkEmail builds an email whose point is one link.
+// linkEmail builds an email whose point is one link carrying a token.
 func (c *Config) linkEmail(to, username, subject, intro, button, path, token, outro string) (Message, error) {
+	return c.linkMessage(to, username, subject, intro, button, c.SiteURL+path+"?token="+url.QueryEscape(token), outro)
+}
+
+// linkMessage builds an email whose point is one link.
+func (c *Config) linkMessage(to, username, subject, intro, button, link, outro string) (Message, error) {
 	username = strings.TrimSpace(username)
-	link := c.SiteURL + path + "?token=" + url.QueryEscape(token)
 	var html bytes.Buffer
 	err := linkHTML.Execute(&html, map[string]string{
 		"Username": username, "Intro": intro, "Button": button, "Link": link, "Outro": outro,
@@ -267,4 +271,14 @@ func (c *Config) PasswordReset(to, username, token string) (Message, error) {
 		"Someone asked to reset the password for your account. Use the link below to choose a new one. It works for 6 hours, once.",
 		"Choose a new password", "/auth/reset-password", token,
 		"If you didn't ask for this, you can ignore this email; your password hasn't changed.")
+}
+
+// AccountLocked tells the owner that an account refused logins for a while
+// after many wrong passwords. Resetting the password is safe, and ends the
+// lock. The link goes to the page where a reset is asked for.
+func (c *Config) AccountLocked(to, username string) (Message, error) {
+	return c.linkMessage(to, username, "Repeated failed logins on your account",
+		"There were many failed attempts to log in to your account, so we have paused logins for it for a few minutes. If that was you, you can wait and try again.",
+		"Reset my password", c.SiteURL+"/auth/forgot-password",
+		"If it wasn't you, resetting your password is safe and ends the pause straight away.")
 }

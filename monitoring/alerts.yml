@@ -79,3 +79,16 @@ groups:
         annotations:
           summary: "The server's disk has less than 10% free space."
           runbook: "docs/RUNBOOK.md#the-disk-is-nearly-full"
+
+      - alert: LoginFailuresSpike
+        # Counts every refused login: wrong passwords, unknown names and
+        # locked accounts. One failure a second, steadily, is far more than
+        # people mistyping; it looks like someone guessing passwords. Raise
+        # the number if your archive is large enough to reach it normally.
+        expr: sum(rate(nuclear_login_failures_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than one failed login a second for 10 minutes: someone may be guessing passwords."
+          runbook: "docs/RUNBOOK.md#many-failed-logins"

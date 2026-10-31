@@ -19,13 +19,15 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 	// Auth endpoints
 	api := r.Group("/api/v1/auth")
 	{
+		// Login, reset and activation share a per-IP limit against guessing.
+		limit := authService.attemptLimit()
 		// Public endpoints (no authentication required)
 		api.POST("/register", authService.Register)
-		api.POST("/login", authService.Login)
-		api.POST("/reset-password", authService.RequestPasswordReset)
-		api.POST("/reset-password/confirm", authService.ConfirmPasswordReset)
-		api.POST("/verify-email", authService.VerifyEmail)
-		api.POST("/resend-verification", authService.ResendVerification)
+		api.POST("/login", limit, authService.Login)
+		api.POST("/reset-password", limit, authService.RequestPasswordReset)
+		api.POST("/reset-password/confirm", limit, authService.ConfirmPasswordReset)
+		api.POST("/verify-email", limit, authService.VerifyEmail)
+		api.POST("/resend-verification", limit, authService.ResendVerification)
 
 		// Protected endpoints (require authentication)
 		protected := api.Group("")
@@ -114,6 +116,8 @@ type AuthService struct {
 	db   *sql.DB
 	jwt  *JWTManager
 	mail *email.Config // nil until SetMail: no emails are sent
+	// guard holds the in-memory counters against password guessing.
+	guard loginGuard
 }
 
 // New builds the auth service on top of the shared database. The

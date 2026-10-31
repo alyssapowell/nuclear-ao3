@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,18 @@ func newSessionEnv(t *testing.T) *sessionEnv {
 	as, err := newTestAuthService(db)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Most tests try one login name many times in a row. Move the per-name
+	// limit's clock 21 seconds on every attempt so it never gets in their
+	// way; TestAttemptLimitPerName checks that limit with a still clock.
+	as.guard.init()
+	var mu sync.Mutex
+	clock := time.Now()
+	as.guard.byName.now = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		clock = clock.Add(nameWindow + time.Second)
+		return clock
 	}
 	return &sessionEnv{t: t, as: as, router: setupRouter(as)}
 }

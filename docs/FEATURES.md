@@ -206,7 +206,7 @@ These were fixed by merging the backend into one program with one login check (`
   - ~~Deleting a work that had tags failed on a `work_tag_summaries` foreign key.~~ **Fixed** in migration 035: the tag summary trigger re-created a summary for a work that was being deleted. Deleting also drops the tags' use counts. The delete handler also no longer tries to clear two tables that don't exist.
   - ~~A work's creator could clear a spam mark an administrator had set~~ (`PUT /comments/:id/moderate`). **Fixed** in migration 035: `comments.spam_by_admin` records who marked it, and only an administrator can clear it. Creators can still approve and reject comments, as in AO3; the route now refuses banned and suspended accounts.
 - **The works service logs SQL details and other debug output** at startup and on every request.
-- **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
+- ~~The login endpoint has no stricter limit~~ than general browsing (100 requests a minute per IP), which is loose for password guessing. **Fixed:** an account is locked for 5 minutes after 50 wrong passwords (AO3's Devise numbers; kept in the database, answering like a wrong password, with one email to the owner), and one IP gets 20 requests per 5 minutes across login, password reset and activation. Both are counted in `nuclear_login_failures_total` and `nuclear_login_lockouts_total`, with the alert "LoginFailuresSpike".
 - **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.
 - If a Hetzner deployment from the old `deploy-*` workflows is live, it is still running the old, vulnerable code until it's redeployed.
 

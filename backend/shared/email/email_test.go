@@ -188,3 +188,18 @@ func TestAccountEmails(t *testing.T) {
 		})
 	}
 }
+
+func TestAccountLockedEmail(t *testing.T) {
+	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
+	m, err := c.AccountLocked("owner@example.org", `<b>owner</b>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	link := "https://archive.example.org/auth/forgot-password"
+	if m.To != "owner@example.org" || !strings.Contains(m.Text, link) || !strings.Contains(m.HTML, link) {
+		t.Errorf("%+v", m)
+	}
+	if strings.Contains(m.HTML, "<b>owner</b>") {
+		t.Error("the username went into the HTML unescaped")
+	}
+}
