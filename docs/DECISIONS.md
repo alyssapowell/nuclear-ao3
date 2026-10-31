@@ -8,6 +8,16 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: Moderation state follows AO3; admin actions are append-only audited
+
+**Decision:** Hidden, spam, unreviewed, frozen, banned and suspended state use AO3's meanings and are decided in one place in the database (`can_user_view_work` and its siblings for chapters, series, bookmarks and comments, migration 033), which every listing, search and page calls. Every admin action, from the site or from `nuclear`, writes a row to `admin_actions` (migration 034) in the same transaction as the change. The table refuses UPDATE, DELETE and TRUNCATE.
+
+**Why:** The people running the archive have to be able to answer "who hid that, and why" long after the fact, and to show that no one quietly edited the answer. Putting the rule in the database means a new page can't forget it; putting the audit row in the transaction means there is never a change without a record. Only staff can see hidden work, only admins can act on staff, and nobody can act on themselves, so one stolen moderator login can't promote itself or clear its own ban.
+
+**What it costs:** A superuser or the table owner can still drop the triggers, so backups are the real record. Visibility functions run per row, which is fine at this size but is something to measure at AO3's. Sanction checks use the admin and moderator roles; AO3's finer roles (policy and abuse, support) are not modelled.
+
+---
+
 ## 2026-10-30: Redis removed
 
 **Decision:** The stack is Postgres, the app and Caddy (plus monitoring). Redis is gone.

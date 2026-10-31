@@ -17,6 +17,7 @@ func Mount(r *gin.Engine, tagService *TagService, d *platform.Deps) {
 	{
 		// Public endpoints (no auth required)
 		tags := api.Group("/tags")
+		tags.Use(d.OptionalUser)
 		{
 			tags.GET("", tagService.SearchTags)                     // GET /api/v1/tags?q=search&type=fandom
 			tags.GET("/search", tagService.SearchTags)              // GET /api/v1/tags/search?q=search&type=fandom (frontend compatibility)

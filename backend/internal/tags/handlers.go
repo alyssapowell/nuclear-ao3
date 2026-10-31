@@ -504,8 +504,8 @@ func (ts *TagService) GetRelatedTags(c *gin.Context) {
 		FROM tags t
 		LEFT JOIN tag_relationships tr1 ON (tr1.child_tag_id = t.id AND tr1.parent_tag_id = $1)
 		LEFT JOIN tag_relationships tr2 ON (tr2.parent_tag_id = t.id AND tr2.child_tag_id = $1)
-		LEFT JOIN work_tags wt1 ON wt1.tag_id = t.id
-		LEFT JOIN work_tags wt2 ON wt2.work_id = wt1.work_id AND wt2.tag_id = $1
+		LEFT JOIN visible_work_tags wt1 ON wt1.tag_id = t.id
+		LEFT JOIN visible_work_tags wt2 ON wt2.work_id = wt1.work_id AND wt2.tag_id = $1
 		WHERE t.id != $1 
 		AND (tr1.parent_tag_id IS NOT NULL OR tr2.child_tag_id IS NOT NULL OR wt2.tag_id IS NOT NULL)
 		GROUP BY t.id, t.name, t.type, t.use_count, t.is_canonical
@@ -567,11 +567,16 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 		FROM works w
 		JOIN work_tags wt ON w.id = wt.work_id
 		WHERE wt.tag_id = $1
+		AND w.status <> 'draft' AND w.is_draft = false
+		AND can_user_view_work(w.id, $4::uuid)
 		ORDER BY %s DESC
 		LIMIT $2 OFFSET $3
 	`, sortBy)
 
-	rows, err := ts.db.Query(query, tagID, limit, offset)
+	// Hidden and spam works, drafts and works the viewer can't read are not
+	// listed or counted under a tag.
+	viewer := viewerFrom(c)
+	rows, err := ts.db.Query(query, tagID, limit, offset, viewer)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -608,7 +613,9 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 
 	// Get total count
 	var total int
-	err = ts.db.QueryRow(`SELECT COUNT(*) FROM work_tags WHERE tag_id = $1`, tagID).Scan(&total)
+	err = ts.db.QueryRow(`SELECT COUNT(*) FROM work_tags wt JOIN works w ON w.id = wt.work_id
+		WHERE wt.tag_id = $1 AND w.status <> 'draft' AND w.is_draft = false
+		AND can_user_view_work(w.id, $2::uuid)`, tagID, viewer).Scan(&total)
 	if err != nil {
 		total = 0
 	}
@@ -730,7 +737,7 @@ func (ts *TagService) GetFandom(c *gin.Context) {
 
 	// Count works in this fandom
 	var workCount int
-	ts.db.QueryRow(`SELECT COUNT(*) FROM work_tags WHERE tag_id = $1`, fandomID).Scan(&workCount)
+	ts.db.QueryRow(`SELECT COUNT(*) FROM visible_work_tags WHERE tag_id = $1`, fandomID).Scan(&workCount)
 	stats["work_count"] = workCount
 
 	// Count characters in this fandom
@@ -738,8 +745,8 @@ func (ts *TagService) GetFandom(c *gin.Context) {
 	ts.db.QueryRow(`
 		SELECT COUNT(DISTINCT c.id) 
 		FROM tags c
-		JOIN work_tags wt_char ON c.id = wt_char.tag_id
-		JOIN work_tags wt_fandom ON wt_char.work_id = wt_fandom.work_id
+		JOIN visible_work_tags wt_char ON c.id = wt_char.tag_id
+		JOIN visible_work_tags wt_fandom ON wt_char.work_id = wt_fandom.work_id
 		WHERE wt_fandom.tag_id = $1 AND c.type = 'character'
 	`, fandomID).Scan(&characterCount)
 	stats["character_count"] = characterCount
@@ -749,8 +756,8 @@ func (ts *TagService) GetFandom(c *gin.Context) {
 	ts.db.QueryRow(`
 		SELECT COUNT(DISTINCT r.id) 
 		FROM tags r
-		JOIN work_tags wt_rel ON r.id = wt_rel.tag_id
-		JOIN work_tags wt_fandom ON wt_rel.work_id = wt_fandom.work_id
+		JOIN visible_work_tags wt_rel ON r.id = wt_rel.tag_id
+		JOIN visible_work_tags wt_fandom ON wt_rel.work_id = wt_fandom.work_id
 		WHERE wt_fandom.tag_id = $1 AND r.type = 'relationship'
 	`, fandomID).Scan(&relationshipCount)
 	stats["relationship_count"] = relationshipCount
@@ -793,8 +800,8 @@ func (ts *TagService) SearchCharacters(c *gin.Context) {
 		rows, err = ts.db.Query(`
 			SELECT DISTINCT c.id, c.name, c.type, c.use_count, c.is_canonical
 			FROM tags c
-			JOIN work_tags wt_char ON c.id = wt_char.tag_id
-			JOIN work_tags wt_fandom ON wt_char.work_id = wt_fandom.work_id
+			JOIN visible_work_tags wt_char ON c.id = wt_char.tag_id
+			JOIN visible_work_tags wt_fandom ON wt_char.work_id = wt_fandom.work_id
 			JOIN tags f ON wt_fandom.tag_id = f.id
 			WHERE c.type = 'character' 
 			AND f.type = 'fandom'
@@ -879,8 +886,8 @@ func (ts *TagService) GetCharacter(c *gin.Context) {
 	fandomRows, err := ts.db.Query(`
 		SELECT f.id, f.name, COUNT(*) as work_count
 		FROM tags f
-		JOIN work_tags wt_fandom ON f.id = wt_fandom.tag_id
-		JOIN work_tags wt_char ON wt_fandom.work_id = wt_char.work_id
+		JOIN visible_work_tags wt_fandom ON f.id = wt_fandom.tag_id
+		JOIN visible_work_tags wt_char ON wt_fandom.work_id = wt_char.work_id
 		WHERE wt_char.tag_id = $1 AND f.type = 'fandom'
 		GROUP BY f.id, f.name
 		ORDER BY work_count DESC
@@ -933,8 +940,8 @@ func (ts *TagService) SearchRelationships(c *gin.Context) {
 		sqlQuery = `
 			SELECT DISTINCT r.id, r.name, r.type, r.use_count, r.is_canonical
 			FROM tags r
-			JOIN work_tags wt_rel ON r.id = wt_rel.tag_id
-			JOIN work_tags wt_fandom ON wt_rel.work_id = wt_fandom.work_id
+			JOIN visible_work_tags wt_rel ON r.id = wt_rel.tag_id
+			JOIN visible_work_tags wt_fandom ON wt_rel.work_id = wt_fandom.work_id
 			JOIN tags f ON wt_fandom.tag_id = f.id
 			WHERE r.type = 'relationship' 
 			AND f.type = 'fandom'
@@ -1030,8 +1037,8 @@ func (ts *TagService) GetRelationship(c *gin.Context) {
 	fandomRows, err := ts.db.Query(`
 		SELECT f.id, f.name, COUNT(*) as work_count
 		FROM tags f
-		JOIN work_tags wt_fandom ON f.id = wt_fandom.tag_id
-		JOIN work_tags wt_rel ON wt_fandom.work_id = wt_rel.work_id
+		JOIN visible_work_tags wt_fandom ON f.id = wt_fandom.tag_id
+		JOIN visible_work_tags wt_rel ON wt_fandom.work_id = wt_rel.work_id
 		WHERE wt_rel.tag_id = $1 AND f.type = 'fandom'
 		GROUP BY f.id, f.name
 		ORDER BY work_count DESC
@@ -1063,7 +1070,7 @@ func (ts *TagService) GetRelationship(c *gin.Context) {
 			COUNT(CASE WHEN prominence = 'secondary' THEN 1 END) as secondary_count,
 			COUNT(CASE WHEN prominence = 'micro' THEN 1 END) as micro_count,
 			AVG(prominence_score) as avg_score
-		FROM work_tags WHERE tag_id = $1
+		FROM visible_work_tags WHERE tag_id = $1
 	`, relationshipID).Scan(&primaryCount, &secondaryCount, &microCount, &avgScore)
 
 	prominenceStats := gin.H{
@@ -1192,7 +1199,7 @@ func (ts *TagService) GetTrendingTags(c *gin.Context) {
 			COUNT(wt.work_id) as recent_uses,
 			(COUNT(wt.work_id)::float / GREATEST(t.use_count, 1)) as trend_ratio
 		FROM tags t
-		JOIN work_tags wt ON t.id = wt.tag_id
+		JOIN visible_work_tags wt ON t.id = wt.tag_id
 		JOIN works w ON wt.work_id = w.id
 		WHERE w.created_at >= $1
 		AND t.is_filterable = true
@@ -1265,7 +1272,7 @@ func (ts *TagService) GetTagUsageStats(c *gin.Context) {
 
 	// Total works using this tag
 	var totalWorks int
-	ts.db.QueryRow(`SELECT COUNT(*) FROM work_tags WHERE tag_id = $1`, tagID).Scan(&totalWorks)
+	ts.db.QueryRow(`SELECT COUNT(*) FROM visible_work_tags WHERE tag_id = $1`, tagID).Scan(&totalWorks)
 
 	// Usage by prominence
 	var primaryCount, secondaryCount, microCount, unassignedCount int
@@ -1275,14 +1282,14 @@ func (ts *TagService) GetTagUsageStats(c *gin.Context) {
 			COUNT(CASE WHEN prominence = 'secondary' THEN 1 END),
 			COUNT(CASE WHEN prominence = 'micro' THEN 1 END),
 			COUNT(CASE WHEN prominence = 'unassigned' THEN 1 END)
-		FROM work_tags WHERE tag_id = $1
+		FROM visible_work_tags WHERE tag_id = $1
 	`, tagID).Scan(&primaryCount, &secondaryCount, &microCount, &unassignedCount)
 
 	// Recent usage (last 30 days)
 	var recentWorks int
 	ts.db.QueryRow(`
 		SELECT COUNT(DISTINCT wt.work_id)
-		FROM work_tags wt
+		FROM visible_work_tags wt
 		JOIN works w ON wt.work_id = w.id
 		WHERE wt.tag_id = $1 AND w.created_at >= $2
 	`, tagID, time.Now().AddDate(0, 0, -30)).Scan(&recentWorks)
@@ -1290,8 +1297,8 @@ func (ts *TagService) GetTagUsageStats(c *gin.Context) {
 	// Co-occurrence with other tags (top 10)
 	cotagRows, err := ts.db.Query(`
 		SELECT t.name, t.type, COUNT(*) as cooccurrence_count
-		FROM work_tags wt1
-		JOIN work_tags wt2 ON wt1.work_id = wt2.work_id
+		FROM visible_work_tags wt1
+		JOIN visible_work_tags wt2 ON wt1.work_id = wt2.work_id
 		JOIN tags t ON wt2.tag_id = t.id
 		WHERE wt1.tag_id = $1 AND wt2.tag_id != $1
 		GROUP BY t.id, t.name, t.type
@@ -1585,4 +1592,14 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// viewerFrom is the logged-in reader's id, or nil for a guest.
+func viewerFrom(c *gin.Context) *uuid.UUID {
+	if v, ok := c.Get("user_uuid"); ok {
+		if id, ok := v.(uuid.UUID); ok {
+			return &id
+		}
+	}
+	return nil
 }

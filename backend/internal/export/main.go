@@ -334,6 +334,12 @@ func (s *ExportService) DownloadExport(c *gin.Context) {
 		return
 	}
 
+	// A work hidden after the export was made can't be downloaded.
+	if !s.validateWorkAccess(workID, c.GetString("user_id")) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this work"})
+		return
+	}
+
 	// Check if export has expired
 	if time.Now().After(expiresAt) {
 		s.markExportExpired(exportID)
@@ -442,9 +448,15 @@ func (s *ExportService) processExport(exportID string) {
 	s.db.Exec(query, exportID)
 }
 
+// validateWorkAccess says whether userID may export the work: they can see it,
+// and an admin has not hidden it. AO3 refuses to download a hidden work for
+// everyone, its creator included (downloads_controller.rb:56-64).
 func (s *ExportService) validateWorkAccess(workID, userID string) bool {
-	// TODO: Implement proper work access validation
-	return true
+	var ok bool
+	err := s.db.QueryRow(`
+		SELECT can_user_view_work(w.id, $2::uuid) AND NOT w.hidden_by_admin AND NOT w.spam
+		FROM works w WHERE w.id = $1::uuid`, workID, userID).Scan(&ok)
+	return err == nil && ok
 }
 
 func (s *ExportService) estimateProcessingTime(format string) string {

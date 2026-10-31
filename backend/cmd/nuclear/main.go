@@ -46,6 +46,23 @@
 //	                          moderator or tag_wrangler. This is how a new
 //	                          archive gets its first admin: register normally,
 //	                          then run this on the server.
+//	nuclear roles             list everyone who holds a role other than user
+//	nuclear hide|unhide work|chapter|series|bookmark|comment <id> [--reason "..."]
+//	                          take something out of public view, or put it back.
+//	                          A reason is required to hide.
+//	nuclear suspend <username> --until 2026-12-01 --reason "..."
+//	                          suspend an account until that date and log it out.
+//	                          A suspended account can read but not post.
+//	nuclear unsuspend <username>
+//	nuclear ban <username> --reason "..."
+//	                          ban an account (it can read but not post) and log
+//	                          it out
+//	nuclear unban <username>
+//	nuclear audit [--since 2026-10-01] [--limit 50]
+//	                          list recent admin actions, newest first
+//
+// Every one of the moderation commands, and "grant", is also written to the
+// audit log as cli:<your operating system user>.
 package main
 
 import (
@@ -69,10 +86,12 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/html"
 	"nuclear-ao3/internal/jobs"
+	"nuclear-ao3/internal/moderation"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
@@ -291,16 +310,23 @@ func runCommand(db *sql.DB, args []string) int {
 	case len(args) == 3 && args[0] == "sessions" && args[1] == "revoke":
 		return revokeSessions(ctx, db, args[2])
 	case len(args) == 3 && args[0] == "grant":
-		if err := grantRole(ctx, db, args[1], args[2]); err != nil {
+		changed, err := grantRole(ctx, db, args[1], args[2])
+		if err != nil {
 			log.Printf("grant: %v", err)
 			return 1
 		}
+		if !changed {
+			log.Printf("grant: %s already has the %s role", args[1], args[2])
+			return 0
+		}
 		log.Printf("grant: %s now has the %s role", args[1], args[2])
 		return 0
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | keys generate|show]\n", strings.Join(args, " "))
-		return 2
 	}
+	if handled, code := moderationCommand(ctx, db, args); handled {
+		return code
+	}
+	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | roles | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <username> | audit | keys generate|show]\n", strings.Join(args, " "))
+	return 2
 }
 
 // showJobs prints what the background job queue is doing.
@@ -368,73 +394,43 @@ func revokeSessions(ctx context.Context, db *sql.DB, username string) int {
 type Revoked struct{ Sessions, AccessTokens, RefreshTokens, Codes, Consents int64 }
 
 // RevokeSessions does the work of "nuclear sessions revoke[-all]". Only
-// sessions and tokens that were still live are counted.
+// sessions and tokens that were still live are counted. The same code ends
+// a user's sessions when they are banned or suspended.
 func RevokeSessions(ctx context.Context, db *sql.DB, username string) (Revoked, error) {
-	var r Revoked
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return r, err
+		return Revoked{}, err
 	}
 	defer tx.Rollback()
-
-	// With no username, "$1 = ''" is true for every row.
-	if username != "" {
-		var id string
-		if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE username = $1`, username).Scan(&id); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return r, fmt.Errorf("no account named %q", username)
-			}
-			return r, err
-		}
+	r, err := moderation.RevokeSessions(ctx, tx, username)
+	if err != nil {
+		return Revoked(r), err
 	}
-	for _, q := range []struct {
-		dst *int64
-		sql string
-	}{
-		{&r.Sessions, `UPDATE user_sessions SET is_active = false
-			WHERE is_active AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
-		{&r.AccessTokens, `UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
-		{&r.RefreshTokens, `UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
-		// An unused code could still be swapped for new tokens.
-		{&r.Codes, `UPDATE authorization_codes SET used_at = now()
-			WHERE used_at IS NULL AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
-		// Apps must ask the user for permission again.
-		{&r.Consents, `UPDATE user_consents SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
-	} {
-		res, err := tx.ExecContext(ctx, q.sql, username)
-		if err != nil {
-			return r, err
-		}
-		*q.dst, _ = res.RowsAffected()
-	}
-	return r, tx.Commit()
+	return Revoked(r), tx.Commit()
 }
 
-// grantRole gives an existing user a role, or restores it if it was revoked.
-func grantRole(ctx context.Context, db *sql.DB, username, role string) error {
-	switch role {
-	case "admin", "moderator", "tag_wrangler":
-	default:
-		return fmt.Errorf("unknown role %q (use admin, moderator or tag_wrangler)", role)
-	}
+// grantRole gives an existing user a role, or restores it if it was revoked,
+// and records it in the audit log. It reports false if the user already had
+// the role.
+func grantRole(ctx context.Context, db *sql.DB, username, role string) (bool, error) {
 	if _, err := migrations.Up(ctx, db); err != nil {
-		return err
+		return false, err
 	}
-	res, err := db.ExecContext(ctx, `
-		INSERT INTO user_roles (user_id, role)
-		SELECT id, $2 FROM users WHERE username = $1
-		ON CONFLICT (user_id, role) DO UPDATE SET revoked_at = NULL, revoked_by = NULL, granted_at = NOW()`,
-		username, role)
+	svc := moderation.New(db)
+	id, err := svc.UserByName(ctx, username)
+	if errors.Is(err, moderation.ErrNotFound) {
+		return false, fmt.Errorf("no account named %q; register it on the site first", username)
+	}
 	if err != nil {
-		return err
+		return false, err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("no account named %q; register it on the site first", username)
+	switch err := svc.GrantRole(ctx, audit.CLIActor(), id, role); {
+	case errors.Is(err, moderation.ErrNoChange):
+		return false, nil
+	case err != nil:
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 // services are the areas of the app.
@@ -456,6 +452,7 @@ func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	notify.Mount(r, s.notify, deps)
 	export.Mount(r, s.export, deps)
 	search.Mount(r, s.search, deps)
+	moderation.Mount(r, moderation.New(deps.DB), deps)
 }
 
 // serveMetrics exposes Prometheus metrics on their own port so they are never

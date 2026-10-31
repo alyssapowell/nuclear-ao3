@@ -46,6 +46,10 @@ type Work struct {
 	Comments    int `json:"comments"`
 	Bookmarks   int `json:"bookmarks"`
 	Collections int `json:"collections"`
+	// HiddenByAdmin is set only when the viewer is allowed to see a work that
+	// an admin has hidden (its creator, or an admin), so the page can say so.
+	HiddenByAdmin bool `json:"hidden_by_admin,omitempty"`
+	Spam          bool `json:"spam,omitempty"`
 }
 
 // Chapter represents a chapter within a work
@@ -118,6 +122,11 @@ type WorkComment struct {
 	IsDeleted        bool       `json:"is_deleted" db:"is_deleted"`
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at" db:"updated_at"`
+	// Moderation state, as AO3 has it. Only shown to people who can act on it.
+	Unreviewed    bool `json:"unreviewed,omitempty"`      // waiting for the work's creator to approve it
+	Iced          bool `json:"frozen,omitempty"`          // nobody can reply
+	HiddenByAdmin bool `json:"hidden_by_admin,omitempty"` // text is withheld from everyone but admins
+	Spam          bool `json:"spam,omitempty"`            // marked as spam
 }
 
 // UserMute represents a user muting another user (matching AO3's implementation)

@@ -59,9 +59,9 @@ Do every step, even ones that seem unrelated. You don't yet know how they got in
 6. **Check who can get in.**
    - On the server, check `~/.ssh/authorized_keys` for every user, and that nobody new is in the docker group.
    - In GitHub, check who has access to the repository and to the `production-approval` environment.
-7. **Check who holds admin powers:**
-   `docker-compose exec postgres psql -U ao3_user -d ao3_nuclear -c "SELECT u.username, r.role, r.granted_at FROM user_roles r JOIN users u ON u.id = r.user_id WHERE r.revoked_at IS NULL AND r.role <> 'user' ORDER BY r.granted_at DESC"`. Anyone you don't recognise is a finding: write it in the log, then revoke it.
-8. If the server itself may be compromised (unknown processes, unknown users, files you didn't change), **don't trust it.** Build a new server, restore the latest backup that predates the incident, and set it up with all the new secrets above.
+7. **Check who holds admin powers:** run `docker-compose exec app nuclear roles`. It lists everyone who holds the admin, moderator or tag_wrangler role. Anyone you don't recognise is a finding: write it in the log, then have a trusted admin take the role away (`DELETE /api/v1/auth/admin/users/<id>/roles/<role>`). If you are unsure whom to trust, run `docker-compose exec app nuclear ban <username> --reason "..."` to stop the account from posting and log it out.
+8. **Review what admins have done:** run `docker-compose exec app nuclear audit --since 2026-10-01 --limit 200` (use a date before the incident began). Every hide, spam mark, suspension, ban and role change is listed with who did it, when, and the reason they gave. Anything you can't explain is a finding. Actions taken with `nuclear` on the server show as `cli:<server user>`. The log can't be edited from the site, but someone with full database access could change it, so compare against your backups if you think that happened.
+9. If the server itself may be compromised (unknown processes, unknown users, files you didn't change), **don't trust it.** Build a new server, restore the latest backup that predates the incident, and set it up with all the new secrets above.
 
 ### Who to tell
 

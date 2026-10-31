@@ -108,6 +108,18 @@ Status key:
 - **Privacy settings wizard, GDPR consent, data rights** (migration 016)
   - Status: Unverified.
 
+## Moderation
+
+- **Hidden works, chapters, series, bookmarks and comments; spam; suspensions and bans; an audit log of every admin action**
+  - Intent: follow AO3 (cited in migration 033 and `internal/moderation`), with the same visibility rules in every place works are listed.
+  - Status: Works (verified 2026-10-30 by tests against a real database and on a local server).
+    - A hidden work shows up in no listing, search, tag page, series, collection, bookmark list or count for strangers and logged-out readers. Its creators see it with a "hidden" flag, and admins and moderators see it. Marking a work as spam hides it too; unmarking unhides it. Nobody can comment on, download or get notified about a hidden work.
+    - Comments: with moderated commenting on, a comment waits for the work's creator (or an admin) to approve it and only they can see it meanwhile. Comments marked as spam are shown to admins only, with their replies. A hidden comment keeps its place in the thread but its text is withheld. A frozen thread takes no replies.
+    - A banned or suspended account can log in and read, but can't create or change works, chapters, comments, bookmarks, series, collections, pseuds, kudos or their profile. A suspended account also can't delete or orphan works; a banned one can, as on AO3. A suspension ends at its end time with no job needed. Banning or suspending logs the account out.
+    - Admin endpoints (`/api/v1/admin/...`) and `nuclear hide|unhide|suspend|unsuspend|ban|unban|roles|audit` do the same things. Moderators can do everything except read the audit log and change roles, and only an admin can act on an admin or moderator. Nobody can act on their own account. Each action writes one row to `admin_actions` in the same transaction; the table refuses UPDATE, DELETE and TRUNCATE.
+  - Not done: the creator is not emailed when their work is hidden (AO3 does); AO3's spam checking (Akismet) and the spam review queue; hiding external works (the rebuild has none); the older admin endpoints that change a work's or comment's `status` are audited but still check the legacy `users.role` column.
+  - Differences from AO3: AO3's chapter `hidden_by_admin` is stored but never used, here a hidden chapter is readable only by the work's creators and admins. A work with `spam` set but not hidden is treated as hidden. An admin-hidden comment's text is not sent to the browser (AO3 sends it and hides it with a style).
+
 ## Accessibility
 
 - **WCAG 2.1 AA as the goal**: keyboard navigation, screen-reader support, ARIA patterns in search and tag inputs.
@@ -187,6 +199,11 @@ These were fixed by merging the backend into one program with one login check (`
 - ~~**Backups stayed on the server**~~, so losing the server lost them. **Fixed 2026-10-30:** each daily backup is encrypted and copied to any S3-compatible or B2 storage with restic (14 daily, 8 weekly and 12 monthly copies kept, a weekly read-back check). A failed copy turns the run red. The repository password is generated once and held by the admin. See docs/BACKUPS.md. Not yet run against a real repository.
 - ~~Redis was still required.~~ The app wouldn't start without it, though it only held rate limits, OAuth consent prompts and two caches. **Fixed 2026-10-30:** Redis is gone; rate limits are counted in memory (per copy of the app), OAuth state is in Postgres, and the caches were removed. See docs/DECISIONS.md.
 - ~~Most services' logs had no size limit~~, which on a small disk eventually stops the database. **Fixed 2026-10-30:** every service keeps at most 5 files of 20 MB.
+- **Older bugs found while adding moderation (2026-10-30), not yet fixed:**
+  - A creator's public works list (`GetUserWorks`) filters on `status = 'posted'`, which the table never allows (it uses `published`), so other people always see an empty list.
+  - Editing a comment (`PUT /comments/:id`) reads the wrong URL parameter and always fails.
+  - The works list's page totals count only the current page.
+  - Deleting a work that has tags fails on a `work_tag_summaries` foreign key.
 - **The works service logs SQL details and other debug output** at startup and on every request.
 - **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
 - **`X-Test-User-ID` logs anyone in when `GIN_MODE=test`.** It is off by default, but it shouldn't exist in production code.

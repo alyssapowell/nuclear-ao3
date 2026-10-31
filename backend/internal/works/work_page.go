@@ -79,6 +79,11 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 		return
 	}
 
+	if !ws.canViewWork(ctx, workID, ws.getUserIDFromContext(c)) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		return
+	}
+
 	stats, err := ws.fetchWorkStatsFromDB(ctx, workID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work stats"})
@@ -145,7 +150,8 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 			COALESCE(w.characters, '{}') as characters,
 			COALESCE(w.relationships, '{}') as relationships,
 			COALESCE(w.freeform_tags, '{}') as freeform_tags,
-			w.published_at, w.updated_at, w.created_at
+			w.published_at, w.updated_at, w.created_at,
+			w.hidden_by_admin, w.spam
 		FROM works w
 		JOIN users u ON w.user_id = u.id
 		WHERE w.id = $1
@@ -158,6 +164,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 		&work.InUnrevealedCollection, &work.IsAnonymous,
 		&fandoms, &characters, &relationships, &freeformTags,
 		&publishedAt, &work.UpdatedAt, &work.CreatedAt,
+		&work.HiddenByAdmin, &work.Spam,
 	)
 
 	if err != nil {

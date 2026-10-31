@@ -33,7 +33,7 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		{
 			protected.POST("/logout", authService.Logout)
 			protected.GET("/me", authService.GetProfile)
-			protected.PUT("/me", authService.UpdateProfile)
+			protected.PUT("/me", d.ActiveAccount, authService.UpdateProfile)
 			protected.POST("/change-password", authService.ChangePassword)
 			protected.GET("/sessions", authService.GetSessions)
 			protected.DELETE("/sessions/:session_id", authService.RevokeSession)
@@ -42,6 +42,7 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		// Admin endpoints
 		admin := api.Group("/admin")
 		admin.Use(JWTAuthMiddleware(authService))
+		admin.Use(d.ActiveAccount)
 		admin.Use(d.RequireRole("admin"))
 
 		{

@@ -14,7 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/internal/html"
+	"nuclear-ao3/internal/moderation"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -240,6 +242,7 @@ func (ws *WorkService) CreateGuestComment(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Printf("create comment: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 		return
 	}
@@ -327,15 +330,60 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		return
 	}
 
-	// A reply must be to a comment on the same work.
+	// Nobody can comment on a work or chapter an admin has hidden, not even
+	// its creator (AO3 comments_controller.rb:76 and :158).
+	var workHidden, chapterHidden bool
+	if err := ws.db.QueryRow("SELECT hidden_by_admin OR spam FROM works WHERE id = $1", req.WorkID).Scan(&workHidden); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		return
+	}
+	if req.ChapterID != nil {
+		if err := ws.db.QueryRow("SELECT hidden_by_admin FROM chapters WHERE id = $1", req.ChapterID).Scan(&chapterHidden); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chapter not found"})
+			return
+		}
+	}
+	if workHidden || chapterHidden {
+		c.JSON(http.StatusForbidden, gin.H{"error": "work_hidden",
+			"message": "You can't add comments to something an admin has hidden."})
+		return
+	}
+
+	// A reply must be to a comment on the same work, that the replier can
+	// see, and that can still take replies (AO3 comments_controller.rb:144-165).
 	if req.ParentCommentID != nil {
-		var exists bool
-		err := ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM comments WHERE id = $1 AND work_id = $2)",
-			req.ParentCommentID, req.WorkID).Scan(&exists)
-		if err != nil || !exists {
+		var exists, visible, iced, unreviewed, spam, hidden bool
+		err := ws.db.QueryRow(`SELECT true, can_user_view_comment(c.id, $3), c.iced, c.unreviewed, c.is_spam, c.hidden_by_admin
+			FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
+			WHERE c.id = $1 AND COALESCE(c.work_id, ch.work_id) = $2`,
+			req.ParentCommentID, req.WorkID, userID).Scan(&exists, &visible, &iced, &unreviewed, &spam, &hidden)
+		if err != nil || !exists || !visible {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Parent comment not found"})
 			return
 		}
+		switch {
+		case iced:
+			c.JSON(http.StatusForbidden, gin.H{"error": "thread_frozen", "message": "This thread is frozen; it can't take new replies."})
+			return
+		case unreviewed:
+			c.JSON(http.StatusForbidden, gin.H{"error": "comment_unreviewed", "message": "You can't reply to a comment that hasn't been approved yet."})
+			return
+		case spam:
+			c.JSON(http.StatusForbidden, gin.H{"error": "comment_is_spam", "message": "You can't reply to a comment marked as spam."})
+			return
+		case hidden:
+			c.JSON(http.StatusForbidden, gin.H{"error": "comment_hidden", "message": "You can't reply to a comment an admin has hidden."})
+			return
+		}
+	}
+
+	// With moderated commenting on, a comment waits for the work's creator to
+	// approve it, unless a creator wrote it (AO3 comment.rb:403-409).
+	var unreviewed bool
+	if err := ws.db.QueryRow(`SELECT COALESCE(w.moderate_comments, false) AND NOT is_work_creator(w.id, $2) FROM works w WHERE w.id = $1`,
+		req.WorkID, userID).Scan(&unreviewed); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+		return
 	}
 
 	// Create the comment
@@ -353,18 +401,19 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	query := `
 		INSERT INTO comments (
 			id, work_id, chapter_id, user_id, pseudonym_id, parent_comment_id,
-			content, guest_name, guest_email, ip_address, created_at, updated_at
+			content, guest_name, guest_email, ip_address, unreviewed, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
 		)
 	`
 
 	_, err := ws.db.Exec(query,
 		commentID, req.WorkID, req.ChapterID, userID, pseudonymID, req.ParentCommentID,
-		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam,
+		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam, unreviewed,
 	)
 
 	if err != nil {
+		log.Printf("create comment: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 		return
 	}
@@ -386,6 +435,13 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 // triggerCommentNotification tells the work's subscribers about a new comment.
 func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDetails, eventType string) {
 	if ws.notificationService == nil || comment.WorkID == nil {
+		return
+	}
+	// A comment waiting for review, marked as spam or on a hidden work is
+	// not announced; AO3 tells people once the creator approves it.
+	var quiet bool
+	if err := ws.db.QueryRow(`SELECT c.unreviewed OR c.is_spam OR c.hidden_by_admin OR w.hidden_by_admin OR w.spam
+		FROM comments c JOIN works w ON w.id = $2 WHERE c.id = $1`, comment.ID, comment.WorkID).Scan(&quiet); err != nil || quiet {
 		return
 	}
 
@@ -785,4 +841,81 @@ func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID, commenterID
 		}
 	}
 	return ids
+}
+
+// FreezeComment freezes a comment and every reply under it, so nobody can
+// reply. AO3 lets the work's creator and admins do this
+// (comments_controller.rb:217-231). When an admin who is not a creator does
+// it, the action goes in the audit log.
+func (ws *WorkService) FreezeComment(c *gin.Context)   { ws.setFrozen(c, true) }
+func (ws *WorkService) UnfreezeComment(c *gin.Context) { ws.setFrozen(c, false) }
+
+func (ws *WorkService) setFrozen(c *gin.Context, frozen bool) {
+	commentID, err := uuid.Parse(c.Param("comment_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid comment ID"})
+		return
+	}
+	userID := ws.getUserIDFromContext(c)
+	if userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	ctx := c.Request.Context()
+	var isCreator, isMod bool
+	err = ws.db.QueryRowContext(ctx, `
+		SELECT is_work_creator(COALESCE(c.work_id, ch.work_id), $2), is_site_moderator($2)
+		FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
+		WHERE c.id = $1`, commentID, userID).Scan(&isCreator, &isMod)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze comment"})
+		return
+	}
+	if !isCreator && !isMod {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only the work's creators and admins can freeze or unfreeze comments"})
+		return
+	}
+	if isMod && !isCreator {
+		actor, ok := moderation.Actor(c, ws.db)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+			return
+		}
+		if err := moderation.New(ws.db).SetCommentFrozen(ctx, actor, commentID, frozen, ""); err != nil {
+			moderation.Fail(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"frozen": frozen})
+		return
+	}
+	tx, err := ws.db.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze comment"})
+		return
+	}
+	defer tx.Rollback()
+	n, err := moderation.FreezeThread(ctx, tx, commentID, frozen)
+	if err != nil || tx.Commit() != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze comment"})
+		return
+	}
+	if n == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "no_change", "message": "It is already in that state."})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"frozen": frozen})
+}
+
+// auditAction records an admin action from one of the older admin endpoints
+// in the audit log, inside the transaction that makes the change.
+func (ws *WorkService) auditAction(c *gin.Context, tx *sql.Tx, action, targetType string, target uuid.UUID, reason string, details any) error {
+	actor, ok := moderation.Actor(c, ws.db)
+	if !ok {
+		return errors.New("audit: no logged-in administrator")
+	}
+	return audit.Record(c.Request.Context(), tx, actor, action, targetType, target.String(), reason, details)
 }

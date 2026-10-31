@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"nuclear-ao3/internal/moderation"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -122,5 +123,50 @@ func (as *AuthService) UpdateProfile(c *gin.Context) { notImplemented(c) }
 func (as *AuthService) ListUsers(c *gin.Context)  { notImplemented(c) }
 func (as *AuthService) GetUser(c *gin.Context)    { notImplemented(c) }
 func (as *AuthService) UpdateUser(c *gin.Context) { notImplemented(c) }
-func (as *AuthService) GrantRole(c *gin.Context)  { notImplemented(c) }
-func (as *AuthService) RevokeRole(c *gin.Context) { notImplemented(c) }
+
+// GrantRole gives an account a role (admin, moderator or tag_wrangler). The
+// change and its audit row are written together.
+func (as *AuthService) GrantRole(c *gin.Context) {
+	actor, ok := moderation.Actor(c, as.db)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, err := uuid.Parse(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "invalid id"})
+		return
+	}
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "invalid JSON"})
+		return
+	}
+	if err := moderation.New(as.db).GrantRole(c.Request.Context(), actor, userID, body.Role); err != nil {
+		moderation.Fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"role": body.Role, "granted": true})
+}
+
+// RevokeRole takes a role away from an account.
+func (as *AuthService) RevokeRole(c *gin.Context) {
+	actor, ok := moderation.Actor(c, as.db)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID, err := uuid.Parse(c.Param("user_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "invalid id"})
+		return
+	}
+	role := c.Param("role")
+	if err := moderation.New(as.db).RevokeRole(c.Request.Context(), actor, userID, role); err != nil {
+		moderation.Fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"role": role, "revoked": true})
+}
