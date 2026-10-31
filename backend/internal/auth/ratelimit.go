@@ -10,6 +10,11 @@ import (
 // counts on its own, so with N copies behind a load balancer a client can
 // make up to N times the limit. See docs/DECISIONS.md ("Redis removed").
 // Counts are lost on restart, which at worst gives a client a fresh window.
+//
+// The table never pushes out a client it is still counting: if it fills up
+// (someone sending from a huge number of addresses), new clients share one
+// overflow bucket until old windows expire. Pushing out live entries instead
+// would hand the flooder a fresh count with every new address.
 
 const (
 	// maxRateLimitKeys caps how many clients are tracked at once.
@@ -25,6 +30,7 @@ type windowCounter struct {
 	entries   map[string]*list.Element // key -> element holding *windowEntry
 	order     *list.List               // front = most recently used
 	maxKeys   int
+	overflow  *windowEntry // shared by new clients while the table is full
 	lastSweep time.Time
 	now       func() time.Time
 }
@@ -70,11 +76,15 @@ func (w *windowCounter) hit(key string, limit int, window time.Duration) (used i
 		}
 		e.window = window
 	} else {
-		for len(w.entries) >= w.maxKeys && w.order.Len() > 0 {
-			w.evictOldestLocked()
+		if len(w.entries) >= w.maxKeys {
+			w.sweepLocked(now)
 		}
-		e = &windowEntry{key: key, windowStart: start, window: window}
-		w.entries[key] = w.order.PushFront(e)
+		if len(w.entries) >= w.maxKeys {
+			e = w.overflowLocked(start, window)
+		} else {
+			e = &windowEntry{key: key, windowStart: start, window: window}
+			w.entries[key] = w.order.PushFront(e)
+		}
 	}
 
 	used = e.count
@@ -99,14 +109,14 @@ func (w *windowCounter) sweepLocked(now time.Time) {
 	}
 }
 
-// evictOldestLocked drops the least recently used key.
-func (w *windowCounter) evictOldestLocked() {
-	el := w.order.Back()
-	if el == nil {
-		return
+// overflowLocked returns the one bucket shared by every client that arrives
+// while the table is full. It sits outside the table, so it never displaces
+// anyone.
+func (w *windowCounter) overflowLocked(start time.Time, window time.Duration) *windowEntry {
+	if w.overflow == nil || !w.overflow.windowStart.Equal(start) {
+		w.overflow = &windowEntry{key: "overflow", windowStart: start, window: window}
 	}
-	w.order.Remove(el)
-	delete(w.entries, el.Value.(*windowEntry).key)
+	return w.overflow
 }
 
 // size reports how many keys are tracked.

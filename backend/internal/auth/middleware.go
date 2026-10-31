@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -46,13 +47,31 @@ type RateLimitHeaders struct {
 
 // RateLimitManager counts requests per client in memory. Each copy of the
 // app enforces the limits on its own.
+// Logged-in users and anonymous visitors are counted in separate tables,
+// so a flood of anonymous addresses can't crowd out logged-in readers.
 type RateLimitManager struct {
-	counter     *windowCounter
+	anonymous   *windowCounter
+	users       *windowCounter
 	serviceName string
 }
 
 func newRateLimitManager(serviceName string) *RateLimitManager {
-	return &RateLimitManager{counter: newWindowCounter(maxRateLimitKeys), serviceName: serviceName}
+	return &RateLimitManager{
+		anonymous:   newWindowCounter(maxRateLimitKeys),
+		users:       newWindowCounter(maxRateLimitKeys),
+		serviceName: serviceName,
+	}
+}
+
+// clientNetwork is the address a visitor is counted under. IPv6 addresses
+// are grouped by their /64 network, because one connection usually has a
+// whole /64 to itself and could otherwise pose as countless clients.
+func clientNetwork(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil || parsed.To4() != nil {
+		return ip
+	}
+	return parsed.Mask(net.CIDRMask(64, 128)).String() + "/64"
 }
 
 // Helper functions for rate limiting
@@ -149,18 +168,16 @@ func (as *AuthService) rateLimitInfo(r *http.Request) *ClientRateLimitInfo {
 func (rlm *RateLimitManager) CheckRateLimit(clientInfo *ClientRateLimitInfo, clientIP string) (*RateLimitHeaders, error) {
 	config := clientInfo.GetRateLimitConfig()
 
-	var key string
 	if clientInfo.DetermineRateLimitTier() == RateLimitTierAnonymous {
-		key = fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientIP)
-	} else {
-		key = fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientInfo.ClientID)
+		key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientNetwork(clientIP))
+		return rlm.checkLimitWithConfig(rlm.anonymous, key, config)
 	}
-
-	return rlm.checkLimitWithConfig(key, config)
+	key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientInfo.ClientID)
+	return rlm.checkLimitWithConfig(rlm.users, key, config)
 }
 
-func (rlm *RateLimitManager) checkLimitWithConfig(key string, config RateLimitConfig) (*RateLimitHeaders, error) {
-	used, windowEnd, allowed := rlm.counter.hit(key, config.Requests, config.Window)
+func (rlm *RateLimitManager) checkLimitWithConfig(counter *windowCounter, key string, config RateLimitConfig) (*RateLimitHeaders, error) {
+	used, windowEnd, allowed := counter.hit(key, config.Requests, config.Window)
 	headers := &RateLimitHeaders{
 		Limit:     config.Requests,
 		Remaining: config.Requests - used - 1,
