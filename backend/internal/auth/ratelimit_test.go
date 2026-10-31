@@ -167,3 +167,39 @@ func TestRateLimitConcurrent(t *testing.T) {
 		t.Errorf("size %d over cap", w.size())
 	}
 }
+
+func TestFullTableFallsBackToWiderNetworks(t *testing.T) {
+	rlm := newRateLimitManager("test")
+	rlm.anonymous = newWindowCounter(10)
+	rlm.networks = newWindowCounter(10)
+	anon := &ClientRateLimitInfo{Tier: RateLimitTierAnonymous}
+	limit := anon.GetRateLimitConfig().Requests
+	// A flood from one /24 fills the main table and then exhausts its own
+	// wider-network bucket.
+	for i := 0; i < limit+50; i++ {
+		rlm.CheckRateLimit(anon, fmt.Sprintf("203.0.113.%d", i%250))
+	}
+	if _, err := rlm.CheckRateLimit(anon, "203.0.113.251"); err == nil {
+		t.Error("the flooding network should be limited")
+	}
+	// A visitor from somewhere else still gets in.
+	if _, err := rlm.CheckRateLimit(anon, "198.51.100.9"); err != nil {
+		t.Errorf("an unrelated visitor was locked out by the flood: %v", err)
+	}
+}
+
+func TestFullTableSweepsAtMostOncePerSecond(t *testing.T) {
+	w := newWindowCounter(3)
+	now, advance := fakeClock(time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC))
+	w.now = now
+	for i := 0; i < 3; i++ {
+		w.hit(fmt.Sprint("k", i), 5, time.Minute)
+	}
+	w.hit("trigger", 5, time.Minute) // full: sweeps once, finds nothing expired
+	first := w.lastSweep
+	advance(100 * time.Millisecond)
+	w.hit("again", 5, time.Minute)
+	if !w.lastSweep.Equal(first) {
+		t.Error("a full table was swept again within a second")
+	}
+}

@@ -11,16 +11,20 @@ import (
 // make up to N times the limit. See docs/DECISIONS.md ("Redis removed").
 // Counts are lost on restart, which at worst gives a client a fresh window.
 //
-// The table never pushes out a client it is still counting: if it fills up
-// (someone sending from a huge number of addresses), new clients share one
-// overflow bucket until old windows expire. Pushing out live entries instead
-// would hand the flooder a fresh count with every new address.
+// The table never pushes out a client it is still counting: pushing out live
+// entries would hand someone sending from many addresses a fresh count with
+// every new one. When the table is full, the caller (RateLimitManager) counts
+// new visitors by their wider network in a second table instead, and only if
+// that is full too do newcomers share one overflow bucket.
 
 const (
 	// maxRateLimitKeys caps how many clients are tracked at once.
 	maxRateLimitKeys = 100000
 	// rateLimitSweepEvery is how often expired windows are dropped.
 	rateLimitSweepEvery = time.Minute
+	// rateLimitFullSweepEvery is the most often a full table is swept early,
+	// so a flood can't make every request scan the whole table.
+	rateLimitFullSweepEvery = time.Second
 )
 
 // windowCounter is a fixed-window counter per key. Windows line up with the
@@ -76,7 +80,7 @@ func (w *windowCounter) hit(key string, limit int, window time.Duration) (used i
 		}
 		e.window = window
 	} else {
-		if len(w.entries) >= w.maxKeys {
+		if len(w.entries) >= w.maxKeys && now.Sub(w.lastSweep) >= rateLimitFullSweepEvery {
 			w.sweepLocked(now)
 		}
 		if len(w.entries) >= w.maxKeys {
@@ -117,6 +121,15 @@ func (w *windowCounter) overflowLocked(start time.Time, window time.Duration) *w
 		w.overflow = &windowEntry{key: "overflow", windowStart: start, window: window}
 	}
 	return w.overflow
+}
+
+// tracking reports whether key has its own entry, or would get one: false
+// means the table is full and key would land in the overflow bucket.
+func (w *windowCounter) tracking(key string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, ok := w.entries[key]
+	return ok || len(w.entries) < w.maxKeys
 }
 
 // size reports how many keys are tracked.

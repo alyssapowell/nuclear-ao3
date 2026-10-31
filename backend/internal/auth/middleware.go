@@ -49,8 +49,13 @@ type RateLimitHeaders struct {
 // app enforces the limits on its own.
 // Logged-in users and anonymous visitors are counted in separate tables,
 // so a flood of anonymous addresses can't crowd out logged-in readers.
+//
+// If the anonymous table fills up, new visitors are counted by their wider
+// network (IPv4 /24, IPv6 /48) in a smaller second table, so a flood from one
+// place slows down that place, not every new visitor.
 type RateLimitManager struct {
 	anonymous   *windowCounter
+	networks    *windowCounter
 	users       *windowCounter
 	serviceName string
 }
@@ -58,9 +63,22 @@ type RateLimitManager struct {
 func newRateLimitManager(serviceName string) *RateLimitManager {
 	return &RateLimitManager{
 		anonymous:   newWindowCounter(maxRateLimitKeys),
+		networks:    newWindowCounter(maxRateLimitKeys / 10),
 		users:       newWindowCounter(maxRateLimitKeys),
 		serviceName: serviceName,
 	}
+}
+
+// wideNetwork is the coarser address used when the anonymous table is full.
+func wideNetwork(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.Mask(net.CIDRMask(24, 32)).String() + "/24"
+	}
+	return parsed.Mask(net.CIDRMask(48, 128)).String() + "/48"
 }
 
 // clientNetwork is the address a visitor is counted under. IPv6 addresses
@@ -170,6 +188,10 @@ func (rlm *RateLimitManager) CheckRateLimit(clientInfo *ClientRateLimitInfo, cli
 
 	if clientInfo.DetermineRateLimitTier() == RateLimitTierAnonymous {
 		key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientNetwork(clientIP))
+		if !rlm.anonymous.tracking(key) {
+			wide := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), wideNetwork(clientIP))
+			return rlm.checkLimitWithConfig(rlm.networks, wide, config)
+		}
 		return rlm.checkLimitWithConfig(rlm.anonymous, key, config)
 	}
 	key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientInfo.ClientID)
