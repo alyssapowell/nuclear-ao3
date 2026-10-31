@@ -1,151 +1,178 @@
 package email
 
 import (
-	"os"
+	"bufio"
+	"context"
+	"io"
+	"mime"
+	"net"
+	"net/mail"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadConfigFromEnv(t *testing.T) {
-	// Set test environment variables
-	os.Setenv("SMTP_HOST", "test-smtp.local")
-	os.Setenv("SMTP_PORT", "2525")
-	os.Setenv("SMTP_FROM", "test@example.com")
-	os.Setenv("SMTP_FROM_NAME", "Test Sender")
-	defer func() {
-		os.Unsetenv("SMTP_HOST")
-		os.Unsetenv("SMTP_PORT")
-		os.Unsetenv("SMTP_FROM")
-		os.Unsetenv("SMTP_FROM_NAME")
+	t.Setenv("SMTP_HOST", "test-smtp.local")
+	t.Setenv("SMTP_PORT", "2525")
+	t.Setenv("SMTP_FROM", "test@example.com")
+	t.Setenv("SITE_URL", "https://archive.example.org/")
+
+	c := LoadConfigFromEnv()
+	if c.Host != "test-smtp.local" || c.Port != "2525" || c.From != "test@example.com" {
+		t.Errorf("config %+v", c)
+	}
+	if c.SiteURL != "https://archive.example.org" {
+		t.Errorf("SiteURL %q should lose its trailing slash", c.SiteURL)
+	}
+}
+
+// fakeServer is just enough of an SMTP server to receive one message.
+type fakeServer struct {
+	addr string
+	got  chan received
+}
+
+type received struct {
+	to   string
+	data string
+}
+
+func newFakeServer(t *testing.T) *fakeServer {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	s := &fakeServer{addr: ln.Addr().String(), got: make(chan received, 1)}
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		r := bufio.NewReader(conn)
+		say := func(line string) { io.WriteString(conn, line+"\r\n") }
+		say("220 fake")
+		var msg received
+		for {
+			line, err := r.ReadString('\n')
+			if err != nil {
+				return
+			}
+			cmd := strings.ToUpper(strings.TrimSpace(line))
+			switch {
+			case strings.HasPrefix(cmd, "RCPT TO:"):
+				msg.to = strings.TrimSpace(line[len("RCPT TO:"):])
+				say("250 ok")
+			case cmd == "DATA":
+				say("354 go")
+				var b strings.Builder
+				for {
+					l, err := r.ReadString('\n')
+					if err != nil || l == ".\r\n" {
+						break
+					}
+					b.WriteString(l)
+				}
+				msg.data = b.String()
+				say("250 queued")
+				s.got <- msg
+			case cmd == "QUIT":
+				say("221 bye")
+				return
+			default: // EHLO, MAIL FROM
+				say("250 ok")
+			}
+		}
 	}()
+	return s
+}
 
-	config := LoadConfigFromEnv()
+func (s *fakeServer) config() *Config {
+	host, port, _ := net.SplitHostPort(s.addr)
+	return &Config{Host: host, Port: port, From: "noreply@archive.example.org", FromName: "Test Archive",
+		SiteURL: "https://archive.example.org"}
+}
 
-	if config.Host != "test-smtp.local" {
-		t.Errorf("Expected Host to be 'test-smtp.local', got '%s'", config.Host)
+func TestSend(t *testing.T) {
+	s := newFakeServer(t)
+	err := s.config().Send(context.Background(), Message{
+		To:      "reader@example.org",
+		Subject: "New chapter\r\nBcc: everyone@example.org",
+		Text:    "Chapter 2 is up.",
+		HTML:    "<p>Chapter 2 is up.</p>",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if config.Port != "2525" {
-		t.Errorf("Expected Port to be '2525', got '%s'", config.Port)
+	got := <-s.got
+	if got.to != "<reader@example.org>" {
+		t.Errorf("RCPT TO %q", got.to)
 	}
-	if config.From != "test@example.com" {
-		t.Errorf("Expected From to be 'test@example.com', got '%s'", config.From)
+	msg, err := mail.ReadMessage(strings.NewReader(got.data))
+	if err != nil {
+		t.Fatalf("not a valid message: %v\n%s", err, got.data)
 	}
-	if config.FromName != "Test Sender" {
-		t.Errorf("Expected FromName to be 'Test Sender', got '%s'", config.FromName)
+	if msg.Header.Get("Bcc") != "" {
+		t.Error("a line break in the subject added a header")
+	}
+	if subj, _ := new(mime.WordDecoder).DecodeHeader(msg.Header.Get("Subject")); subj != "New chapter Bcc: everyone@example.org" {
+		t.Errorf("subject %q", subj)
+	}
+	if !strings.HasPrefix(msg.Header.Get("Content-Type"), "multipart/alternative") {
+		t.Errorf("content type %q", msg.Header.Get("Content-Type"))
 	}
 }
 
-func TestLoadConfigFromEnv_Defaults(t *testing.T) {
-	// Clear environment variables to test defaults
-	os.Unsetenv("SMTP_HOST")
-	os.Unsetenv("SMTP_PORT")
-	os.Unsetenv("SMTP_FROM")
-	os.Unsetenv("SMTP_FROM_NAME")
-
-	config := LoadConfigFromEnv()
-
-	if config.Host != "mailhog" {
-		t.Errorf("Expected default Host to be 'mailhog', got '%s'", config.Host)
-	}
-	if config.Port != "1025" {
-		t.Errorf("Expected default Port to be '1025', got '%s'", config.Port)
-	}
-	if config.From != "noreply@nuclear-ao3.local" {
-		t.Errorf("Expected default From to be 'noreply@nuclear-ao3.local', got '%s'", config.From)
-	}
-	if config.FromName != "Nuclear AO3" {
-		t.Errorf("Expected default FromName to be 'Nuclear AO3', got '%s'", config.FromName)
-	}
-}
-
-func TestWelcomeEmailTemplate(t *testing.T) {
-	username := "testuser"
-	subject, body := WelcomeEmailTemplate(username)
-
-	if subject != "Welcome to Nuclear AO3!" {
-		t.Errorf("Expected subject 'Welcome to Nuclear AO3!', got '%s'", subject)
-	}
-
-	if !strings.Contains(body, username) {
-		t.Errorf("Expected body to contain username '%s'", username)
-	}
-
-	if !strings.Contains(body, "Nuclear AO3") {
-		t.Error("Expected body to contain 'Nuclear AO3'")
-	}
-
-	if !strings.Contains(body, "Browse and search") {
-		t.Error("Expected body to contain feature highlights")
-	}
-}
-
-func TestWelcomeEmailHTMLTemplate(t *testing.T) {
-	username := "testuser"
-	subject, htmlBody := WelcomeEmailHTMLTemplate(username)
-
-	if subject != "Welcome to Nuclear AO3!" {
-		t.Errorf("Expected subject 'Welcome to Nuclear AO3!', got '%s'", subject)
-	}
-
-	if !strings.Contains(htmlBody, username) {
-		t.Errorf("Expected HTML body to contain username '%s'", username)
-	}
-
-	if !strings.Contains(htmlBody, "<!DOCTYPE html>") {
-		t.Error("Expected HTML body to be valid HTML")
-	}
-
-	if !strings.Contains(htmlBody, "<style>") {
-		t.Error("Expected HTML body to contain styles")
-	}
-
-	if !strings.Contains(htmlBody, "Nuclear AO3") {
-		t.Error("Expected HTML body to contain 'Nuclear AO3'")
-	}
-
-	// Check for feature highlights
-	expectedFeatures := []string{
-		"Browse and search",
-		"Post your own",
-		"Bookmark",
-		"Subscribe",
-		"Engage",
-	}
-
-	for _, feature := range expectedFeatures {
-		if !strings.Contains(htmlBody, feature) {
-			t.Errorf("Expected HTML body to contain feature '%s'", feature)
+func TestSendRefusesBadAddresses(t *testing.T) {
+	c := &Config{Host: "127.0.0.1", Port: "1", From: "noreply@archive.example.org"}
+	for _, to := range []string{"", "not an address", "a@example.org\r\nRCPT TO:<b@example.org>"} {
+		if err := c.Send(context.Background(), Message{To: to, Text: "hi"}); err == nil || !strings.Contains(err.Error(), "recipient") {
+			t.Errorf("%q: %v", to, err)
 		}
 	}
 }
 
-func TestWelcomeEmailHTMLTemplate_Escaping(t *testing.T) {
-	// Test with special characters that should be handled properly
-	username := "test<user>"
-	_, htmlBody := WelcomeEmailHTMLTemplate(username)
-
-	// The username should be in the email
-	if !strings.Contains(htmlBody, username) {
-		t.Errorf("Expected HTML body to contain username '%s'", username)
+func TestSendGivesUpOnASilentServer(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		conn, _ := ln.Accept()
+		if conn != nil {
+			defer conn.Close()
+			time.Sleep(5 * time.Second) // never says hello
+		}
+	}()
+	host, port, _ := net.SplitHostPort(ln.Addr().String())
+	c := &Config{Host: host, Port: port, From: "noreply@archive.example.org"}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	if err := c.Send(ctx, Message{To: "reader@example.org", Text: "hi"}); err == nil {
+		t.Fatal("expected a timeout")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Error("Send waited too long for a server that never answered")
 	}
 }
 
-func TestGetEnv(t *testing.T) {
-	// Test with set environment variable
-	os.Setenv("TEST_VAR", "test_value")
-	defer os.Unsetenv("TEST_VAR")
-
-	value := getEnv("TEST_VAR", "default_value")
-	if value != "test_value" {
-		t.Errorf("Expected 'test_value', got '%s'", value)
+func TestWelcomeEscapesTheUsername(t *testing.T) {
+	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
+	m, err := c.Welcome("new@example.org", `<script>alert(1)</script>`)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// Test with unset environment variable (should return default)
-	value = getEnv("NONEXISTENT_VAR", "default_value")
-	if value != "default_value" {
-		t.Errorf("Expected 'default_value', got '%s'", value)
+	if strings.Contains(m.HTML, "<script>") {
+		t.Error("the username went into the HTML unescaped")
+	}
+	if !strings.Contains(m.HTML, "https://archive.example.org/dashboard") || !strings.Contains(m.Text, "https://archive.example.org/dashboard") {
+		t.Error("the dashboard link should use SITE_URL")
+	}
+	if m.To != "new@example.org" || m.Subject != "Welcome to Test Archive!" {
+		t.Errorf("%+v", m)
 	}
 }
-
-// Note: We don't test actual email sending here because it requires an SMTP server
-// Those tests should be integration tests, not unit tests

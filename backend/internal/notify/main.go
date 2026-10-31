@@ -3,7 +3,6 @@ package notify
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,18 +15,17 @@ import (
 	"github.com/gorilla/websocket"
 	_ "github.com/lib/pq"
 
-	"nuclear-ao3/shared/messaging"
+	"nuclear-ao3/shared/email"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
 
 type NotificationService struct {
-	db               *sql.DB
-	notificationSvc  *NotificationServiceExtended
-	messagingService messaging.MessageService
-	wsUpgrader       websocket.Upgrader
-	wsClients        map[string]*websocket.Conn // userID -> connection
-	wsBroadcast      chan []byte
+	db              *sql.DB
+	notificationSvc *NotificationServiceExtended
+	wsUpgrader      websocket.Upgrader
+	wsClients       map[string]*websocket.Conn // userID -> connection
+	wsBroadcast     chan []byte
 }
 
 // NotificationServiceExtended adds additional methods to the notification service
@@ -70,16 +68,9 @@ func (ns *NotificationServiceExtended) DeleteSubscription(ctx context.Context, s
 	return ns.subscriptionRepo.DeleteSubscription(ctx, subscriptionID)
 }
 
-// New builds the notification service on the shared database.
-func New(db *sql.DB) *NotificationService {
-	messagingService := messaging.NewUniversalMessageService(
-		nil, // telemetry
-		&messaging.SimpleMessageValidator{},
-		messaging.NewSimpleRateLimiter(),
-		nil, // messageRepo: optional; without it sent messages aren't stored
-		nil, // attemptRepo: optional; without it delivery attempts aren't stored
-		nil, // preferenceService: optional; without it everyone gets default channels
-	)
+// New builds the notification service on the shared database. Notification
+// emails are sent through mail; nil turns them off.
+func New(db *sql.DB, mail *email.Config) *NotificationService {
 
 	subscriptionRepo := NewSubscriptionRepository(db)
 	notificationRepo := NewNotificationRepository(db)
@@ -87,7 +78,7 @@ func New(db *sql.DB) *NotificationService {
 	preferenceRepo := NewPreferenceRepository(db)
 
 	coreNotificationSvc := notifications.NewNotificationService(
-		messagingService,
+		&mailSender{db: db, cfg: mail},
 		subscriptionRepo,
 		notificationRepo,
 		digestRepo,
@@ -121,7 +112,6 @@ func New(db *sql.DB) *NotificationService {
 			notificationRepo:    notificationRepo,
 			preferenceRepo:      preferenceRepo,
 		},
-		messagingService: messagingService,
 		wsUpgrader: websocket.Upgrader{
 			// Same-origin connections have an Origin matching the Host.
 			CheckOrigin: func(r *http.Request) bool {
@@ -188,17 +178,6 @@ func getEnvBool(key string, defaultValue bool) bool {
 		}
 	}
 	return defaultValue
-}
-
-// HandleEvent processes an event from another part of the app: it sends the
-// welcome email for new accounts and notifies subscribers.
-func (s *NotificationService) HandleEvent(ctx context.Context, ev *notifications.EventData) {
-	if ev.Type == "user_registered" {
-		s.sendWelcomeEmail(ev)
-	}
-	if err := s.notificationSvc.ProcessEvent(ctx, ev); err != nil {
-		log.Printf("notification event %s failed: %v", ev.Type, err)
-	}
 }
 
 // Notifier returns the notification engine other packages send events to.

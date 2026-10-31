@@ -65,7 +65,24 @@ If it **has real data**:
 ### Notifications aren't arriving
 
 1. In-app notifications: check that the app log has no `PANIC while processing` lines.
-2. Email: the log says `Failed to send` with the reason. Usually the mail server settings (`SMTP_HOST`, `SMTP_PORT`) are wrong.
+2. Email: see "Emails aren't arriving" below.
+
+### Emails aren't arriving
+
+Every email (welcome emails, notification emails) is a background job. If the mail server is down, the app keeps the email and tries again: after 30 seconds, then 1 minute, 2, 4, and so on, for about four hours. Nothing is lost while it waits.
+
+1. See what's happening: `make jobs`. It shows how many emails are waiting and failed, and why the latest ones failed.
+2. The reason is usually the mail server settings: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` in `.env`. Fix them and restart the app: `docker compose up -d app`. Waiting emails go out on their next try.
+3. Emails that gave up (after about four hours) stay listed as failed. Once mail works again, send them all with `make jobs-retry`, or one with `make jobs-retry ID=<id>`.
+4. If links in emails point to the wrong address, set `SITE_URL` in `.env` to the archive's public address, such as `https://archive.example.org`.
+
+### Background jobs are piling up
+
+`make jobs` shows a large WAITING count and an old OLDEST WAITING time.
+
+- If the failures show the same error over and over, fix that first (for email, see above). Retrying doesn't help until the cause is fixed.
+- If jobs are succeeding but slowly, run more at once: set `JOB_WORKERS` in `.env` (default 2) and restart the app.
+- A job that was running when the app stopped is picked up again after 10 minutes. You don't need to do anything.
 
 ### Search doesn't find a work
 

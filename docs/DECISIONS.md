@@ -48,6 +48,15 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - Removed endpoints: tag, user, collection and series search; "advanced" and "smart" search; facets; quality analysis; popular and trending terms; search history; saved searches and alerts; search analytics; index management. Nothing on the website used them, and AO3 has none of them except tag and people search, which can come back as plain queries when the website needs them.
 - Filter counts are exact, computed over every matching work. Paging stops at result 10,000. At AO3's size (millions of works), broad searches will need measuring: if counting gets slow, count over the top few thousand results instead.
 
+**How background jobs were done (2026-10-30):** Jobs live in a `jobs` table (migration 029), and the app runs them itself (`backend/internal/jobs`, about 250 lines). There's no separate worker program or queue server.
+- A job is added in the same database transaction as the change that caused it. A new account and its welcome email are saved together: if the account fails to save, no email exists, and once it's saved the email can't be lost.
+- A failed job is retried after 30 seconds, then 1, 2, 4 minutes and so on, for 10 tries (about four hours). Then it's marked failed and kept, with its error, until someone retries it.
+- Any number of copies of the app can run jobs at once without doing one twice (`FOR UPDATE SKIP LOCKED`). A job whose worker died is picked up again after 10 minutes, so a job must be safe to run twice.
+- `nuclear jobs` shows what's waiting, running and failed, and why. `nuclear jobs retry [id]` sends failed jobs again.
+- Email is the first kind of job. `shared/email` sends it: a 30-second limit per email, TLS whenever the mail server offers it, a password only over TLS, and headers built so nothing in a title or username can add headers. Notification emails are plain text, because they quote titles and names anyone can write.
+- Removed: `shared/messaging`, about 4,900 lines for channels, templates, telemetry and rate limits. Nothing was registered with it, so it delivered nothing, and no notification email was ever sent.
+- Still to move onto the queue: exports (still a stub) and notification batching, which keeps waiting notifications in memory and loses them on restart.
+
 ## 2026-10-29: One Go binary instead of six services and a gateway
 
 **Decision:** Merge auth, works, tags, search, notifications and export into one Go program with one package per area. Remove the API gateway and GraphQL.

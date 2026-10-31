@@ -1,12 +1,11 @@
 package auth
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 
 	"nuclear-ao3/internal/platform"
-	"nuclear-ao3/shared/notifications"
+	"nuclear-ao3/shared/email"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -115,10 +114,10 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 
 // AuthService holds all dependencies for authentication
 type AuthService struct {
-	db      *sql.DB
-	redis   *redis.Client
-	jwt     *JWTManager
-	onEvent func(context.Context, *notifications.EventData) // nil until SetEventHandler
+	db    *sql.DB
+	redis *redis.Client
+	jwt   *JWTManager
+	mail  *email.Config // nil until SetMail: no emails are sent
 }
 
 // New builds the auth service on top of the shared database and Redis.
@@ -134,9 +133,10 @@ func New(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
 	return &AuthService{db: db, redis: rdb, jwt: jwtManager}, nil
 }
 
-// SetEventHandler sets where account events (like registration) are sent.
-func (as *AuthService) SetEventHandler(h func(context.Context, *notifications.EventData)) {
-	as.onEvent = h
+// SetMail turns on account emails (such as the welcome email), sent from
+// and with links to the archive described by cfg.
+func (as *AuthService) SetMail(cfg *email.Config) {
+	as.mail = cfg
 }
 
 // ValidateUserToken checks a login token and returns the user it belongs to.

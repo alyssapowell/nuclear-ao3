@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"nuclear-ao3/shared/messaging"
 	"nuclear-ao3/shared/models"
 )
 
@@ -123,30 +122,6 @@ type mockMessageService struct{}
 func (m *mockMessageService) SendMessage(ctx context.Context, message *models.Message) error {
 	// Just return success for testing
 	return nil
-}
-
-func (m *mockMessageService) ScheduleMessage(ctx context.Context, msg *models.Message, deliverAt time.Time) error {
-	return nil
-}
-
-func (m *mockMessageService) GetMessageStatus(ctx context.Context, messageID string) (*messaging.MessageStatus, error) {
-	return nil, nil
-}
-
-func (m *mockMessageService) RetryFailedDeliveries(ctx context.Context, messageID string) error {
-	return nil
-}
-
-func (m *mockMessageService) GetMetrics(ctx context.Context, start, end time.Time) (*models.MessageMetrics, error) {
-	return nil, nil
-}
-
-func (m *mockMessageService) RegisterChannelProvider(provider messaging.ChannelProvider) error {
-	return nil
-}
-
-func (m *mockMessageService) GetAvailableChannels(ctx context.Context) []models.DeliveryChannel {
-	return []models.DeliveryChannel{models.ChannelEmail, models.ChannelInApp}
 }
 
 func TestNotificationServiceCreation(t *testing.T) {

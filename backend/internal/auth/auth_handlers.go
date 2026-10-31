@@ -1,12 +1,12 @@
 package auth
 
 import (
-	"context"
+	"log"
 	"net/http"
 	"time"
 
+	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/shared/models"
-	"nuclear-ao3/shared/notifications"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -39,9 +39,31 @@ func (as *AuthService) Register(c *gin.Context) {
 		INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, true, false, $6, $7)`
 
-	_, err = as.db.Exec(query, userID, req.Username, req.Email, string(hashedPassword), req.DisplayName, now, now)
+	// The account and its welcome email are saved together: the email is
+	// sent if and only if the account exists.
+	tx, err := as.db.BeginTx(c, nil)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(query, userID, req.Username, req.Email, string(hashedPassword), req.DisplayName, now, now); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user_exists"})
+		return
+	}
+	if as.mail != nil {
+		msg, err := as.mail.Welcome(req.Email, req.Username)
+		if err == nil {
+			err = jobs.Enqueue(c, tx, "email", msg)
+		}
+		if err != nil {
+			log.Printf("register: queue welcome email: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
 
@@ -62,19 +84,6 @@ func (as *AuthService) Register(c *gin.Context) {
 		IsVerified:  false,
 		CreatedAt:   now,
 		UpdatedAt:   now,
-	}
-
-	// Send the welcome email in the background so registration doesn't wait.
-	if as.onEvent != nil {
-		go as.onEvent(context.Background(), &notifications.EventData{
-			Type:       models.NotificationEvent("user_registered"),
-			SourceID:   userID,
-			SourceType: "user",
-			ExtraData: map[string]interface{}{
-				"username": req.Username,
-				"email":    req.Email,
-			},
-		})
 	}
 
 	c.JSON(http.StatusCreated, models.AuthResponse{

@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"nuclear-ao3/shared/email"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -453,11 +452,6 @@ func (s *NotificationService) processEvent(c *gin.Context) {
 		return
 	}
 
-	// Handle user_registered event with welcome email
-	if eventData.Type == "user_registered" {
-		go s.sendWelcomeEmail(&eventData)
-	}
-
 	err := s.notificationSvc.ProcessEvent(context.Background(), &eventData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process event"})
@@ -465,24 +459,6 @@ func (s *NotificationService) processEvent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
-}
-
-// sendWelcomeEmail sends a welcome email to a newly registered user
-func (s *NotificationService) sendWelcomeEmail(eventData *notifications.EventData) {
-	username, ok1 := eventData.ExtraData["username"].(string)
-	userEmail, ok2 := eventData.ExtraData["email"].(string)
-
-	if !ok1 || !ok2 || userEmail == "" || username == "" {
-		log.Printf("Cannot send welcome email: missing username or email in event data")
-		return
-	}
-
-	subject, htmlBody := email.WelcomeEmailHTMLTemplate(username)
-	if err := email.SendHTMLEmail(userEmail, subject, htmlBody); err != nil {
-		log.Printf("Failed to send welcome email to %s: %v", userEmail, err)
-	} else {
-		log.Printf("Welcome email sent successfully to %s <%s>", username, userEmail)
-	}
 }
 
 // Helper methods

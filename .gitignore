@@ -168,7 +168,6 @@ backend/**/*-binary
 backend/**/*-enhanced
 backend/**/*-with-dashboard
 backend/example
-backend/shared/messaging/example/test-messaging
 backend/work-service/test-main
 frontend/src/data/massive-ao3-dataset.json
 tools/*-data.json

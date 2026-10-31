@@ -75,6 +75,8 @@ services:
       - SMTP_PORT=1025
       - SMTP_FROM=${SMTP_FROM:-noreply@nuclear-ao3.local}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
+      - SITE_URL=${SITE_URL:-http://localhost}
+      - JOB_WORKERS=${JOB_WORKERS:-2}
     ports:
       # Published on localhost only, for `npm run dev` in frontend/. Caddy is
       # the public entrance.
@@ -97,7 +99,7 @@ services:
   # Development: MailHog (catches emails, web UI at http://localhost:8025)
   # Production-like: Use the same image but it will relay emails
   smtp:
-    image: mailhog/mailhog:latest
+    image: mailhog/mailhog:v1.0.1
     container_name: nuclear-ao3-smtp
     ports:
       - "127.0.0.1:1025:1025"  # SMTP server (services connect here)

@@ -18,7 +18,7 @@ Status key:
 - **Register, log in, log out, password reset, email verification**
   - Intent: standard accounts that work without JavaScript tricks or third-party login.
   - Status: Works (verified 2026-10-29 against a local database: register, log in, authenticated requests).
-  - Welcome emails were **never sent** before the merge: registration posted to a `/api/events` route that didn't exist. They are now sent directly (seen in logs; not yet verified against a real mail server).
+  - Welcome emails were **never sent** before the merge: registration posted to a `/api/events` route that didn't exist. Since 2026-10-30 the welcome email is queued with the new account and sent through SMTP (verified against a local mail server). The username is escaped in it, and its link uses `SITE_URL`. AO3 itself sends an activation email instead; this becomes that when email verification is built.
 - **Sessions and security log**: see and revoke your active sessions, and see recent security events.
   - Intent _(inferred)_: let users notice and stop account takeover themselves.
   - Status: Unverified.
@@ -83,7 +83,9 @@ Status key:
 - **In-app notifications, unread count, live updates over WebSocket**
   - Status: Unverified. Fixed 2026-10-29: the frontend called the wrong port, and auth accepted any token plus an `X-User-ID` header. Known issue: the WebSocket client list isn't protected by a lock, so simultaneous connections can race.
 - **Notification preferences and rules; email notifications**
-  - Status: Unverified.
+  - Status: preferences and rules unverified. Emails were **never sent**: the delivery framework had no email sender registered. Since 2026-10-30 they're queued as background jobs and sent through SMTP, with retries; the sending and retry path is tested against a local mail server, but no notification email has been checked end to end yet.
+  - Known issue: when batching is on (the default, `ENABLE_BATCHING`), waiting notifications are kept in memory and lost if the app restarts.
+  - Known issue: comment notification links go to `/works/<id>/comments/<id>`, which the website has no page for.
 - **Subscriptions** to works, authors and series.
   - Status: Unverified. There used to be two copies; the notification-service copy was removed and the works copy (the one the frontend uses) stays.
 
@@ -163,6 +165,14 @@ These were fixed by merging the backend into one program with one login check (`
 - ~~The login and sign-up pages followed any `?redirect=` address~~, so a crafted link could send people to another site after they logged in, or run code in their session with `javascript:`. **Fixed 2026-10-30:** only addresses on this site are followed (`safeRedirect` in `frontend/src/utils/auth.ts`).
 
 ### Still open
+
+- **Most account security is placeholder code that reports success without doing anything** (found 2026-10-30, `backend/internal/auth/auth_handlers.go`):
+  - Password reset, reset confirmation, email verification and resend do nothing, and no email is sent. Someone who forgets their password can't get back in.
+  - **Change password says it worked but doesn't change anything.** Someone who thinks their account is compromised would believe they'd secured it.
+  - Logout revokes nothing. Login tokens last 30 days and can't be cancelled, so a stolen token works until it expires.
+  - Token refresh always fails (it checks for the literal string `dummy_refresh_token`, then needs a login the route doesn't have).
+  - Profile view/edit, session list/revoke, security events, and the admin user and role endpoints are stubs. Granting roles works only through `nuclear grant`.
+  - Plan: build these for real after background jobs, because reset and verification emails need delivery that retries.
 
 - **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
 - **The works service logs SQL details and other debug output** at startup and on every request.

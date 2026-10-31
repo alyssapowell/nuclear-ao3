@@ -1,7 +1,7 @@
 # Nuclear AO3 Development Makefile
 # Provides convenient commands for database management, testing, and development
 
-.PHONY: help migrate migrate-status seed grant db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
+.PHONY: help migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
 
 # Default target
 help: ## Show this help message
@@ -49,6 +49,12 @@ seed: ## Load sample accounts and works for development (password: password123)
 grant: ## Give an account a role: make grant USER=name ROLE=admin|moderator|tag_wrangler
 	@if [ -z "$(USER)" ] || [ -z "$(ROLE)" ]; then echo "usage: make grant USER=name ROLE=admin"; exit 1; fi
 	@docker-compose run --rm app nuclear grant $(USER) $(ROLE)
+
+jobs: ## Show background jobs (emails): waiting, running, failed, and why
+	@docker-compose run --rm app nuclear jobs
+
+jobs-retry: ## Send failed background jobs again: make jobs-retry (all) or make jobs-retry ID=42
+	@docker-compose run --rm app nuclear jobs retry $(ID)
 
 db-populate: ## Populate databases with test data (requires clean DB)
 	@echo "📚 Populating databases with test data..."

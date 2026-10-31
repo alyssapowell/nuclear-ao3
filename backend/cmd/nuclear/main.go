@@ -10,6 +10,10 @@
 //	METRICS_ADDR       where Prometheus metrics are served (default :9091);
 //	                   keep this port private
 //	STATIC_DIR         optional folder of built frontend files to serve
+//	SITE_URL           the archive's public address, for links in emails
+//	SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USERNAME, SMTP_PASSWORD
+//	                   the mail server emails are sent through
+//	JOB_WORKERS        how many background jobs run at once (default 2)
 //	MIGRATE_ON_START   set to "false" to skip applying database migrations
 //	                   at startup (then run "nuclear migrate" yourself)
 //
@@ -18,6 +22,10 @@
 //	nuclear                   run the server (applies pending migrations first)
 //	nuclear migrate           apply pending migrations and exit
 //	nuclear migrate status    list migrations that haven't been applied
+//	nuclear jobs              show background jobs: how many are waiting,
+//	                          running and failed, and the latest failures
+//	nuclear jobs retry [id]   put a failed job (or, with no id, every failed
+//	                          job) back in the queue
 //	nuclear grant <username> <role>
 //	                          give an existing account a role: admin,
 //	                          moderator or tag_wrangler. This is how a new
@@ -28,6 +36,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -35,6 +44,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -46,12 +56,14 @@ import (
 
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/export"
+	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
 	"nuclear-ao3/internal/tags"
 	"nuclear-ao3/internal/works"
 	"nuclear-ao3/migrations"
+	"nuclear-ao3/shared/email"
 )
 
 func main() {
@@ -87,9 +99,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
-	notifySvc := notify.New(db)
+	mail := email.LoadConfigFromEnv()
+	notifySvc := notify.New(db, mail)
 	worksSvc.SetNotifier(notifySvc.Notifier())
-	authSvc.SetEventHandler(notifySvc.HandleEvent)
+	authSvc.SetMail(mail)
 	notifySvc.Start()
 	exportSvc := export.New(db)
 	exportSvc.Start()
@@ -122,6 +135,8 @@ func main() {
 
 	go serveMetrics(platform.Env("METRICS_ADDR", ":9091"))
 
+	stopWorkers := startWorkers(db, mail)
+
 	srv := &http.Server{
 		Addr:              ":" + platform.Env("PORT", "8080"),
 		Handler:           r,
@@ -146,6 +161,39 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)
+	}
+	stopWorkers()
+}
+
+// startWorkers runs background jobs until the returned function is called.
+// That function waits for jobs that are running to finish.
+func startWorkers(db *sql.DB, mail *email.Config) (stop func()) {
+	q := jobs.New(db)
+	q.Handle("email", func(ctx context.Context, payload json.RawMessage) error {
+		var m email.Message
+		if err := json.Unmarshal(payload, &m); err != nil {
+			return err
+		}
+		return mail.Send(ctx, m)
+	})
+
+	n, err := strconv.Atoi(platform.Env("JOB_WORKERS", "2"))
+	if err != nil || n < 1 {
+		log.Fatalf("startup: JOB_WORKERS must be a number of at least 1")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	for i := 0; i < n; i++ {
+		go func() {
+			q.Run(ctx)
+			done <- struct{}{}
+		}()
+	}
+	return func() {
+		cancel()
+		for i := 0; i < n; i++ {
+			<-done
+		}
 	}
 }
 
@@ -176,6 +224,24 @@ func runCommand(db *sql.DB, args []string) int {
 			fmt.Println("pending:", v)
 		}
 		return 0
+	case args[0] == "jobs" && len(args) == 1:
+		return showJobs(ctx, db)
+	case args[0] == "jobs" && args[1] == "retry" && len(args) <= 3:
+		var id int64
+		if len(args) == 3 {
+			var err error
+			if id, err = strconv.ParseInt(args[2], 10, 64); err != nil {
+				log.Printf("jobs retry: %q is not a job id", args[2])
+				return 2
+			}
+		}
+		n, err := jobs.Retry(ctx, db, id)
+		if err != nil {
+			log.Printf("jobs retry: %v", err)
+			return 1
+		}
+		log.Printf("jobs retry: %d job(s) queued again", n)
+		return 0
 	case len(args) == 3 && args[0] == "grant":
 		if err := grantRole(ctx, db, args[1], args[2]); err != nil {
 			log.Printf("grant: %v", err)
@@ -184,9 +250,52 @@ func runCommand(db *sql.DB, args []string) int {
 		log.Printf("grant: %s now has the %s role", args[1], args[2])
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | grant <username> <role>]\n", strings.Join(args, " "))
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | grant <username> <role>]\n", strings.Join(args, " "))
 		return 2
 	}
+}
+
+// showJobs prints what the background job queue is doing.
+func showJobs(ctx context.Context, db *sql.DB) int {
+	summary, err := jobs.Summarize(ctx, db)
+	if err != nil {
+		log.Printf("jobs: %v", err)
+		return 1
+	}
+	if len(summary) == 0 {
+		fmt.Println("no jobs")
+	}
+	fmt.Printf("%-12s %8s %8s %8s  %s\n", "KIND", "WAITING", "RUNNING", "FAILED", "OLDEST WAITING")
+	for _, s := range summary {
+		oldest := "-"
+		if s.Oldest != nil {
+			oldest = time.Since(*s.Oldest).Round(time.Second).String() + " ago"
+			if s.Oldest.After(time.Now()) {
+				oldest = "retrying in " + time.Until(*s.Oldest).Round(time.Second).String()
+			}
+		}
+		fmt.Printf("%-12s %8d %8d %8d  %s\n", s.Kind, s.Waiting, s.Running, s.Failed, oldest)
+	}
+	failures, err := jobs.Failures(ctx, db, 20)
+	if err != nil {
+		log.Printf("jobs: %v", err)
+		return 1
+	}
+	if len(failures) > 0 {
+		fmt.Println("\nlatest failures (retry with: nuclear jobs retry <id>, or all with: nuclear jobs retry):")
+	}
+	for _, f := range failures {
+		fmt.Printf("  #%d %s, gave up %s after %d attempts: %s\n", f.ID, f.Kind,
+			f.FailedAt.Format(time.RFC3339), f.Attempts, firstLine(f.Error))
+	}
+	return 0
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // grantRole gives an existing user a role, or restores it if it was revoked.

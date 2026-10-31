@@ -1,108 +1,60 @@
+// Package email sends mail over SMTP.
+//
+// Nothing calls Send directly from a web request: emails are queued as
+// "email" jobs (see internal/jobs), so a slow or broken mail server delays
+// mail instead of breaking pages, and a message that couldn't be sent is
+// retried and, if it keeps failing, shows up in `nuclear jobs`.
 package email
 
 import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"html/template"
+	"io"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
+	"net"
+	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"os"
 	"strings"
+	"time"
 )
 
-// EmailConfig holds SMTP configuration
-type EmailConfig struct {
+// Config is where mail is sent from and through.
+type Config struct {
 	Host     string
 	Port     string
 	From     string
 	FromName string
 	Username string
 	Password string
+	// SiteURL is the archive's public address, for links in emails, such
+	// as https://archive.example.org (no trailing slash).
+	SiteURL string
 }
 
-// LoadConfigFromEnv loads email configuration from environment variables
-func LoadConfigFromEnv() *EmailConfig {
-	return &EmailConfig{
+// LoadConfigFromEnv reads SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_FROM_NAME,
+// SMTP_USERNAME, SMTP_PASSWORD and SITE_URL.
+func LoadConfigFromEnv() *Config {
+	return &Config{
 		Host:     getEnv("SMTP_HOST", "mailhog"),
 		Port:     getEnv("SMTP_PORT", "1025"),
 		From:     getEnv("SMTP_FROM", "noreply@nuclear-ao3.local"),
 		FromName: getEnv("SMTP_FROM_NAME", "Nuclear AO3"),
 		Username: getEnv("SMTP_USERNAME", ""),
 		Password: getEnv("SMTP_PASSWORD", ""),
+		SiteURL:  strings.TrimRight(getEnv("SITE_URL", "http://localhost:8080"), "/"),
 	}
 }
 
-// SendEmail sends a simple text email
-func SendEmail(to, subject, body string) error {
-	config := LoadConfigFromEnv()
-	return SendEmailWithConfig(config, to, subject, body)
-}
-
-// SendEmailWithConfig sends an email using the provided configuration
-func SendEmailWithConfig(config *EmailConfig, to, subject, body string) error {
-	// Build the email message
-	from := config.From
-	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
-	}
-
-	message := []byte(fmt.Sprintf(
-		"From: %s\r\n"+
-			"To: %s\r\n"+
-			"Subject: %s\r\n"+
-			"MIME-Version: 1.0\r\n"+
-			"Content-Type: text/plain; charset=UTF-8\r\n"+
-			"\r\n"+
-			"%s",
-		from, to, subject, body,
-	))
-
-	// Setup SMTP server address
-	addr := fmt.Sprintf("%s:%s", config.Host, config.Port)
-
-	// For MailHog (development), no auth needed
-	// For production SMTP, use authentication
-	var auth smtp.Auth
-	if config.Username != "" && config.Password != "" {
-		auth = smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	}
-
-	// Send the email
-	return smtp.SendMail(addr, auth, config.From, []string{to}, message)
-}
-
-// SendHTMLEmail sends an HTML email
-func SendHTMLEmail(to, subject, htmlBody string) error {
-	config := LoadConfigFromEnv()
-	return SendHTMLEmailWithConfig(config, to, subject, htmlBody)
-}
-
-// SendHTMLEmailWithConfig sends an HTML email using the provided configuration
-func SendHTMLEmailWithConfig(config *EmailConfig, to, subject, htmlBody string) error {
-	from := config.From
-	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
-	}
-
-	message := []byte(fmt.Sprintf(
-		"From: %s\r\n"+
-			"To: %s\r\n"+
-			"Subject: %s\r\n"+
-			"MIME-Version: 1.0\r\n"+
-			"Content-Type: text/html; charset=UTF-8\r\n"+
-			"\r\n"+
-			"%s",
-		from, to, subject, htmlBody,
-	))
-
-	addr := fmt.Sprintf("%s:%s", config.Host, config.Port)
-
-	var auth smtp.Auth
-	if config.Username != "" && config.Password != "" {
-		auth = smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	}
-
-	return smtp.SendMail(addr, auth, config.From, []string{to}, message)
-}
-
-// Helper function to get environment variable with default
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -110,77 +62,201 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// WelcomeEmailTemplate generates a welcome email
-func WelcomeEmailTemplate(username string) (subject, body string) {
-	subject = "Welcome to Nuclear AO3!"
-	body = fmt.Sprintf(`Hello %s!
-
-Welcome to Nuclear AO3, the fast and modern fanfiction archive!
-
-Your account has been successfully created. You can now:
-- Browse and search thousands of works
-- Post your own fanfiction
-- Bookmark your favorite stories
-- Subscribe to authors and series
-- Engage with the community through comments and kudos
-
-Get started by visiting your dashboard and exploring what our community has to offer!
-
-Happy reading and writing!
-
-- The Nuclear AO3 Team
-
----
-This is an automated message. Please do not reply to this email.`, username)
-	return
+// Message is one email. Text is required; HTML is optional and is sent as
+// an alternative to it.
+type Message struct {
+	To      string `json:"to"`
+	Subject string `json:"subject"`
+	Text    string `json:"text"`
+	HTML    string `json:"html,omitempty"`
 }
 
-// WelcomeEmailHTMLTemplate generates a welcome email in HTML format
-func WelcomeEmailHTMLTemplate(username string) (subject, htmlBody string) {
-	subject = "Welcome to Nuclear AO3!"
-	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
+// timeout bounds a whole send, from connecting to the last byte, when the
+// caller's context has no deadline of its own.
+const timeout = 30 * time.Second
+
+// Send delivers m. It uses TLS when the server offers it (STARTTLS), or
+// throughout on port 465, and only sends a password over TLS (or to a
+// server on this machine).
+func (c *Config) Send(ctx context.Context, m Message) error {
+	to, err := mail.ParseAddress(m.To)
+	if err != nil {
+		return fmt.Errorf("bad recipient %q: %w", m.To, err)
+	}
+	from, err := mail.ParseAddress(c.From)
+	if err != nil {
+		return fmt.Errorf("bad SMTP_FROM %q: %w", c.From, err)
+	}
+	body, err := c.build(from.Address, to.Address, m)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	addr := net.JoinHostPort(c.Host, c.Port)
+	var conn net.Conn
+	if c.Port == "465" {
+		conn, err = (&tls.Dialer{Config: &tls.Config{ServerName: c.Host}}).DialContext(ctx, "tcp", addr)
+	} else {
+		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	}
+	if err != nil {
+		return fmt.Errorf("connect to mail server %s: %w", addr, err)
+	}
+	defer conn.Close()
+	deadline, _ := ctx.Deadline()
+	conn.SetDeadline(deadline)
+
+	client, err := smtp.NewClient(conn, c.Host)
+	if err != nil {
+		return fmt.Errorf("mail server %s: %w", addr, err)
+	}
+	defer client.Close()
+	if ok, _ := client.Extension("STARTTLS"); ok && c.Port != "465" {
+		if err := client.StartTLS(&tls.Config{ServerName: c.Host}); err != nil {
+			return fmt.Errorf("mail server %s: STARTTLS: %w", addr, err)
+		}
+	}
+	if c.Username != "" {
+		// PlainAuth refuses to send the password without TLS unless the
+		// server is localhost.
+		if err := client.Auth(smtp.PlainAuth("", c.Username, c.Password, c.Host)); err != nil {
+			return fmt.Errorf("mail server %s: login: %w", addr, err)
+		}
+	}
+	if err := client.Mail(from.Address); err != nil {
+		return fmt.Errorf("mail server %s refused sender: %w", addr, err)
+	}
+	if err := client.Rcpt(to.Address); err != nil {
+		return fmt.Errorf("mail server %s refused recipient: %w", addr, err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("mail server %s: %w", addr, err)
+	}
+	if _, err := w.Write(body); err != nil {
+		return fmt.Errorf("mail server %s: %w", addr, err)
+	}
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("mail server %s didn't accept the message: %w", addr, err)
+	}
+	return client.Quit()
+}
+
+// build writes the message with its headers. Every header value is either
+// a parsed address or encoded, so nothing in a subject or name can add
+// headers of its own.
+func (c *Config) build(fromAddr, toAddr string, m Message) ([]byte, error) {
+	if strings.TrimSpace(m.Text) == "" {
+		return nil, errors.New("email has no text")
+	}
+	var buf bytes.Buffer
+	header := func(k, v string) { fmt.Fprintf(&buf, "%s: %s\r\n", k, v) }
+	header("From", (&mail.Address{Name: c.FromName, Address: fromAddr}).String())
+	header("To", (&mail.Address{Address: toAddr}).String())
+	header("Subject", mime.QEncoding.Encode("utf-8", oneLine(m.Subject)))
+	header("Date", time.Now().Format(time.RFC1123Z))
+	header("Message-ID", "<"+randomID()+"@"+domain(fromAddr)+">")
+	header("MIME-Version", "1.0")
+
+	if m.HTML == "" {
+		header("Content-Type", "text/plain; charset=utf-8")
+		header("Content-Transfer-Encoding", "quoted-printable")
+		buf.WriteString("\r\n")
+		err := writeQP(&buf, m.Text)
+		return buf.Bytes(), err
+	}
+
+	mw := multipart.NewWriter(&buf)
+	header("Content-Type", "multipart/alternative; boundary="+mw.Boundary())
+	buf.WriteString("\r\n")
+	for _, part := range []struct{ kind, body string }{{"text/plain", m.Text}, {"text/html", m.HTML}} {
+		w, err := mw.CreatePart(textproto.MIMEHeader{
+			"Content-Type":              {part.kind + "; charset=utf-8"},
+			"Content-Transfer-Encoding": {"quoted-printable"},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err := writeQP(w, part.body); err != nil {
+			return nil, err
+		}
+	}
+	err := mw.Close()
+	return buf.Bytes(), err
+}
+
+func writeQP(w io.Writer, s string) error {
+	qp := quotedprintable.NewWriter(w)
+	if _, err := qp.Write([]byte(s)); err != nil {
+		return err
+	}
+	return qp.Close()
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}
+
+func randomID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func domain(addr string) string {
+	if i := strings.LastIndex(addr, "@"); i >= 0 {
+		return addr[i+1:]
+	}
+	return "localhost"
+}
+
+var welcomeHTML = template.Must(template.New("welcome").Parse(`<!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #ea580c 0%%, #fb923c 100%%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-        .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px; }
-        .button { display: inline-block; padding: 12px 24px; background: #ea580c; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
-        ul { padding-left: 20px; }
-        li { margin: 8px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1 style="margin: 0; font-size: 28px;">🚀 Welcome to Nuclear AO3!</h1>
-        </div>
-        <div class="content">
-            <h2>Hello %s!</h2>
-            <p>We're excited to have you join our community! Your account has been successfully created.</p>
-            
-            <h3>What you can do now:</h3>
-            <ul>
-                <li>📚 <strong>Browse and search</strong> thousands of fanfiction works</li>
-                <li>✍️ <strong>Post your own</strong> stories and share your creativity</li>
-                <li>🔖 <strong>Bookmark</strong> your favorite works for easy access</li>
-                <li>🔔 <strong>Subscribe</strong> to authors and series you love</li>
-                <li>💬 <strong>Engage</strong> with the community through comments and kudos</li>
-            </ul>
-            
-            <p style="margin-top: 30px;">Ready to get started?</p>
-            <center>
-                <a href="http://localhost:3000/dashboard" class="button">Visit Your Dashboard</a>
-            </center>
-        </div>
-        <div class="footer">
-            <p>This is an automated message from Nuclear AO3. Please do not reply to this email.</p>
-        </div>
-    </div>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2>Hello {{.Username}}!</h2>
+  <p>Your account has been created. You can now:</p>
+  <ul>
+    <li>Browse and search works</li>
+    <li>Post your own works</li>
+    <li>Bookmark works you love</li>
+    <li>Subscribe to creators, works and series</li>
+    <li>Leave comments and kudos</li>
+  </ul>
+  <p><a href="{{.Dashboard}}" style="display: inline-block; padding: 12px 24px; background: #ea580c; color: white; text-decoration: none; border-radius: 6px;">Visit your dashboard</a></p>
+  <p style="color: #6b7280; font-size: 12px;">This is an automated message. Please do not reply to it.</p>
 </body>
-</html>`, strings.TrimSpace(username))
-	return
+</html>`))
+
+// Welcome is the email sent to a new account.
+func (c *Config) Welcome(to, username string) (Message, error) {
+	username = strings.TrimSpace(username)
+	dashboard := c.SiteURL + "/dashboard"
+	var html bytes.Buffer
+	if err := welcomeHTML.Execute(&html, map[string]string{"Username": username, "Dashboard": dashboard}); err != nil {
+		return Message{}, err
+	}
+	return Message{
+		To:      to,
+		Subject: "Welcome to " + c.FromName + "!",
+		Text: fmt.Sprintf(`Hello %s!
+
+Your account has been created. You can now:
+- Browse and search works
+- Post your own works
+- Bookmark works you love
+- Subscribe to creators, works and series
+- Leave comments and kudos
+
+Visit your dashboard: %s
+
+This is an automated message. Please do not reply to it.
+`, username, dashboard),
+		HTML: html.String(),
+	}, nil
 }
