@@ -377,16 +377,21 @@ func TestBlocksAndGiftsBookmarksSubscriptions(t *testing.T) {
 	e := w.e
 	w.blockEx()
 
-	// work.rb:194-216: no gift to someone who has a block with a creator.
+	// work.rb:194-216: no gift to someone who has a block with a creator. The
+	// giver is not told: the gift is answered like any other and kept aside
+	// (shadowed), so pseuds can't be probed to find who blocked you. See
+	// TestGiftToABlockerIsShadowed.
 	for _, p := range []uuid.UUID{w.ex, w.exTwo} {
 		code, out := e.do("POST", "/api/v1/works/"+w.work.String()+"/gift", w.blockerTok, map[string]any{"pseud_id": p})
-		if code != 403 || !strings.Contains(out, "gift_blocked") {
+		if code != 201 || strings.Contains(out, "gift_blocked") {
 			t.Errorf("gift from the blocker to pseud %s: %d %s", p, code, out)
 		}
-		w.noLeak("gift refusal", out)
 	}
-	if code, out := e.do("POST", "/api/v1/works/"+w.blockedWork.String()+"/gift", w.blockedTok, map[string]any{"pseud_id": w.beeTwo}); code != 403 {
+	if code, out := e.do("POST", "/api/v1/works/"+w.blockedWork.String()+"/gift", w.blockedTok, map[string]any{"pseud_id": w.beeTwo}); code != 201 {
 		t.Errorf("gift from the blocked person to the blocker: %d %s", code, out)
+	}
+	if n := e.count(`SELECT count(*) FROM gifts WHERE shadowed`); n != 3 {
+		t.Errorf("shadowed gifts = %d, want 3", n)
 	}
 	e.expect(201, "POST", "/api/v1/works/"+w.work.String()+"/gift", w.blockerTok, map[string]any{"pseud_id": w.rae})
 

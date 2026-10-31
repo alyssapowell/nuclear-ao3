@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/html"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
@@ -1611,10 +1612,19 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 		comments = append(comments, comment)
 	}
 
-	// A reader blocked from the work's creators gets no comments (the query
-	// above already left them out) and is told comments are disabled.
+	// A reader blocked from a creator of a work whose creators are named gets
+	// no comments (the query above already left them out) and is told
+	// comments are disabled. On a work that hides its creators nothing
+	// differs for them, because it would say who wrote it; comments they
+	// wrote there since the block are shadowed and only they see them.
 	disabled, _ := ws.blockedFromWork(c, workID, userUUID)
-	c.JSON(http.StatusOK, gin.H{"comments": comments, "comments_disabled_for_you": disabled})
+	// The flag appears only when it is true, so a reader who isn't blocked
+	// (or is blocked silently) gets an answer with no trace of it.
+	out := gin.H{"comments": comments}
+	if disabled {
+		out["comments_disabled_for_you"] = true
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 func (ws *WorkService) GetKudos(c *gin.Context) {
@@ -1644,14 +1654,15 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 
 	// First, get total kudos count
 	var totalCount int
-	countQuery := `SELECT COUNT(*) FROM kudos WHERE work_id = $1`
+	countQuery := `SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND NOT shadowed`
 	err = ws.db.QueryRow(countQuery, workID).Scan(&totalCount)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos count"})
 		return
 	}
 
-	// Check if current user has given kudos
+	// Check if current user has given kudos. This counts their own shadowed
+	// kudos too, so they see it as given (as does the 409 on a second try).
 	hasGivenKudos := false
 	if userUUID != nil {
 		var exists bool
@@ -1675,7 +1686,7 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 	// own kudos on a work that hides its creator would tie them to it, so it
 	// isn't listed (AO3 doesn't let creators give kudos to their own work).
 	var guestCount int
-	if err := ws.db.QueryRow(`SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND user_id IS NULL`, workID).Scan(&guestCount); err != nil {
+	if err := ws.db.QueryRow(`SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND user_id IS NULL AND NOT shadowed`, workID).Scan(&guestCount); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos count"})
 		return
 	}
@@ -1685,7 +1696,7 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 		SELECT k.id, k.created_at, p.id, p.name
 		FROM kudos k
 		JOIN pseuds p ON p.user_id = k.user_id AND p.is_default
-		WHERE k.work_id = $1
+		WHERE k.work_id = $1 AND NOT k.shadowed
 		  AND (NOT work_hides_creator(k.work_id) OR NOT is_work_creator(k.work_id, k.user_id))
 		ORDER BY k.created_at DESC
 		LIMIT 20`, workID)
@@ -1764,6 +1775,14 @@ func (ws *WorkService) GiveKudos(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "kudos_disabled", "message": "Kudos are disabled."})
 		return
 	}
+	// On a work that hides its creators, a block from one of them is not
+	// announced: the kudos is accepted as usual but stored as shadowed, so it
+	// is never listed or counted.
+	silent, err := ws.blockedSilently(c, workID, userUUID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check work permissions"})
+		return
+	}
 
 	// Check if work allows kudos from this user
 	var allowKudos bool
@@ -1817,9 +1836,9 @@ func (ws *WorkService) GiveKudos(c *gin.Context) {
 	clientIP := c.ClientIP()
 
 	_, err = ws.db.Exec(`
-		INSERT INTO kudos (id, work_id, user_id, ip_address, created_at)
-		VALUES ($1, $2, $3, $4, $5)`,
-		kudosID, workID, userUUID, clientIP, now)
+		INSERT INTO kudos (id, work_id, user_id, ip_address, created_at, shadowed)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		kudosID, workID, userUUID, clientIP, now, silent)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to give kudos"})
@@ -1829,7 +1848,7 @@ func (ws *WorkService) GiveKudos(c *gin.Context) {
 	// Update work kudos count
 	_, err = ws.db.Exec(`
 		UPDATE works SET 
-			kudos_count = (SELECT COUNT(*) FROM kudos WHERE work_id = $1),
+			kudos_count = (SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND NOT shadowed),
 			updated_at = $2
 		WHERE id = $1`, workID, now)
 
@@ -4744,11 +4763,12 @@ func (ws *WorkService) ModerateComment(c *gin.Context) {
 
 	// Check if user is the author of the work this comment belongs to
 	var authorID uuid.UUID
+	var visibleToCaller, shadowed bool
 	err = ws.db.QueryRow(`
-		SELECT w.user_id 
+		SELECT w.user_id, can_user_view_comment(c.id, $2), c.shadowed
 		FROM works w
 		JOIN comments c ON w.id = c.work_id
-		WHERE c.id = $1`, commentID).Scan(&authorID)
+		WHERE c.id = $1`, commentID, userID).Scan(&authorID, &visibleToCaller, &shadowed)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
@@ -4761,6 +4781,14 @@ func (ws *WorkService) ModerateComment(c *gin.Context) {
 		return
 	}
 
+	// A comment the caller can't see doesn't exist to them (404 before 403),
+	// and its work's author never learns of a shadowed one. (An author can
+	// still act on spam and unreviewed comments they can't list, which is
+	// how they approve them.)
+	if (authorID != userUUID && !visibleToCaller) || shadowed {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
+		return
+	}
 	if authorID != userUUID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Only work authors can moderate comments"})
 		return
@@ -4890,6 +4918,12 @@ func (ws *WorkService) ReportWork(c *gin.Context) {
 
 // AO3 Core Features Handlers
 
+// giftsPerHour is how many gifts one account can create in an hour.
+const giftsPerHour = 30
+
+// giftLimiter counts gifts per account, in memory (see auth.Limiter).
+var giftLimiter = auth.NewLimiter()
+
 // Work gifting
 func (ws *WorkService) GiftWork(c *gin.Context) {
 	workID, err := uuid.Parse(c.Param("work_id"))
@@ -4901,6 +4935,18 @@ func (ws *WorkService) GiftWork(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// A limit on how many gifts one account can create in an hour. Every
+	// request counts the same way, whatever the recipient or the result, so
+	// the limit can't be used to tell one recipient from another.
+	if ok, wait := giftLimiter.Allow(fmt.Sprint(userID), giftsPerHour, time.Hour); !ok {
+		c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":   "rate_limit_exceeded",
+			"message": "You are giving gifts too quickly. Please try again later.",
+		})
 		return
 	}
 
@@ -4930,21 +4976,20 @@ func (ws *WorkService) GiftWork(c *gin.Context) {
 	}
 
 	// A work can't be gifted to someone who has a block with one of its
-	// creators (AO3 work.rb:194-216). The answer doesn't say which way.
+	// creators (AO3 work.rb:194-216). The giver is not told: refusing would
+	// let anyone try pseuds one by one and find out which accounts have
+	// blocked them. The gift is answered like any other but stored as
+	// shadowed, so the recipient never sees it and nobody is notified.
+	shadowed := false
 	if req.PseudID != nil {
-		var giftBlocked bool
 		if err := ws.db.QueryRow(`
 			SELECT EXISTS (
 				SELECT 1 FROM creatorships c
 				JOIN pseuds cp ON cp.id = c.pseud_id
 				JOIN pseuds rp ON rp.id = $2
 				WHERE c.creation_id = $1 AND c.creation_type = 'Work' AND c.approved
-				  AND accounts_blocked(cp.user_id, rp.user_id))`, workID, *req.PseudID).Scan(&giftBlocked); err != nil {
+				  AND accounts_blocked(cp.user_id, rp.user_id))`, workID, *req.PseudID).Scan(&shadowed); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create gift"})
-			return
-		}
-		if giftBlocked {
-			c.JSON(http.StatusForbidden, gin.H{"error": "gift_blocked", "message": "That person can't be given this gift."})
 			return
 		}
 	}
@@ -4964,10 +5009,10 @@ func (ws *WorkService) GiftWork(c *gin.Context) {
 	}
 
 	_, err = ws.db.Exec(`
-		INSERT INTO gifts (id, work_id, pseud_id, recipient_name, rejected, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		INSERT INTO gifts (id, work_id, pseud_id, recipient_name, rejected, created_at, updated_at, shadowed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		gift.ID, gift.WorkID, gift.PseudID, sql.NullString{String: gift.RecipientName, Valid: gift.RecipientName != ""},
-		gift.Rejected, gift.CreatedAt, gift.UpdatedAt)
+		gift.Rejected, gift.CreatedAt, gift.UpdatedAt, shadowed)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create gift"})
@@ -4984,13 +5029,25 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 		return
 	}
 
+	// A gift refused because of a block (shadowed) is listed only for the
+	// work's creators, who gave it.
+	viewer := ws.getUserIDFromContext(c)
+	var isCreator bool
+	if viewer != nil {
+		if err := ws.db.QueryRowContext(c.Request.Context(),
+			`SELECT is_work_creator($1, $2)`, workID, *viewer).Scan(&isCreator); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch gifts"})
+			return
+		}
+	}
+
 	rows, err := ws.db.Query(`
 		SELECT g.id, g.work_id, g.pseud_id, g.recipient_name, g.rejected, 
 			g.created_at, g.updated_at, p.name as pseud_name
 		FROM gifts g
 		LEFT JOIN pseuds p ON g.pseud_id = p.id
-		WHERE g.work_id = $1 AND g.rejected = false
-		ORDER BY g.created_at`, workID)
+		WHERE g.work_id = $1 AND g.rejected = false AND (NOT g.shadowed OR $2)
+		ORDER BY g.created_at`, workID, isCreator)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch gifts"})
 		return
@@ -5000,9 +5057,10 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 	var gifts []interface{}
 	for rows.Next() {
 		var gift models.Gift
-		var pseudName sql.NullString
-		err := rows.Scan(&gift.ID, &gift.WorkID, &gift.PseudID, &gift.RecipientName,
+		var pseudName, recipientName sql.NullString
+		err := rows.Scan(&gift.ID, &gift.WorkID, &gift.PseudID, &recipientName,
 			&gift.Rejected, &gift.CreatedAt, &gift.UpdatedAt, &pseudName)
+		gift.RecipientName = recipientName.String
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan gift"})
 			return
@@ -6039,7 +6097,7 @@ func (ws *WorkService) AdminDeleteComment(c *gin.Context) {
 	// Update work comment count
 	_, err = tx.Exec(`
 		UPDATE works 
-		SET comment_count = (SELECT COUNT(*) FROM comments WHERE work_id = $1 AND status = 'published'),
+		SET comment_count = (SELECT COUNT(*) FROM comments WHERE work_id = $1 AND status = 'published' AND NOT shadowed),
 			updated_at = $2
 		WHERE id = $1`, workID, now)
 

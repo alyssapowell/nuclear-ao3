@@ -12,10 +12,10 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **Decision:**
 - **A block is between two accounts and works both ways, across all pseuds.** The blocker picks a pseud (`POST /api/v1/blocks {pseud_id}`), which blocks the account behind it. That account, under any pseud, is blocked from the blocker's account, under any pseud, and the other way round.
-- **Works stay readable.** The blocked person still finds the blocker's works in search and lists and reads them and their chapters. Only the comments close: the work page carries `comments_disabled_for_you: true` (the page shows "Comments are disabled"), the comment list for them is empty, and posting, replying or editing a comment, or giving kudos, is a 403 (`comments_disabled`, `kudos_disabled`). A creator is never blocked from their own work; a co-creator's block closes the work for the blocked person even if the other creator hasn't blocked them. Guests are unaffected. Admins and moderators are not subject to blocks.
+- **Works stay readable.** The blocked person still finds the blocker's works in search and lists and reads them and their chapters. Only the comments close: the work page carries `comments_disabled_for_you: true` (the page shows "Comments are disabled"), the comment list for them is empty, and posting, replying or editing a comment, or giving kudos, is a 403 (`comments_disabled`, `kudos_disabled`). (Not on a work that hides its creator: there the block is silent; see the entry below.) A creator is never blocked from their own work; a co-creator's block closes the work for the blocked person even if the other creator hasn't blocked them. Guests are unaffected. Admins and moderators are not subject to blocks.
 - **The blocker does not see comments from the blocked account**, under any pseud, anywhere (on their own works, on replies to their comments, and on other people's works). The blocked person still sees the blocker's comments on other people's works, as in AO3, but cannot reply to them (`replies_disabled`).
 - **Notifications:** nobody is notified about anything done by an account they blocked, whichever pseud it used.
-- **Other interactions follow AO3:** a work can't be gifted to someone with a block against one of its creators (`gift_blocked`); bookmarks and subscriptions are not affected (AO3 has no rule for them).
+- **Other interactions follow AO3:** a work can't be gifted to someone with a block against one of its creators (the gift is answered like any other but kept aside, never shown or announced; see "On works that hide their creator, a block is applied silently"); bookmarks and subscriptions are not affected (AO3 has no rule for them).
 - **Mutes are per pseud** (`POST /api/v1/mutes {pseud_id}`). A mute hides that pseud's works and comments from the muter only and never covers the account's other pseuds. It does not apply to a work or comment that hides its creator, since hiding it would tell the muter who wrote it.
 - **Lists show what the person picked**, as `{id, name}`. They never carry an account id, a username or another pseud. Blocking a second pseud of an account already blocked adds a second entry and answers like any other block, so it can't be used to learn that two pseuds belong together; removing a block matches only the pseud that was picked, for the same reason.
 - **AO3's @mentions don't exist**, so the rebuild's version (which resolved `@name` to an account) is gone. Comments keep their text as written. **Collections** name their organiser as a pseud `{id, name, role}`, chosen at creation (the default pseud if none), as AO3 records collection participants by pseud.
@@ -35,6 +35,21 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - A pseud can only be blocked or muted if you can find it; there is no way to block "the account" without naming a pseud, on purpose.
 - If someone deletes the pseud you blocked, the block stays and your list keeps the name you picked.
 - Existing blocks and mutes were moved to the account's default pseud (migration 041). The owner of a comment hidden by a mute or block loses sight of the replies under it too, as with spam.
+
+---
+
+## 2026-10-30: On works that hide their creator, a block is applied silently
+
+**Decision:** this refines the block rule above. When a work hides its creator (`work_hides_creator()`: anonymous, in an anonymous collection, or in a collection that hasn't revealed its creators), a block from one of its creators is never announced:
+- The blocked person sees what any other reader sees: the real comments, the real count, and no `comments_disabled_for_you`. Comments, replies and kudos from them get the normal answer, but are stored as **shadowed** (`comments.shadowed`, `kudos.shadowed`). Only they and moderators can see a shadowed comment; it is left out of the public comment, reply and kudos counts and the kudos list; it notifies nobody (the database trigger and the Go notifier both skip it). The giver's own view still shows their kudos as given, and a second kudos is the usual 409.
+- If they edit their own earlier comment there, the edit is allowed and the edited comment becomes shadowed.
+- A block from a creator whose name is shown (a work that doesn't hide its creators) keeps today's behaviour: comments disabled, 403.
+- **Gifts:** a gift to someone with a block against a creator used to be refused (`gift_blocked`), which let anyone try pseuds one at a time to find who had blocked them. It now answers like any gift but is stored as shadowed (`gifts.shadowed`): the recipient doesn't see it, nobody is notified, and only the work's creators see it in the work's gift list. Creating gifts is also limited to 30 per account per hour (429).
+- **Order of checks:** editing, deleting, freezing or moderating a comment now checks that the comment exists, is visible to the caller and is theirs (or they may act on it) before any block is looked at. A stranger asking about a comment they can't see gets 404, not 403.
+
+**Why:** the whole point of hiding the creator is that readers can't tell who wrote the work. "Comments are disabled for you" on an anonymous work tells the blocked person that its author is someone who blocked them, and combined with other blocks or gifts it can narrow down who it is. Saying nothing, and quietly keeping what they write out of sight, gives them nothing to learn from.
+
+**What it costs:** a blocked person's comment on such a work looks posted to them but nobody else sees it, so a block there can't be told apart from being ignored. The blocker never sees the comment either, which is what a block is for. If the collection later reveals its creators, the block then closes comments as it does on any signed work, and the comments written in the meantime stay shadowed.
 
 ---
 

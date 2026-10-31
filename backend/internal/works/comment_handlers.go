@@ -77,7 +77,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 		LEFT JOIN users u ON c.user_id = u.id
 		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
 		LEFT JOIN works w ON c.work_id = w.id
-		WHERE c.work_id = $1 AND c.is_deleted = false
+		WHERE c.work_id = $1 AND c.is_deleted = false AND NOT c.shadowed
 		ORDER BY ` + sortBy + ` ` + sortOrder + `
 		LIMIT $2 OFFSET $3
 	`
@@ -141,7 +141,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 
 	// Get total count for pagination
 	var totalCount int
-	countQuery := `SELECT COUNT(*) FROM comments WHERE work_id = $1 AND is_deleted = false`
+	countQuery := `SELECT COUNT(*) FROM comments WHERE work_id = $1 AND is_deleted = false AND NOT shadowed`
 	err = ws.db.QueryRow(countQuery, workID).Scan(&totalCount)
 	if err != nil {
 		// Log error and use comments length as fallback
@@ -337,6 +337,17 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	// A block between the commenter and one of the work's creators closes
 	// comments and replies on it (AO3 comment.rb:49-55). This comes before
 	// anything that looks at other comments, which the commenter can't see.
+	//
+	// On a work that hides its creators nothing is refused, because saying
+	// "blocked" would tell the commenter who wrote it. The comment is saved
+	// as shadowed instead (silent below): the commenter and moderators can
+	// see it, and nobody else is told about it.
+	silent, err := ws.blockedSilently(c, *req.WorkID, userID)
+	if err != nil {
+		log.Printf("create comment: blocked_silently: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+		return
+	}
 	if blocked, err := ws.blockedFromWork(c, *req.WorkID, userID); err != nil {
 		log.Printf("create comment: blocked_from_work: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
@@ -380,7 +391,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		// Nobody can reply to a comment by an account they're blocked with
 		// (AO3 comment.rb:40-46). Both ways, though a blocker can't see the
 		// blocked person's comments, so that case already ended above.
-		if userID != nil {
+		if userID != nil && !silent {
 			var replyBlocked bool
 			if err := ws.db.QueryRow(`SELECT accounts_blocked(c.user_id, $2) FROM comments c WHERE c.id = $1`,
 				req.ParentCommentID, *userID).Scan(&replyBlocked); err != nil {
@@ -433,15 +444,15 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	query := `
 		INSERT INTO comments (
 			id, work_id, chapter_id, user_id, pseudonym_id, parent_comment_id,
-			content, guest_name, guest_email, ip_address, unreviewed, created_at, updated_at
+			content, guest_name, guest_email, ip_address, unreviewed, shadowed, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW()
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()
 		)
 	`
 
-	_, err := ws.db.Exec(query,
+	_, err = ws.db.Exec(query,
 		commentID, req.WorkID, req.ChapterID, userID, pseudonymID, req.ParentCommentID,
-		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam, unreviewed,
+		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam, unreviewed, silent,
 	)
 
 	if err != nil {
@@ -458,8 +469,11 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		return
 	}
 
-	// Trigger notification for comment creation
-	go ws.triggerCommentNotification(comment, "comment_created")
+	// Trigger notification for comment creation. A shadowed comment tells
+	// nobody (the database trigger and the notifier both skip it).
+	if !silent {
+		go ws.triggerCommentNotification(comment, "comment_created")
+	}
 
 	c.JSON(http.StatusCreated, comment)
 }
@@ -472,7 +486,7 @@ func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDet
 	// A comment waiting for review, marked as spam or on a hidden work is
 	// not announced; AO3 tells people once the creator approves it.
 	var quiet bool
-	if err := ws.db.QueryRow(`SELECT c.unreviewed OR c.is_spam OR c.hidden_by_admin OR w.hidden_by_admin OR w.spam
+	if err := ws.db.QueryRow(`SELECT c.unreviewed OR c.is_spam OR c.shadowed OR c.hidden_by_admin OR w.hidden_by_admin OR w.spam
 		FROM comments c JOIN works w ON w.id = $2 WHERE c.id = $1`, comment.ID, comment.WorkID).Scan(&quiet); err != nil || quiet {
 		return
 	}
@@ -533,15 +547,16 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 
 	var authorID sql.NullString
 	var iced, hidden bool
-	var visible, hasReplies, blocked bool
+	var visible, hasReplies, blocked, silent bool
 	err = ws.db.QueryRowContext(c.Request.Context(), `
 		SELECT c.user_id, c.iced, c.hidden_by_admin,
 		       can_user_view_comment(c.id, $2),
 		       EXISTS (SELECT 1 FROM comments r WHERE r.parent_comment_id = c.id AND NOT r.is_deleted),
-		       blocked_from_work(COALESCE(c.work_id, ch.work_id), $2)
+		       blocked_from_work(COALESCE(c.work_id, ch.work_id), $2),
+		       blocked_silently(COALESCE(c.work_id, ch.work_id), $2)
 		FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
 		WHERE c.id = $1 AND NOT c.is_deleted`,
-		commentID, *userID).Scan(&authorID, &iced, &hidden, &visible, &hasReplies, &blocked)
+		commentID, *userID).Scan(&authorID, &iced, &hidden, &visible, &hasReplies, &blocked, &silent)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
@@ -551,19 +566,28 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 		return
 	}
 
-	// A block closes editing too (AO3 comments_controller.rb:37).
-	if blocked {
-		c.JSON(http.StatusForbidden, commentsDisabledBody())
-		return
-	}
-	// A comment the viewer cannot see does not exist to them.
-	if !visible {
+	// The order matters. First the comment has to exist for this person, and
+	// be theirs; only then is the block looked at. If the block came first, a
+	// blocked person could tell a comment they can't see from one that
+	// doesn't exist, and could learn about a block from a comment id.
+	own := authorID.Valid && authorID.String == userID.String()
+	// A comment the viewer cannot see does not exist to them. (A blocked
+	// person can't see any comment on the work, but their own comment is
+	// theirs: they get the "comments are disabled" answer below.)
+	if !visible && !(own && blocked) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
 	}
 	// AO3 check_ownership: only the comment's own author may edit.
-	if !authorID.Valid || authorID.String != userID.String() {
+	if !own {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only edit your own comments"})
+		return
+	}
+	// A block closes editing too (AO3 comments_controller.rb:37). On a work
+	// that hides its creators the edit goes through instead, and the edited
+	// comment becomes shadowed (silent), as a new comment from them would be.
+	if blocked {
+		c.JSON(http.StatusForbidden, commentsDisabledBody())
 		return
 	}
 	// AO3 check_permission_to_edit (comments_controller.rb:207): a frozen
@@ -582,8 +606,9 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 	}
 
 	if _, err = ws.db.ExecContext(c.Request.Context(), `
-		UPDATE comments SET content = $1, edited_at = NOW(), updated_at = NOW()
-		WHERE id = $2`, content, commentID); err != nil {
+		UPDATE comments SET content = $1, edited_at = NOW(), updated_at = NOW(),
+			shadowed = shadowed OR $3
+		WHERE id = $2`, content, commentID, silent); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update comment"})
 		return
 	}
@@ -620,13 +645,15 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 		return
 	}
 
-	// Verify the comment exists, and whether the caller created its work.
+	// Verify the comment exists, whether the caller created its work, and
+	// whether they can see it.
 	var existingComment models.Comment
-	var ownsWork bool
-	query := `SELECT id, user_id, COALESCE(is_work_creator(work_id, $2), false)
+	var ownsWork, visible, shadowed bool
+	query := `SELECT id, user_id, COALESCE(is_work_creator(work_id, $2), false),
+			can_user_view_comment(id, $2), shadowed
 		FROM comments WHERE id = $1 AND is_deleted = false`
 
-	err = ws.db.QueryRow(query, commentID, userID).Scan(&existingComment.ID, &existingComment.UserID, &ownsWork)
+	err = ws.db.QueryRow(query, commentID, userID).Scan(&existingComment.ID, &existingComment.UserID, &ownsWork, &visible, &shadowed)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
@@ -635,6 +662,16 @@ func (ws *WorkService) DeleteComment(c *gin.Context) {
 	if err != nil {
 		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify comment"})
+		return
+	}
+
+	// A comment the caller can't see doesn't exist to them: 404, not 403.
+	// A work's creators can still delete what they can't list, such as spam
+	// they marked (AO3 lets them), but never a shadowed comment, which they
+	// must not learn exists.
+	own := existingComment.UserID != nil && *existingComment.UserID == userID
+	if !own && !visible && !(ownsWork && !shadowed) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
 	}
 
@@ -832,17 +869,24 @@ func (ws *WorkService) setFrozen(c *gin.Context, frozen bool) {
 		return
 	}
 	ctx := c.Request.Context()
-	var isCreator, isMod bool
+	var isCreator, isMod, visible, shadowed bool
 	err = ws.db.QueryRowContext(ctx, `
-		SELECT is_work_creator(COALESCE(c.work_id, ch.work_id), $2), is_site_moderator($2)
+		SELECT is_work_creator(COALESCE(c.work_id, ch.work_id), $2), is_site_moderator($2),
+		       can_user_view_comment(c.id, $2), c.shadowed
 		FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
-		WHERE c.id = $1`, commentID, userID).Scan(&isCreator, &isMod)
+		WHERE c.id = $1`, commentID, userID).Scan(&isCreator, &isMod, &visible, &shadowed)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze comment"})
+		return
+	}
+	// A comment the caller can't see doesn't exist to them (404 before 403),
+	// and a creator never learns of a shadowed one.
+	if (!isCreator && !isMod && !visible) || (shadowed && !isMod) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
 	}
 	if !isCreator && !isMod {

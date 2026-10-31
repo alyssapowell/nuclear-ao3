@@ -50,7 +50,9 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	}
 
 	// A reader who is blocked from this work's creators still reads it, but
-	// sees comments as disabled and no comment count.
+	// sees comments as disabled and no comment count. (Not on a work that
+	// hides its creators: there the block is silent, blockedFromWork is false,
+	// and the reader sees exactly what everyone else sees.)
 	if blocked, err := ws.blockedFromWork(c, workID, userID); err != nil {
 		log.Printf("blocked_from_work(%s): %v", workID, err)
 	} else if blocked {
@@ -161,7 +163,9 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 			COALESCE(w.relationships, '{}') as relationships,
 			COALESCE(w.freeform_tags, '{}') as freeform_tags,
 			w.published_at, w.updated_at, w.created_at,
-			w.hidden_by_admin, w.spam
+			w.hidden_by_admin, w.spam,
+			COALESCE(w.hit_count, 0), COALESCE(w.kudos_count, 0),
+			COALESCE(w.comment_count, 0), COALESCE(w.bookmark_count, 0)
 		FROM works w
 		JOIN users u ON w.user_id = u.id
 		WHERE w.id = $1
@@ -175,6 +179,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 		&fandoms, &characters, &relationships, &freeformTags,
 		&publishedAt, &work.UpdatedAt, &work.CreatedAt,
 		&work.HiddenByAdmin, &work.Spam,
+		&work.Hits, &work.Kudos, &work.Comments, &work.Bookmarks,
 	)
 
 	if err != nil {

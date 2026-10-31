@@ -203,3 +203,19 @@ func TestFullTableSweepsAtMostOncePerSecond(t *testing.T) {
 		t.Error("a full table was swept again within a second")
 	}
 }
+
+func TestLimiterRefusesPastTheLimitAndKeysAreSeparate(t *testing.T) {
+	l := NewLimiter()
+	for i := 0; i < 3; i++ {
+		if ok, _ := l.Allow("a", 3, time.Hour); !ok {
+			t.Fatalf("use %d refused", i+1)
+		}
+	}
+	ok, wait := l.Allow("a", 3, time.Hour)
+	if ok || wait <= 0 {
+		t.Errorf("fourth use: allowed=%v wait=%v, want refused with a wait", ok, wait)
+	}
+	if ok, _ := l.Allow("b", 3, time.Hour); !ok {
+		t.Errorf("another key should have its own count")
+	}
+}

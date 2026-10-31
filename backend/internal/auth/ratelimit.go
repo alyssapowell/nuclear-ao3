@@ -138,3 +138,27 @@ func (w *windowCounter) size() int {
 	defer w.mu.Unlock()
 	return len(w.entries)
 }
+
+// Limiter is a fixed-window counter that other packages can use for a limit
+// of their own, such as "30 gifts per account per hour". It is the same
+// in-memory table the login and API limits use, so it has the same caveats:
+// each copy of the app counts alone, and a restart gives a fresh window.
+type Limiter struct {
+	counter *windowCounter
+}
+
+// NewLimiter makes an empty limiter.
+func NewLimiter() *Limiter {
+	return &Limiter{counter: newWindowCounter(maxRateLimitKeys)}
+}
+
+// Allow counts one use of key. It reports whether the use is allowed under
+// limit uses per window, and if not, how long until the window ends. Refused
+// uses are not counted.
+func (l *Limiter) Allow(key string, limit int, window time.Duration) (allowed bool, retryAfter time.Duration) {
+	_, windowEnd, ok := l.counter.hit(key, limit, window)
+	if ok {
+		return true, 0
+	}
+	return false, time.Until(windowEnd)
+}

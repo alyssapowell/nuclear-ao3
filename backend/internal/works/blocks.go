@@ -277,7 +277,9 @@ func (ws *WorkService) DeleteMute(c *gin.Context) {
 }
 
 // blockedFromWork says whether a block closes comments and kudos on the work
-// for this viewer. See blocked_from_work in migration 041.
+// for this viewer. See blocked_from_work in migrations 041 and 042. It is
+// always false on a work that hides its creators: there the block is silent
+// (blockedSilently), because refusing would tell the viewer who wrote it.
 func (ws *WorkService) blockedFromWork(c *gin.Context, workID uuid.UUID, viewer *uuid.UUID) (bool, error) {
 	if viewer == nil {
 		return false, nil
@@ -286,6 +288,20 @@ func (ws *WorkService) blockedFromWork(c *gin.Context, workID uuid.UUID, viewer 
 	err := ws.db.QueryRowContext(c.Request.Context(),
 		`SELECT blocked_from_work($1, $2)`, workID, *viewer).Scan(&blocked)
 	return blocked, err
+}
+
+// blockedSilently says whether the viewer is blocked by a creator of a work
+// that hides its creators. Nothing is refused and nothing looks different to
+// them; what they post is stored as shadowed (migration 042), so only they
+// and moderators can see it, it isn't counted, and it notifies nobody.
+func (ws *WorkService) blockedSilently(c *gin.Context, workID uuid.UUID, viewer *uuid.UUID) (bool, error) {
+	if viewer == nil {
+		return false, nil
+	}
+	var silent bool
+	err := ws.db.QueryRowContext(c.Request.Context(),
+		`SELECT blocked_silently($1, $2)`, workID, *viewer).Scan(&silent)
+	return silent, err
 }
 
 // commentsDisabledBody is the 403 answer for a comment, reply or kudos the

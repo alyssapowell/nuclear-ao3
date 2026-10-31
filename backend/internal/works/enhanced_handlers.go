@@ -296,10 +296,10 @@ func (ws *WorkService) calculateWorkStatistics(workID uuid.UUID) (*WorkStatistic
 	ws.db.QueryRow("SELECT hits FROM work_statistics WHERE work_id = $1", workID).Scan(&stats.Hits)
 
 	// Count kudos
-	ws.db.QueryRow("SELECT COUNT(*) FROM kudos WHERE work_id = $1", workID).Scan(&stats.Kudos)
+	ws.db.QueryRow("SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND NOT shadowed", workID).Scan(&stats.Kudos)
 
 	// Count comments
-	ws.db.QueryRow("SELECT COUNT(*) FROM comments WHERE work_id = $1 AND is_deleted = false", workID).Scan(&stats.Comments)
+	ws.db.QueryRow("SELECT COUNT(*) FROM comments WHERE work_id = $1 AND is_deleted = false AND NOT shadowed", workID).Scan(&stats.Comments)
 
 	// Count bookmarks
 	ws.db.QueryRow("SELECT COUNT(*) FROM bookmarks WHERE work_id = $1 AND is_private = false", workID).Scan(&stats.Bookmarks)
