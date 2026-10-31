@@ -3583,6 +3583,12 @@ func (ws *WorkService) RemoveWorkFromCollection(c *gin.Context) {
 	})
 }
 
+// hidesNoCreator keeps out works whose creator is hidden from other people:
+// anonymous works and works in anonymous or unrevealed collections. Add it to
+// any query that lists or counts works by creator for someone other than
+// the creator.
+const hidesNoCreator = " AND NOT (w.is_anonymous OR w.in_anon_collection OR w.in_unrevealed_collection)"
+
 func (ws *WorkService) GetUserWorks(c *gin.Context) {
 	userIDParam := c.Param("user_id")
 	targetUserID, err := uuid.Parse(userIDParam)
@@ -3636,8 +3642,11 @@ func (ws *WorkService) GetUserWorks(c *gin.Context) {
 
 	// If not viewing own profile, only show published, non-restricted works
 	// the viewer may see (not hidden or spam, not blocked).
+	// As in AO3, anonymous works and works in collections that hide or haven't
+	// yet revealed their creators never appear on the creator's page for
+	// anyone else: listing them there would reveal who wrote them.
 	if !isOwnProfile {
-		baseQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $4::uuid)"
+		baseQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $4::uuid)" + hidesNoCreator
 	}
 
 	baseQuery += " ORDER BY w.updated_at DESC LIMIT $2 OFFSET $3"
@@ -3718,7 +3727,7 @@ func (ws *WorkService) GetUserWorks(c *gin.Context) {
 
 	args := []interface{}{targetUserID}
 	if !isOwnProfile {
-		countQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid)"
+		countQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid)" + hidesNoCreator
 		args = append(args, viewerID)
 	}
 

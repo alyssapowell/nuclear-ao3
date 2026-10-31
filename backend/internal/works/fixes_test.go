@@ -366,3 +366,41 @@ func TestDeleteComment(t *testing.T) {
 		t.Error("the work's creator couldn't delete a comment on it")
 	}
 }
+
+// A creator's page must never list their anonymous works, or works in
+// collections that hide or haven't revealed creators, to anyone else:
+// that would reveal who wrote them.
+func TestUserWorksListNeverRevealsAnonymousWorks(t *testing.T) {
+	e := newFixEnv(t)
+	creator, creatorTok := e.user("creator")
+	_, strangerTok := e.user("stranger")
+	pub := e.work(creator, "Signed", "published")
+	anon := e.work(creator, "Anonymous", "published")
+	anonColl := e.work(creator, "In an anonymous collection", "published")
+	unrevealed := e.work(creator, "In an unrevealed collection", "published")
+	e.exec(`UPDATE works SET is_anonymous = true WHERE id = $1`, anon)
+	e.exec(`UPDATE works SET in_anon_collection = true WHERE id = $1`, anonColl)
+	e.exec(`UPDATE works SET in_unrevealed_collection = true WHERE id = $1`, unrevealed)
+
+	for _, tok := range []string{strangerTok, ""} {
+		out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", tok, nil)
+		if !strings.Contains(out, pub.String()) {
+			t.Errorf("token %q: the signed work is missing", tok)
+		}
+		for name, id := range map[string]uuid.UUID{"anonymous": anon, "anonymous collection": anonColl, "unrevealed collection": unrevealed} {
+			if strings.Contains(out, id.String()) {
+				t.Errorf("token %q: the %s work is listed on its creator's page", tok, name)
+			}
+		}
+		if !strings.Contains(out, `"total":1`) {
+			t.Errorf("token %q: the total counts hidden-creator works: %s", tok, out)
+		}
+	}
+	// The creator still sees all of their own works.
+	out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", creatorTok, nil)
+	for _, id := range []uuid.UUID{anon, anonColl, unrevealed} {
+		if !strings.Contains(out, id.String()) {
+			t.Errorf("the creator should see their own work %s", id)
+		}
+	}
+}
