@@ -1,8 +1,11 @@
 package works
 
 import (
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"nuclear-ao3/internal/testdb"
 
 	"nuclear-ao3/internal/platform"
 )
@@ -15,15 +18,12 @@ func setupRouter(ws *WorkService) *gin.Engine {
 	return r
 }
 
-// NewWorkService connects to the test database, for tests.
-func NewWorkService() *WorkService {
-	db, err := platform.OpenDB()
+// newTestWorkService builds the service on a fresh test database.
+func newTestWorkService(t *testing.T) *WorkService {
+	t.Helper()
+	ws, err := New(testdb.New(t))
 	if err != nil {
-		panic(err)
-	}
-	ws, err := New(db)
-	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return ws
 }

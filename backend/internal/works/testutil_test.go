@@ -2,12 +2,12 @@ package works
 
 import (
 	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+
+	"nuclear-ao3/internal/testdb"
 )
 
 // TestDBConfig holds database configuration for tests
@@ -15,24 +15,11 @@ type TestDBConfig struct {
 	DB *sql.DB
 }
 
-// SetupTestDB creates a database connection for testing
+// SetupTestDB gives the test its own fresh, fully migrated database (see
+// internal/testdb). It is dropped when the test, or for a suite the whole
+// suite, ends.
 func SetupTestDB(t *testing.T) *TestDBConfig {
-	// Never a built-in address: these helpers delete rows, so they only ever
-	// run against a database someone named on purpose.
-	dbURL := os.Getenv("TEST_DATABASE_URL")
-	if dbURL == "" {
-		t.Skip("set TEST_DATABASE_URL to a throwaway test database; these tests delete rows")
-	}
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		t.Fatalf("Database not accessible: %v", err)
-	}
-
-	return &TestDBConfig{DB: db}
+	return &TestDBConfig{DB: testdb.New(t)}
 }
 
 // CreateTestUser creates a test user with proper schema
@@ -66,17 +53,7 @@ func (config *TestDBConfig) CreateTestUserWithRole(username, email, role string)
 		return uuid.Nil, uuid.Nil, err
 	}
 
-	// For testing purposes, also add role directly to users table to support existing handlers
-	// First try to add a role column if it doesn't exist
-	config.DB.Exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50)")
-
-	// Update the user with the role
-	_, err = config.DB.Exec(`UPDATE users SET role = $1 WHERE id = $2`, role, userID)
-	if err != nil {
-		return uuid.Nil, uuid.Nil, err
-	}
-
-	// Also assign role in user_roles table for completeness
+	// Roles live in user_roles (the database never had a users.role to rely on)
 	_, err = config.DB.Exec(`
 		INSERT INTO user_roles (user_id, role, granted_at)
 		VALUES ($1, $2, NOW())
@@ -124,7 +101,7 @@ func (config *TestDBConfig) CreateTestWork(userID uuid.UUID, title, status strin
 		INSERT INTO works (id, title, summary, user_id, language, rating, status, 
 			is_draft, is_complete, published_at, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
-		workID, title, "Test summary", userID, "en", "General Audiences",
+		workID, title, "Test summary", userID, "en", "general",
 		status, isDraft, isComplete, publishedAt)
 
 	if err != nil {
@@ -180,7 +157,6 @@ func (config *TestDBConfig) CreateTestCollection(userID uuid.UUID, title string)
 func (config *TestDBConfig) CleanupTestData() {
 	// Clean up in dependency order
 	config.DB.Exec("DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'test%')")
-	config.DB.Exec("DELETE FROM comment_kudos WHERE comment_id IN (SELECT id FROM comments WHERE work_id IN (SELECT id FROM works WHERE title LIKE 'Test%'))")
 	config.DB.Exec("DELETE FROM comments WHERE work_id IN (SELECT id FROM works WHERE title LIKE 'Test%')")
 	config.DB.Exec("DELETE FROM works WHERE title LIKE 'Test%'")
 	config.DB.Exec("DELETE FROM collections WHERE name LIKE 'Test%'")

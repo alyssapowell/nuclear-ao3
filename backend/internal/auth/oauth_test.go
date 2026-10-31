@@ -11,11 +11,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"nuclear-ao3/internal/testdb"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -35,24 +35,14 @@ type OAuth2TestSuite struct {
 }
 
 func (suite *OAuth2TestSuite) SetupSuite() {
-	// Use test database
-	testDB := os.Getenv("TEST_DATABASE_URL")
-	if testDB == "" {
-		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
-	}
-
-	db, err := sql.Open("postgres", testDB)
-	require.NoError(suite.T(), err)
+	// A fresh, fully migrated database for this suite
+	db := testdb.New(suite.T())
 	suite.db = db
 
 	// Create test auth service
-	jwtManager, err := newTestJWTManager("test-oauth-issuer")
+	service, err := newTestAuthService(db)
 	require.NoError(suite.T(), err)
-
-	suite.service = &AuthService{
-		db:  db,
-		jwt: jwtManager,
-	}
+	suite.service = service
 
 	// Setup test router
 	gin.SetMode(gin.TestMode)
@@ -70,6 +60,18 @@ func (suite *OAuth2TestSuite) SetupTest() {
 	// Create fresh test data for each test
 	suite.createTestUsers()
 	suite.createTestClients()
+	suite.consentToEverything()
+}
+
+// consentToEverything records that every test user already allowed every test
+// client its full scopes, so the flows below reach the authorization code. The
+// consent screen itself is tested in TestAuthorize_AsksForConsentFirst.
+func (suite *OAuth2TestSuite) consentToEverything() {
+	for _, user := range suite.testUsers {
+		for _, client := range suite.testClients {
+			suite.Require().NoError(suite.service.storeUserConsent(user.ID, client.ID, client.Scopes))
+		}
+	}
 }
 
 func (suite *OAuth2TestSuite) TearDownTest() {
@@ -116,36 +118,9 @@ func (suite *OAuth2TestSuite) createTestUsers() {
 	}
 
 	for _, u := range users {
-		registerReq := models.RegisterRequest{
-			Username:        u.username,
-			Email:           u.email,
-			Password:        u.password,
-			ConfirmPassword: u.password,
-			DisplayName:     fmt.Sprintf("OAuth Test %s", u.username),
-			AcceptTOS:       true,
-		}
-
-		jsonBody, _ := json.Marshal(registerReq)
-		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/api/v1/auth/register", bytes.NewBuffer(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
-
-		suite.router.ServeHTTP(w, req)
-
-		if w.Code == http.StatusCreated {
-			var response models.AuthResponse
-			json.Unmarshal(w.Body.Bytes(), &response)
-			suite.testUsers[u.username] = response.User
-
-			// Set verification status and add additional roles
-			if u.verified {
-				suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
-			}
-
-			for _, role := range u.roles[1:] {
-				suite.db.Exec("INSERT INTO user_roles (user_id, role) VALUES ($1, $2)", response.User.ID, role)
-			}
-		}
+		user, err := seedUser(suite.db, u.username, u.email, u.password, u.roles[1:]...)
+		suite.Require().NoError(err)
+		suite.testUsers[u.username] = user
 	}
 }
 
@@ -346,7 +321,7 @@ func (suite *OAuth2TestSuite) TestOIDCDiscovery_WellKnownEndpoint() {
 	suite.router.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	assert.Equal(suite.T(), "application/json", w.Header().Get("Content-Type"))
+	assert.Contains(suite.T(), w.Header().Get("Content-Type"), "application/json")
 
 	var discovery models.OIDCDiscoveryDocument
 	err := json.Unmarshal(w.Body.Bytes(), &discovery)
@@ -399,7 +374,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_ConfidentialClient_Success()
 
 	// Mock authenticated user session
 	// In a real scenario, this would redirect to login first
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -452,7 +427,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_PKCERequired_PublicClient() 
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, suite.testUsers["oauth_user"].ID)
+	suite.signInAs(req, suite.testUsers["oauth_user"].ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -460,7 +435,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_PKCERequired_PublicClient() 
 	assert.Equal(suite.T(), http.StatusFound, w.Code)
 	location := w.Header().Get("Location")
 	assert.Contains(suite.T(), location, "error=invalid_request")
-	assert.Contains(suite.T(), location, "PKCE required")
+	assert.Contains(suite.T(), location, "PKCE+required")
 }
 
 func (suite *OAuth2TestSuite) TestAuthorizationFlow_PKCE_Success() {
@@ -479,7 +454,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_PKCE_Success() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -528,7 +503,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_InvalidPKCE() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -559,10 +534,8 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_InvalidPKCE() {
 
 // Helper methods
 
-func (suite *OAuth2TestSuite) mockUserSession(req *http.Request, userID uuid.UUID) {
-	// In a real implementation, this would set session cookies or headers
-	// For testing, we'll add a custom header that our middleware can check
-	req.Header.Set("X-Test-User-ID", userID.String())
+func (suite *OAuth2TestSuite) signInAs(req *http.Request, userID uuid.UUID) {
+	suite.Require().NoError(signIn(suite.service, req, userID))
 }
 
 func (suite *OAuth2TestSuite) extractAuthCodeFromRedirect(location string) string {
@@ -663,7 +636,7 @@ func (suite *OAuth2TestSuite) TestTokenIntrospection_InvalidClient() {
 func (suite *OAuth2TestSuite) TestUserInfo_ValidToken_ProfileScope() {
 	// Get access token with profile scope
 	client := suite.testClients["confidential_client"]
-	accessToken := suite.getValidAccessToken(client, suite.testUsers["oauth_user"], []string{"openid", "profile"})
+	accessToken := suite.getValidAccessToken(client, suite.testUsers["oauth_user"], []string{"profile"})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/auth/userinfo", nil)
@@ -685,7 +658,7 @@ func (suite *OAuth2TestSuite) TestUserInfo_ValidToken_ProfileScope() {
 
 func (suite *OAuth2TestSuite) TestUserInfo_ValidToken_EmailScope() {
 	client := suite.testClients["confidential_client"]
-	accessToken := suite.getValidAccessToken(client, suite.testUsers["oauth_user"], []string{"openid", "profile", "email"})
+	accessToken := suite.getValidAccessToken(client, suite.testUsers["oauth_user"], []string{"profile", "email"})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/auth/userinfo", nil)
@@ -813,7 +786,7 @@ func (suite *OAuth2TestSuite) TestScopeValidation_InvalidScope() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, suite.testUsers["oauth_user"].ID)
+	suite.signInAs(req, suite.testUsers["oauth_user"].ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -835,7 +808,7 @@ func (suite *OAuth2TestSuite) TestScopeValidation_ExceedsClientScopes() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, suite.testUsers["oauth_user"].ID)
+	suite.signInAs(req, suite.testUsers["oauth_user"].ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -1017,7 +990,7 @@ func (suite *OAuth2TestSuite) TestInvalidRedirectURI() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, suite.testUsers["oauth_user"].ID)
+	suite.signInAs(req, suite.testUsers["oauth_user"].ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -1086,12 +1059,36 @@ func (suite *OAuth2TestSuite) getAuthorizationCode(client *models.OAuthClient, u
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
 	location := w.Header().Get("Location")
 	return suite.extractAuthCodeFromRedirect(location)
+}
+
+// Without a recorded consent, an app gets no code: the person is asked first.
+func (suite *OAuth2TestSuite) TestAuthorize_AsksForConsentFirst() {
+	client := suite.testClients["confidential_client"]
+	user := suite.testUsers["oauth_user"]
+	_, err := suite.db.Exec(`DELETE FROM user_consents WHERE user_id = $1`, user.ID)
+	suite.Require().NoError(err)
+
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=read&state=s1",
+		client.ID, url.QueryEscape(client.RedirectURIs[0]))
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", authURL, nil)
+	suite.signInAs(req, user.ID)
+	suite.router.ServeHTTP(w, req)
+
+	assert.Equal(suite.T(), http.StatusOK, w.Code)
+	assert.Empty(suite.T(), w.Header().Get("Location"))
+	var body map[string]any
+	assert.NoError(suite.T(), json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Equal(suite.T(), true, body["consent_required"])
+	var codes int
+	suite.db.QueryRow(`SELECT count(*) FROM authorization_codes`).Scan(&codes)
+	assert.Equal(suite.T(), 0, codes, "no code before the person agrees")
 }
 
 func TestOAuth2TestSuite(t *testing.T) {

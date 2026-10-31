@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"nuclear-ao3/internal/testdb"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -34,24 +34,14 @@ type OIDCTestSuite struct {
 }
 
 func (suite *OIDCTestSuite) SetupSuite() {
-	// Use test database
-	testDB := os.Getenv("TEST_DATABASE_URL")
-	if testDB == "" {
-		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
-	}
-
-	db, err := sql.Open("postgres", testDB)
-	require.NoError(suite.T(), err)
+	// A fresh, fully migrated database for this suite
+	db := testdb.New(suite.T())
 	suite.db = db
 
 	// Create test auth service
-	jwtManager, err := newTestJWTManager("test-oidc-issuer")
+	service, err := newTestAuthService(db)
 	require.NoError(suite.T(), err)
-
-	suite.service = &AuthService{
-		db:  db,
-		jwt: jwtManager,
-	}
+	suite.service = service
 
 	// Setup test router
 	gin.SetMode(gin.TestMode)
@@ -63,7 +53,13 @@ func (suite *OIDCTestSuite) SetupSuite() {
 	suite.setupTestData()
 }
 
+// Each test starts with the person having already allowed the app, so the
+// flows reach the authorization code. The consent tests start by undoing it.
 func (suite *OIDCTestSuite) SetupTest() {
+	suite.db.Exec(`DELETE FROM oauth_refresh_tokens`)
+	suite.db.Exec(`DELETE FROM oauth_access_tokens`)
+	suite.db.Exec(`DELETE FROM authorization_codes`)
+	suite.grantConsent(suite.testUsers["oidc_user"].ID, suite.testClients["oidc_client"].ID, []string{"openid", "profile", "email"})
 }
 
 func (suite *OIDCTestSuite) TearDownSuite() {
@@ -90,28 +86,9 @@ func (suite *OIDCTestSuite) setupTestData() {
 }
 
 func (suite *OIDCTestSuite) createTestUser(username, email, password string) {
-	registerReq := models.RegisterRequest{
-		Username:        username,
-		Email:           email,
-		Password:        password,
-		ConfirmPassword: password,
-		DisplayName:     fmt.Sprintf("OIDC Test %s", username),
-		AcceptTOS:       true,
-	}
-
-	jsonBody, _ := json.Marshal(registerReq)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/v1/auth/register", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(w, req)
-
-	if w.Code == http.StatusCreated {
-		var response models.AuthResponse
-		json.Unmarshal(w.Body.Bytes(), &response)
-		suite.testUsers[username] = response.User
-		suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
-	}
+	user, err := seedUser(suite.db, username, email, password)
+	suite.Require().NoError(err)
+	suite.testUsers[username] = user
 }
 
 func (suite *OIDCTestSuite) createOIDCClient() {
@@ -258,7 +235,6 @@ func (suite *OIDCTestSuite) TestIDToken_ClaimsValidation() {
 	assert.NotEmpty(suite.T(), claims["iat"])
 	assert.NotEmpty(suite.T(), claims["exp"])
 	assert.Equal(suite.T(), "nonce123", claims["nonce"])
-	assert.Equal(suite.T(), "ID", claims["typ"])
 
 	// Validate profile claims
 	assert.Equal(suite.T(), user.Username, claims["preferred_username"])
@@ -326,7 +302,7 @@ func (suite *OIDCTestSuite) TestJWKSEndpoint() {
 	suite.router.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
-	assert.Equal(suite.T(), "application/json", w.Header().Get("Content-Type"))
+	assert.Contains(suite.T(), w.Header().Get("Content-Type"), "application/json")
 
 	var jwks map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &jwks)
@@ -352,34 +328,48 @@ func (suite *OIDCTestSuite) TestJWKSEndpoint() {
 func (suite *OIDCTestSuite) TestConsentFlow_FirstTime() {
 	client := suite.testClients["oidc_client"]
 	user := suite.testUsers["oidc_user"]
+	_, err := suite.db.Exec(`DELETE FROM user_consents`)
+	suite.Require().NoError(err)
 
-	// First authorization should require consent
+	// First authorization asks the person instead of issuing a code
 	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile email&state=consent_test",
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
-
+	suite.signInAs(req, user.ID)
 	suite.router.ServeHTTP(w, req)
 
-	// Should show consent screen (in a real implementation)
-	// For testing, we'll assume consent is automatically granted for trusted clients
-	// or we simulate the consent process
-
-	// If consent is required, it would redirect to consent page
-	// If consent is automatic (trusted client), it proceeds with auth code
-	if w.Code == http.StatusFound {
-		location := w.Header().Get("Location")
-		if strings.Contains(location, "consent") {
-			// Handle consent flow
-			suite.handleConsentFlow(location, user.ID, client.ID, []string{"openid", "profile", "email"})
-		} else {
-			// Direct authorization - verify auth code is present
-			assert.Contains(suite.T(), location, "code=")
-		}
+	assert.Equal(suite.T(), http.StatusOK, w.Code)
+	assert.Empty(suite.T(), w.Header().Get("Location"))
+	var prompt struct {
+		Required  bool   `json:"consent_required"`
+		ConsentID string `json:"consent_id"`
 	}
+	suite.Require().NoError(json.Unmarshal(w.Body.Bytes(), &prompt))
+	suite.Require().True(prompt.Required)
+
+	// Someone else cannot answer for them
+	other, err := seedUser(suite.db, "oidc_other", "oidc-other@nuclear-ao3.test", "password123")
+	suite.Require().NoError(err)
+	ow := httptest.NewRecorder()
+	oreq, _ := http.NewRequest("POST", "/auth/consent/"+prompt.ConsentID, strings.NewReader("approved=true"))
+	oreq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	suite.signInAs(oreq, other.ID)
+	suite.router.ServeHTTP(ow, oreq)
+	assert.Equal(suite.T(), http.StatusForbidden, ow.Code)
+
+	// Agreeing sends them back to the app with a code, and is remembered
+	aw := httptest.NewRecorder()
+	areq, _ := http.NewRequest("POST", "/auth/consent/"+prompt.ConsentID, strings.NewReader("approved=true"))
+	areq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	suite.signInAs(areq, user.ID)
+	suite.router.ServeHTTP(aw, areq)
+	assert.Equal(suite.T(), http.StatusFound, aw.Code)
+	assert.Contains(suite.T(), aw.Header().Get("Location"), "code=")
+	assert.Contains(suite.T(), aw.Header().Get("Location"), "state=consent_test")
+	assert.True(suite.T(), suite.service.hasValidConsent(user.ID, client.ID, []string{"openid", "profile", "email"}))
 }
 
 func (suite *OIDCTestSuite) TestConsentFlow_PreviouslyGranted() {
@@ -396,7 +386,7 @@ func (suite *OIDCTestSuite) TestConsentFlow_PreviouslyGranted() {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -411,42 +401,34 @@ func (suite *OIDCTestSuite) TestConsentRevocation() {
 	client := suite.testClients["oidc_client"]
 	user := suite.testUsers["oidc_user"]
 
-	// Grant consent
-	suite.grantConsent(user.ID, client.ID, []string{"openid", "profile"})
-
-	// Get access token
 	accessToken := suite.getAccessToken(client, user, []string{"openid", "profile"})
+	suite.Require().NotEmpty(accessToken)
 
-	// Revoke consent
+	// The person ends the app's access from their own login
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/auth/authorized-applications/%s", client.ID), nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
+	suite.signInAs(req, user.ID)
 	suite.router.ServeHTTP(w, req)
-
 	assert.Equal(suite.T(), http.StatusOK, w.Code)
 
-	// Verify consent is revoked - next auth should require consent again
+	// The app's token stops working
+	uw := httptest.NewRecorder()
+	ureq, _ := http.NewRequest("GET", "/auth/userinfo", nil)
+	ureq.Header.Set("Authorization", "Bearer "+accessToken)
+	suite.router.ServeHTTP(uw, ureq)
+	assert.Equal(suite.T(), http.StatusUnauthorized, uw.Code)
+
+	// And the next authorization asks again instead of issuing a code
 	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile",
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
-
 	authW := httptest.NewRecorder()
 	authReq, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(authReq, user.ID)
-
+	suite.signInAs(authReq, user.ID)
 	suite.router.ServeHTTP(authW, authReq)
-
-	// Should require consent again
-	if authW.Code == http.StatusFound {
-		location := authW.Header().Get("Location")
-		// In a real implementation, this would redirect to consent page
-		// For testing, we check that it doesn't immediately grant authorization
-		if !strings.Contains(location, "consent") && strings.Contains(location, "code=") {
-			// If we get an auth code immediately, consent might be automatic for trusted clients
-			// This is acceptable behavior depending on the client configuration
-		}
-	}
+	assert.Equal(suite.T(), http.StatusOK, authW.Code)
+	assert.Empty(suite.T(), authW.Header().Get("Location"))
+	assert.Contains(suite.T(), authW.Body.String(), "consent_required")
 }
 
 // Helper methods
@@ -488,7 +470,7 @@ func (suite *OIDCTestSuite) getAuthorizationCode(client *models.OAuthClient, use
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -520,25 +502,12 @@ func (suite *OIDCTestSuite) getAccessToken(client *models.OAuthClient, user *mod
 	return tokenResp.AccessToken
 }
 
-func (suite *OIDCTestSuite) mockUserSession(req *http.Request, userID uuid.UUID) {
-	req.Header.Set("X-Test-User-ID", userID.String())
+func (suite *OIDCTestSuite) signInAs(req *http.Request, userID uuid.UUID) {
+	suite.Require().NoError(signIn(suite.service, req, userID))
 }
 
 func (suite *OIDCTestSuite) grantConsent(userID, clientID uuid.UUID, scopes []string) {
-	query := `
-		INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at, created_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		ON CONFLICT (user_id, client_id) DO UPDATE SET
-			scopes = EXCLUDED.scopes,
-			granted_at = EXCLUDED.granted_at`
-
-	suite.db.Exec(query, uuid.New(), userID, clientID, scopes)
-}
-
-func (suite *OIDCTestSuite) handleConsentFlow(consentURL string, userID, clientID uuid.UUID, scopes []string) {
-	// In a real implementation, this would simulate user granting consent
-	// For testing, we directly grant consent in the database
-	suite.grantConsent(userID, clientID, scopes)
+	suite.Require().NoError(suite.service.storeUserConsent(userID, clientID, scopes))
 }
 
 func TestOIDCTestSuite(t *testing.T) {

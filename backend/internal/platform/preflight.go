@@ -76,7 +76,7 @@ func Preflight(getenv func(string) string) []Problem {
 	}
 
 	if gm := getenv("GIN_MODE"); gm == "test" {
-		out = append(out, Problem{"GIN_MODE", "is test, which turns off rate limits and approves OAuth app access without asking; unset it", true})
+		out = append(out, Problem{"GIN_MODE", "is test, which turns off rate limits; unset it", true})
 	}
 	return out
 }

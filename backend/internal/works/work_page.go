@@ -22,7 +22,12 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Parse work ID (UUID or legacy)
-	workID, isRedirect, redirectURL := ws.parseWorkID(workIDParam)
+	workID, isRedirect, redirectURL, unknownLegacy := ws.parseWorkID(workIDParam)
+	if unknownLegacy {
+		// A well-formed AO3 number we have no work for (an old link)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		return
+	}
 	if isRedirect {
 		c.Redirect(http.StatusMovedPermanently, redirectURL)
 		return
@@ -108,25 +113,25 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 
 // Helper functions
 
-func (ws *WorkService) parseWorkID(workIDParam string) (uuid.UUID, bool, string) {
+func (ws *WorkService) parseWorkID(workIDParam string) (workID uuid.UUID, isRedirect bool, redirectURL string, unknownLegacy bool) {
 	// Try UUID first
 	if workID, err := uuid.Parse(workIDParam); err == nil {
-		return workID, false, ""
+		return workID, false, "", false
 	}
 
-	// Try legacy ID
-	if legacyID, err := strconv.Atoi(workIDParam); err == nil {
+	// Try legacy ID (an AO3 number; negatives are not numbers)
+	if legacyID, err := strconv.Atoi(workIDParam); err == nil && legacyID >= 0 {
 		// Look up UUID and redirect
 		var workUUID uuid.UUID
 		err = ws.db.QueryRow("SELECT id FROM works WHERE legacy_id = $1", legacyID).Scan(&workUUID)
 		if err != nil {
-			return uuid.Nil, false, ""
+			return uuid.Nil, false, "", true
 		}
 		redirectURL := fmt.Sprintf("/api/v1/work/%s", workUUID.String())
-		return uuid.Nil, true, redirectURL
+		return uuid.Nil, true, redirectURL, false
 	}
 
-	return uuid.Nil, false, ""
+	return uuid.Nil, false, "", false
 }
 
 func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*models.Work, error) {

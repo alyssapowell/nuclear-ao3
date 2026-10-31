@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"nuclear-ao3/internal/testdb"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -22,14 +23,16 @@ type DebugTestSuite struct {
 }
 
 func (suite *DebugTestSuite) SetupSuite() {
-	// Initialize auth service for testing
-	suite.authService = NewAuthService()
+	// Initialize auth service on a fresh test database
+	as, err := newTestAuthService(testdb.New(suite.T()))
+	suite.Require().NoError(err)
+	suite.authService = as
 	suite.router = setupRouter(suite.authService)
 }
 
 func (suite *DebugTestSuite) TearDownSuite() {
 	if suite.authService != nil {
-		suite.authService.Close()
+		suite.authService.db.Close()
 	}
 }
 

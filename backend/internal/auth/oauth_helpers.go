@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -160,15 +161,7 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 		return
 	}
 
-	// For test mode, automatically approve consent; in production, render HTML
-	if gin.Mode() == gin.TestMode {
-		// Auto-approve consent for testing
-		as.processConsent(c, consentID, true)
-		return
-	}
-
-	// In production, would render actual consent screen HTML
-	// For now, return JSON response indicating consent is needed
+	// The website shows the consent screen from this answer
 	c.JSON(http.StatusOK, gin.H{
 		"consent_required":   true,
 		"consent_id":         consentID,
@@ -409,6 +402,16 @@ func (as *AuthService) generateTokens(userID, clientID uuid.UUID, scopes []strin
 	return accessToken, refreshToken, nil
 }
 
+// inetOrZero makes a client address fit an inet column: an address that does
+// not parse (for example none, behind a unix socket) is stored as 0.0.0.0, as
+// sessions do, instead of failing the whole request.
+func inetOrZero(ip string) string {
+	if net.ParseIP(ip) == nil {
+		return "0.0.0.0"
+	}
+	return ip
+}
+
 func (as *AuthService) storeAccessToken(token *models.OAuthAccessToken) error {
 	query := `
 		INSERT INTO oauth_access_tokens (
@@ -418,7 +421,7 @@ func (as *AuthService) storeAccessToken(token *models.OAuthAccessToken) error {
 
 	_, err := as.db.Exec(query,
 		token.ID, token.Token, token.UserID, token.ClientID, pq.Array(token.Scopes),
-		token.TokenType, token.ExpiresAt, token.IPAddress, token.UserAgent, token.CreatedAt)
+		token.TokenType, token.ExpiresAt, inetOrZero(token.IPAddress), token.UserAgent, token.CreatedAt)
 
 	return err
 }

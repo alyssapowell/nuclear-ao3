@@ -123,7 +123,7 @@ Status key:
   - **Gifts no longer say who blocked you:** a gift to someone with a block against a creator answers 201 like any gift, is stored as shadowed, and is shown only to the work's creators (not the recipient, not the public gift list), and notifies nobody. Creating gifts is limited to 30 per account per hour (429 `rate_limit_exceeded` with `Retry-After`, the same for everyone).
   - **Comment actions check visibility first:** editing, deleting, freezing or moderating a comment you can't see is 404, before any 403 about ownership or the block.
   - Open: a blocked reader still sees a work's comment count in search results and lists on works whose creator is named (the work page and stats show 0).
-  - Open: chapter comments can't be posted at all (the comments table's `comment_target` check refuses a row with both `work_id` and `chapter_id`, which is what `CreateComment` writes); found while testing, not fixed.
+  - ~~Chapter comments couldn't be posted~~ **Fixed** (migration 043, 2026-10-31): the comments table's `comment_target` check refused a row with both `work_id` and `chapter_id`, which is what `CreateComment` writes. AO3 (`comment.rb`) comments on a chapter and treats the work as the comment's ultimate parent, so the rule is now: every comment has a `work_id`, and may name a `chapter_id` that must be a chapter of that work (a composite foreign key). Counts, notifications, visibility and blocks already read `work_id`. Posting also checks the chapter is visible to the commenter (a draft chapter takes comments only from its creators). Tested in `comments_test.go` and `migrations/chapter_comments_test.go`.
 - **Privacy settings wizard, GDPR consent, data rights** (migration 016)
   - Status: Unverified.
 
@@ -244,3 +244,19 @@ These were fixed by merging the backend into one program with one login check (`
 - **The works and auth test suites use the developer's own Postgres** (`localhost:5432/ao3_nuclear`) instead of a fresh database, so results depend on that machine. They should use `internal/testdb`, which builds a migrated database per test, as the search tests do.
 - **Work gifts need a login to read** (`GET /works/:work_id/gifts` is behind `RequireUser`). On AO3, gifts show to everyone.
 - **API endpoints the website calls that fail** (seen 2026-10-30 with a fresh database): `GET /my/bookmarks` returns 500 ("Failed to count bookmarks"); the profile and pseud endpoints return 404; work gifts return 401 for logged-out readers, so the work page shows "Error loading gifts".
+
+## Found while making `go test ./...` pass (2026-10-31)
+
+Fixed, each with a test:
+- Deleting a chapter always failed (the renumbering query had an unused parameter, and renumbering broke the unique `(work_id, chapter_number)` check).
+- The older `/admin/works`, `/admin/comments` and `/admin/reports` endpoints refused every administrator: they read `users.role`, which nothing sets. They now read `user_roles`, like the route guard. `GET /admin/statistics` did the same and also queried a column (`users.last_seen_at`) that does not exist.
+- `PUT /admin/comments/:id/status` answered 500 for statuses the table does not allow; it now says 400 and accepts only `published` and `hidden`.
+- OAuth "client credentials" tokens could not be stored (`oauth_access_tokens.user_id` was NOT NULL), and any request with no usable client address failed on the `inet` column. Userinfo and introspection failed for every account with no bio, location or website (NULL scanned into a string).
+- The OAuth consent screen approved itself whenever Gin was in test mode. Removed; the server already refused to start in that mode.
+- `POST /works` accepted a work with no title, language, fandom or text (the `validate` tags are never read) and answered 500 for a bad rating. It now answers 400.
+- An unknown AO3 number in `/works/:id` answered 400 instead of 404; an empty gift list was `null`; empty tag lists were `null`; the notification list failed (500) when any notification had no link or actor name.
+
+Still open:
+- Tag prominence (migration 010) is only a schema: its trigger joins `work_tags.tag_name`, which does not exist, and no Go code uses it. Its test is skipped with that reason.
+- `internal/auth/oauth_performance_test.go` is an opt-in load test (`RUN_PERF_TESTS=1`); it does not finish within a few minutes and has not been brought up to date.
+- Handlers with no route (dead code): `GetWorkWithTags`, `UploadWorkAttachment`, `SearchWorksAdvanced` in `internal/works/enhanced_handlers.go`.

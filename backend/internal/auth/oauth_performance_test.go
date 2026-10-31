@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"nuclear-ao3/internal/testdb"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -40,24 +41,14 @@ func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
 		suite.T().Skip("load test; set RUN_PERF_TESTS=1 to run")
 	}
 
-	// Use test database
-	testDB := os.Getenv("TEST_DATABASE_URL")
-	if testDB == "" {
-		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
-	}
-
-	db, err := sql.Open("postgres", testDB)
-	require.NoError(suite.T(), err)
+	// A fresh, fully migrated database for this suite
+	db := testdb.New(suite.T())
 	suite.db = db
 
 	// Create test auth service
-	jwtManager, err := newTestJWTManager("test-perf-issuer")
+	service, err := newTestAuthService(db)
 	require.NoError(suite.T(), err)
-
-	suite.service = &AuthService{
-		db:  db,
-		jwt: jwtManager,
-	}
+	suite.service = service
 
 	// Setup test router
 	gin.SetMode(gin.TestMode)
@@ -100,28 +91,9 @@ func (suite *OAuth2PerformanceTestSuite) setupPerformanceTestData() {
 }
 
 func (suite *OAuth2PerformanceTestSuite) createTestUser(username, email, password string) {
-	registerReq := models.RegisterRequest{
-		Username:        username,
-		Email:           email,
-		Password:        password,
-		ConfirmPassword: password,
-		DisplayName:     fmt.Sprintf("Perf Test %s", username),
-		AcceptTOS:       true,
-	}
-
-	jsonBody, _ := json.Marshal(registerReq)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/v1/auth/register", bytes.NewBuffer(jsonBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(w, req)
-
-	if w.Code == http.StatusCreated {
-		var response models.AuthResponse
-		json.Unmarshal(w.Body.Bytes(), &response)
-		suite.testUsers[username] = response.User
-		suite.db.Exec("UPDATE users SET is_verified = true WHERE id = $1", response.User.ID)
-	}
+	user, err := seedUser(suite.db, username, email, password)
+	suite.Require().NoError(err)
+	suite.testUsers[username] = user
 }
 
 func (suite *OAuth2PerformanceTestSuite) createPerformanceTestClients() {
@@ -692,7 +664,7 @@ func (suite *OAuth2PerformanceTestSuite) getAuthorizationCode(client *models.OAu
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
-	suite.mockUserSession(req, user.ID)
+	suite.signInAs(req, user.ID)
 
 	suite.router.ServeHTTP(w, req)
 
@@ -740,8 +712,8 @@ func (suite *OAuth2PerformanceTestSuite) getTokenPair(client *models.OAuthClient
 	return tokenResp.AccessToken, tokenResp.RefreshToken
 }
 
-func (suite *OAuth2PerformanceTestSuite) mockUserSession(req *http.Request, userID uuid.UUID) {
-	req.Header.Set("X-Test-User-ID", userID.String())
+func (suite *OAuth2PerformanceTestSuite) signInAs(req *http.Request, userID uuid.UUID) {
+	suite.Require().NoError(signIn(suite.service, req, userID))
 }
 
 func (suite *OAuth2PerformanceTestSuite) calculateAverage(times []time.Duration) time.Duration {

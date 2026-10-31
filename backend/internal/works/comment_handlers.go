@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -21,248 +20,6 @@ import (
 )
 
 // Comment handlers for the work service
-
-// GetWorkComments retrieves comments for a specific work with threading
-func (ws *WorkService) GetWorkComments(c *gin.Context) {
-	workID := c.Param("id")
-	if workID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Work ID is required"})
-		return
-	}
-
-	// Parse query parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	sortBy := c.DefaultQuery("sort_by", "created_at")
-	sortOrder := c.DefaultQuery("sort_order", "asc")
-
-	// Validate sort parameters
-	validSortFields := map[string]bool{
-		"created_at":   true,
-		"updated_at":   true,
-		"kudos_count":  true,
-		"reply_count":  true,
-		"thread_level": true,
-	}
-
-	if !validSortFields[sortBy] {
-		sortBy = "created_at"
-	}
-
-	if sortOrder != "asc" && sortOrder != "desc" {
-		sortOrder = "asc"
-	}
-
-	offset := (page - 1) * limit
-
-	// Query to get comments with author details
-	query := `
-		SELECT 
-			c.id, c.work_id, c.chapter_id, c.user_id, c.pseudonym_id, c.parent_comment_id,
-			c.content, c.guest_name, c.guest_email, c.is_deleted, c.is_moderated, c.is_spam,
-			c.thread_level, c.kudos_count, c.reply_count, c.created_at, c.updated_at, c.edited_at,
-			CASE WHEN ` + creatorHiddenSQL + ` THEN '` + anonymousCreatorLabel + `'
-			     ELSE COALESCE(up.name, c.guest_name) END as author_name,
-			u.id as author_user_id,
-			CASE WHEN ` + creatorHiddenSQL + ` THEN NULL ELSE up.id END as author_pseudonym_id,
-			CASE 
-				WHEN c.guest_name IS NOT NULL THEN 'guest'
-				WHEN u.id IS NOT NULL THEN 'user'
-				ELSE 'unknown'
-			END as author_type,
-			w.title as work_title,
-			w.user_id as work_author_id,
-			` + creatorHiddenSQL + ` as creator_hidden
-		FROM comments c
-		LEFT JOIN users u ON c.user_id = u.id
-		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
-		LEFT JOIN works w ON c.work_id = w.id
-		WHERE c.work_id = $1 AND c.is_deleted = false AND NOT c.shadowed
-		ORDER BY ` + sortBy + ` ` + sortOrder + `
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := ws.db.Query(query, workID, limit, offset)
-	if err != nil {
-		// Log error and return
-		// s.logger.Error("Failed to get work comments", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve comments"})
-		return
-	}
-	defer rows.Close()
-
-	var comments []models.CommentWithDetails
-
-	for rows.Next() {
-		var comment models.CommentWithDetails
-		var pseudonymID, userID, parentCommentID sql.NullString
-		var chapterID sql.NullString
-		var editedAt sql.NullTime
-		var creatorHidden bool
-
-		err := rows.Scan(
-			&comment.ID, &comment.WorkID, &chapterID, &userID, &pseudonymID, &parentCommentID,
-			&comment.Content, &comment.GuestName, &comment.GuestEmail, &comment.IsDeleted,
-			&comment.IsModerated, &comment.IsSpam, &comment.ThreadLevel, &comment.KudosCount,
-			&comment.ReplyCount, &comment.CreatedAt, &comment.UpdatedAt, &editedAt,
-			&comment.AuthorName, &comment.AuthorUserID, &comment.AuthorPseudonymID,
-			&comment.AuthorType, &comment.WorkTitle, &comment.WorkAuthorID,
-			&creatorHidden,
-		)
-		if err != nil {
-			// Log error and continue
-			continue
-		}
-
-		// Handle nullable fields
-		if chapterID.Valid {
-			chapterUUID, _ := uuid.Parse(chapterID.String)
-			comment.ChapterID = &chapterUUID
-		}
-		if userID.Valid {
-			userUUID, _ := uuid.Parse(userID.String)
-			comment.UserID = &userUUID
-		}
-		if pseudonymID.Valid {
-			pseudUUID, _ := uuid.Parse(pseudonymID.String)
-			comment.PseudonymID = &pseudUUID
-		}
-		if parentCommentID.Valid {
-			parentUUID, _ := uuid.Parse(parentCommentID.String)
-			comment.ParentCommentID = &parentUUID
-		}
-		if editedAt.Valid {
-			comment.EditedAt = &editedAt.Time
-		}
-
-		shapeCommentPseud(&comment, creatorHidden)
-		comments = append(comments, comment)
-	}
-
-	// Get total count for pagination
-	var totalCount int
-	countQuery := `SELECT COUNT(*) FROM comments WHERE work_id = $1 AND is_deleted = false AND NOT shadowed`
-	err = ws.db.QueryRow(countQuery, workID).Scan(&totalCount)
-	if err != nil {
-		// Log error and use comments length as fallback
-		totalCount = len(comments)
-	}
-
-	// Build comment tree if requested
-	threaded := c.Query("threaded") == "true"
-	if threaded {
-		// Get current user for permissions
-		var currentUserID *uuid.UUID
-		if userIDValue := c.GetString("user_id"); userIDValue != "" {
-			if parsedID, err := uuid.Parse(userIDValue); err == nil {
-				currentUserID = &parsedID
-			}
-		}
-
-		commentTree := models.BuildCommentTree(comments, currentUserID)
-
-		c.JSON(http.StatusOK, gin.H{
-			"comments":    commentTree,
-			"total_count": totalCount,
-			"page":        page,
-			"limit":       limit,
-			"total_pages": (totalCount + limit - 1) / limit,
-			"threaded":    true,
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"comments":    comments,
-		"total_count": totalCount,
-		"page":        page,
-		"limit":       limit,
-		"total_pages": (totalCount + limit - 1) / limit,
-		"threaded":    false,
-	})
-}
-
-// CreateGuestComment creates a guest comment without any auth middleware
-func (ws *WorkService) CreateGuestComment(c *gin.Context) {
-	var req models.CommentCreateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
-		return
-	}
-
-	// For guest comments, require guest name
-	if req.GuestName == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Guest name is required for guest comments"})
-		return
-	}
-
-	// Get work ID from URL parameter
-	workIDStr := c.Param("work_id")
-	workID, err := uuid.Parse(workIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid work ID"})
-		return
-	}
-	req.WorkID = &workID
-
-	// Validate the request
-	if err := req.Validate(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid comment data"})
-		return
-	}
-
-	// Verify the work exists
-	var exists bool
-	err = ws.db.QueryRow("SELECT EXISTS(SELECT 1 FROM works WHERE id = $1)", req.WorkID).Scan(&exists)
-	if err != nil || !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
-		return
-	}
-
-	// Create the comment using same logic as CreateComment
-	commentID := uuid.New()
-	ipAddress := c.ClientIP()
-
-	// Handle empty IP address for test environments
-	var ipParam interface{}
-	if ipAddress == "" {
-		ipParam = nil
-	} else {
-		ipParam = ipAddress
-	}
-
-	query := `
-		INSERT INTO comments (
-			id, work_id, chapter_id, user_id, pseudonym_id, parent_comment_id,
-			content, guest_name, guest_email, ip_address, created_at, updated_at
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
-		)
-	`
-
-	_, err = ws.db.Exec(query,
-		commentID, req.WorkID, req.ChapterID, nil, nil, req.ParentCommentID,
-		html.Clean(req.Content), req.GuestName, req.GuestEmail, ipParam,
-	)
-
-	if err != nil {
-		log.Printf("create comment: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
-		return
-	}
-
-	// Retrieve the created comment with details
-	comment, err := ws.getCommentByID(commentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Comment created but failed to retrieve details"})
-		return
-	}
-
-	// Trigger notification for comment creation
-	go ws.triggerCommentNotification(comment, "comment_created")
-
-	c.JSON(http.StatusCreated, comment)
-}
 
 // CreateComment creates a new comment on a work or chapter
 func (ws *WorkService) CreateComment(c *gin.Context) {
@@ -332,6 +89,14 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", req.WorkID, userID).Scan(&canView); err != nil || !canView {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
+	}
+	// ...and a chapter you're allowed to see (not another draft chapter).
+	if req.ChapterID != nil {
+		var canViewChapter bool
+		if err := ws.db.QueryRow("SELECT can_user_view_chapter($1, $2)", req.ChapterID, userID).Scan(&canViewChapter); err != nil || !canViewChapter {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chapter not found"})
+			return
+		}
 	}
 
 	// A block between the commenter and one of the work's creators closes

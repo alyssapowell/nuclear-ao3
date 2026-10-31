@@ -13,7 +13,8 @@ import (
 func (as *AuthService) getUserByID(userID uuid.UUID) (*models.User, error) {
 	var user models.User
 	query := `
-		SELECT id, username, email, display_name, bio, location, website, 
+		SELECT id, username, email, COALESCE(display_name, ''), COALESCE(bio, ''),
+			   COALESCE(location, ''), COALESCE(website, ''),
 			   is_active, is_verified, last_login_at, created_at, updated_at
 		FROM users 
 		WHERE id = $1`

@@ -39,6 +39,10 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 		return
 	}
 	userID := *user
+	if err := req.Validate(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		return
+	}
 
 	tx, err := ws.db.Begin()
 	if err != nil {

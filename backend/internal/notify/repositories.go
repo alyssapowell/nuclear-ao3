@@ -222,8 +222,8 @@ func (r *NotificationRepositoryImpl) CreateNotification(ctx context.Context, not
 
 func (r *NotificationRepositoryImpl) GetNotification(ctx context.Context, id uuid.UUID) (*models.NotificationItem, error) {
 	query := `
-		SELECT id, user_id, event, priority, source_id, source_type, title, description, action_url,
-		       actor_id, actor_name, extra_data, is_read, is_delivered, created_at, read_at, delivered_at
+		SELECT id, user_id, event, priority, source_id, source_type, title, COALESCE(description, ''), COALESCE(action_url, ''),
+		       actor_id, COALESCE(actor_name, ''), extra_data, is_read, is_delivered, created_at, read_at, delivered_at
 		FROM notification_items WHERE id = $1
 	`
 	var notification models.NotificationItem
@@ -273,8 +273,8 @@ func (r *NotificationRepositoryImpl) DeleteNotification(ctx context.Context, id,
 
 func (r *NotificationRepositoryImpl) GetUserNotifications(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*models.NotificationItem, error) {
 	query := `
-		SELECT id, user_id, event, priority, source_id, source_type, title, description, action_url,
-		       actor_id, actor_name, extra_data, is_read, is_delivered, created_at, read_at, delivered_at
+		SELECT id, user_id, event, priority, source_id, source_type, title, COALESCE(description, ''), COALESCE(action_url, ''),
+		       actor_id, COALESCE(actor_name, ''), extra_data, is_read, is_delivered, created_at, read_at, delivered_at
 		FROM notification_items WHERE user_id = $1 
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3
 	`
@@ -319,8 +319,8 @@ func (r *NotificationRepositoryImpl) GetUnreadCount(ctx context.Context, userID 
 func (r *NotificationRepositoryImpl) GetNotificationsForBatch(ctx context.Context, userID uuid.UUID, frequency models.NotificationFrequency) ([]*models.NotificationItem, error) {
 	// Get undelivered notifications for batching
 	query := `
-		SELECT id, user_id, event, priority, source_id, source_type, title, description, action_url,
-		       actor_id, actor_name, extra_data, is_read, is_delivered, created_at, read_at, delivered_at
+		SELECT id, user_id, event, priority, source_id, source_type, title, COALESCE(description, ''), COALESCE(action_url, ''),
+		       actor_id, COALESCE(actor_name, ''), extra_data, is_read, is_delivered, created_at, read_at, delivered_at
 		FROM notification_items 
 		WHERE user_id = $1 AND is_delivered = false
 		ORDER BY created_at ASC

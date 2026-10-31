@@ -1,7 +1,9 @@
 package works
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,17 +24,17 @@ type WorkServiceTestSuite struct {
 
 func (suite *WorkServiceTestSuite) SetupSuite() {
 	// Use existing work service instance for integration testing
-	suite.service = NewWorkService()
+	suite.service = newTestWorkService(suite.T())
 
 	// Setup test data
 	suite.setupTestData()
 }
 
 func (suite *WorkServiceTestSuite) setupTestData() {
-	// Use existing test users from migration or create if needed
 	suite.testUsers = make(map[string]uuid.UUID)
 
-	// First, try to use existing users from migration
+	// Two authors (there are no built-in accounts; each gets its default pseud
+	// from the database)
 	existingUsers := []struct {
 		username string
 		id       string
@@ -45,6 +47,9 @@ func (suite *WorkServiceTestSuite) setupTestData() {
 		userID, err := uuid.Parse(userData.id)
 		suite.Require().NoError(err)
 		suite.testUsers[userData.username] = userID
+		_, err = suite.service.db.Exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
+			VALUES ($1, $2, $3, 'x', true, true)`, userID, userData.username, userData.username+"@example.org")
+		suite.Require().NoError(err)
 	}
 
 	// Create test works
@@ -55,7 +60,7 @@ func (suite *WorkServiceTestSuite) setupTestData() {
 			Summary:   "A story about winter adventures",
 			UserID:    suite.testUsers["testuser"],
 			Language:  "en",
-			Rating:    "Teen And Up Audiences",
+			Rating:    "teen",
 			Status:    "published",
 			WordCount: 5000,
 			CreatedAt: time.Now(),
@@ -67,22 +72,40 @@ func (suite *WorkServiceTestSuite) setupTestData() {
 			Summary:   "An epic fantasy with mature themes",
 			UserID:    suite.testUsers["author2"],
 			Language:  "en",
-			Rating:    "Mature",
+			Rating:    "mature",
 			Status:    "published",
 			WordCount: 12000,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
+		{
+			ID:        uuid.New(),
+			Title:     "A Plain Modern Story",
+			Summary:   "Posted here, never imported",
+			UserID:    suite.testUsers["testuser"],
+			Language:  "en",
+			Rating:    "general",
+			Status:    "published",
+			WordCount: 800,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		},
 	}
 
-	// Insert test works into database
+	// Insert the works as the API would leave them: posted, with a chapter and
+	// a creator, so strangers can find them
 	for _, work := range suite.testWorks {
 		_, err := suite.service.db.Exec(`
-			INSERT INTO works (id, title, summary, user_id, language, rating, word_count, is_draft, created_at, updated_at) 
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
-			ON CONFLICT (id) DO NOTHING`,
+			INSERT INTO works (id, title, summary, user_id, language, rating, status, word_count, is_draft, published_at, fandoms, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, 'published', $7, false, $8, '{Test Fandom}', $8, $9)`,
 			work.ID, work.Title, work.Summary, work.UserID, work.Language,
-			work.Rating, work.WordCount, false, work.CreatedAt, work.UpdatedAt)
+			work.Rating, work.WordCount, work.CreatedAt, work.UpdatedAt)
+		suite.Require().NoError(err)
+		_, err = suite.service.db.Exec(`INSERT INTO chapters (work_id, chapter_number, title, content, is_draft, published_at, summary, notes, end_notes)
+			VALUES ($1, 1, 'one', 'text', false, now(), '', '', '')`, work.ID)
+		suite.Require().NoError(err)
+		_, err = suite.service.db.Exec(`INSERT INTO creatorships (creation_id, creation_type, pseud_id)
+			SELECT $1, 'Work', id FROM pseuds WHERE user_id = $2 AND is_default`, work.ID, work.UserID)
 		suite.Require().NoError(err)
 	}
 }
@@ -139,7 +162,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorksWithFilters() {
 
 	w := testutils.PerformRequest(router, testutils.TestRequest{
 		Method:       "GET",
-		URL:          "/api/v1/works?rating=Mature&limit=3",
+		URL:          "/api/v1/works?rating=mature&limit=3",
 		ExpectedCode: 200,
 	})
 
@@ -150,7 +173,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorksWithFilters() {
 	for _, work := range works {
 		workData := work.(map[string]interface{})
 		if rating, exists := workData["rating"]; exists {
-			assert.Equal(suite.T(), "Mature", rating)
+			assert.Equal(suite.T(), "mature", rating)
 		}
 	}
 }
@@ -198,7 +221,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorksMultipleFilters() {
 	// Test multiple filters
 	w := testutils.PerformRequest(router, testutils.TestRequest{
 		Method:       "GET",
-		URL:          "/api/v1/works?rating=Teen+And+Up+Audiences&language=en&limit=10",
+		URL:          "/api/v1/works?rating=teen&language=en&limit=10",
 		ExpectedCode: 200,
 	})
 
@@ -208,7 +231,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorksMultipleFilters() {
 	for _, work := range works {
 		workData := work.(map[string]interface{})
 		if rating, exists := workData["rating"]; exists {
-			assert.Equal(suite.T(), "Teen And Up Audiences", rating)
+			assert.Equal(suite.T(), "teen", rating)
 		}
 		if language, exists := workData["language"]; exists {
 			assert.Equal(suite.T(), "en", language)
@@ -230,11 +253,12 @@ func (suite *WorkServiceTestSuite) TestGetWorkByID() {
 
 	response := testutils.AssertJSONResponse(suite.T(), w, 200)
 
-	// Check work details
-	assert.Equal(suite.T(), testWork.Title, response["title"])
-	assert.Equal(suite.T(), testWork.Summary, response["summary"])
-	assert.Equal(suite.T(), testWork.Rating, response["rating"])
-	assert.Equal(suite.T(), testWork.Language, response["language"])
+	// Check work details (the work is under "work", its authors beside it)
+	work := response["work"].(map[string]interface{})
+	assert.Equal(suite.T(), testWork.Title, work["title"])
+	assert.Equal(suite.T(), testWork.Summary, work["summary"])
+	assert.Equal(suite.T(), testWork.Rating, work["rating"])
+	assert.Equal(suite.T(), testWork.Language, work["language"])
 }
 
 func (suite *WorkServiceTestSuite) TestGetWorkByID_NotFound() {
@@ -359,7 +383,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_QueryParameters() {
 		},
 		{
 			name:        "filter by rating",
-			queryParams: "?rating=Teen+And+Up+Audiences",
+			queryParams: "?rating=teen",
 			expectEmpty: false,
 		},
 		{
@@ -369,7 +393,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_QueryParameters() {
 		},
 		{
 			name:        "combined filters",
-			queryParams: "?rating=Teen+And+Up+Audiences&language=en",
+			queryParams: "?rating=teen&language=en",
 			expectEmpty: false,
 		},
 		{
@@ -428,10 +452,10 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_AdvancedFiltering() {
 		},
 		{
 			name:          "search by mature rating",
-			queryParams:   "?rating=Mature",
+			queryParams:   "?rating=mature",
 			expectResults: true,
 			expectedFields: map[string]interface{}{
-				"rating": "Mature",
+				"rating": "mature",
 			},
 		},
 		{
@@ -558,7 +582,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_SortingAndOrdering() {
 			if len(works) > 0 {
 				firstWork := works[0].(map[string]interface{})
 				expectedFields := []string{
-					"id", "title", "summary", "author", "language", "rating",
+					"id", "title", "summary", "language", "rating",
 					"word_count", "chapter_count", "is_complete", "created_at", "updated_at",
 				}
 
@@ -600,7 +624,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_ErrorHandling() {
 		},
 		{
 			name:        "very long query",
-			queryParams: "?q=" + string(make([]byte, 1000)), // Very long query
+			queryParams: "?q=" + strings.Repeat("a", 1000), // Very long query
 			description: "Should handle very long query gracefully",
 		},
 	}
@@ -649,29 +673,32 @@ func (suite *WorkServiceTestSuite) TestGetWork_DetailedFields() {
 
 	response := testutils.AssertJSONResponse(suite.T(), w, 200)
 
-	// Verify all expected fields are present
+	// The work is under "work"; its authors are beside it, as pseuds only.
+	work := response["work"].(map[string]interface{})
 	expectedFields := []string{
-		"id", "title", "summary", "notes", "author", "language", "rating",
+		"id", "title", "summary", "notes", "language", "rating",
 		"word_count", "chapter_count", "is_complete", "created_at", "updated_at",
 	}
 
 	for _, field := range expectedFields {
-		assert.Contains(suite.T(), response, field, "Response should contain field %s", field)
+		assert.Contains(suite.T(), work, field, "Work should contain field %s", field)
+	}
+	for _, banned := range []string{"user_id", "username", "author", "email"} {
+		assert.NotContains(suite.T(), work, banned, "Work must not name its account (%s)", banned)
 	}
 
 	// Verify specific data types
-	assert.IsType(suite.T(), "", response["id"], "ID should be string")
-	assert.IsType(suite.T(), "", response["title"], "Title should be string")
-	assert.IsType(suite.T(), "", response["author"], "Author should be string")
-	assert.IsType(suite.T(), float64(0), response["word_count"], "Word count should be number")
-	assert.IsType(suite.T(), float64(0), response["chapter_count"], "Chapter count should be number")
-	assert.IsType(suite.T(), false, response["is_complete"], "Is complete should be boolean")
+	assert.IsType(suite.T(), "", work["id"], "ID should be string")
+	assert.IsType(suite.T(), "", work["title"], "Title should be string")
+	assert.IsType(suite.T(), float64(0), work["word_count"], "Word count should be number")
+	assert.IsType(suite.T(), float64(0), work["chapter_count"], "Chapter count should be number")
+	assert.IsType(suite.T(), false, work["is_complete"], "Is complete should be boolean")
 
 	// Verify data matches what we inserted
-	assert.Equal(suite.T(), testWork.Title, response["title"])
-	assert.Equal(suite.T(), testWork.Summary, response["summary"])
-	assert.Equal(suite.T(), testWork.Language, response["language"])
-	assert.Equal(suite.T(), testWork.Rating, response["rating"])
+	assert.Equal(suite.T(), testWork.Title, work["title"])
+	assert.Equal(suite.T(), testWork.Summary, work["summary"])
+	assert.Equal(suite.T(), testWork.Language, work["language"])
+	assert.Equal(suite.T(), testWork.Rating, work["rating"])
 }
 
 func (suite *WorkServiceTestSuite) TestGetWork_EdgeCases() {
@@ -696,12 +723,6 @@ func (suite *WorkServiceTestSuite) TestGetWork_EdgeCases() {
 			description:  "Should return 400 for malformed UUID",
 		},
 		{
-			name:         "empty UUID",
-			workID:       "",
-			expectedCode: 404, // Gin router will return 404 for empty param
-			description:  "Should handle empty UUID gracefully",
-		},
-		{
 			name:         "UUID with extra characters",
 			workID:       uuid.New().String() + "extra",
 			expectedCode: 400,
@@ -711,10 +732,7 @@ func (suite *WorkServiceTestSuite) TestGetWork_EdgeCases() {
 
 	for _, tc := range testCases {
 		suite.T().Run(tc.name, func(t *testing.T) {
-			url := "/api/v1/works/"
-			if tc.workID != "" {
-				url += tc.workID
-			}
+			url := "/api/v1/works/" + tc.workID
 
 			w := testutils.PerformRequest(router, testutils.TestRequest{
 				Method:       "GET",
@@ -741,7 +759,7 @@ func (suite *WorkServiceTestSuite) TestSearchWorks_PerformanceBaseline() {
 	performanceQueries := []string{
 		"?limit=20",
 		"?q=test&limit=10",
-		"?rating=Teen+And+Up+Audiences&limit=15",
+		"?rating=teen&limit=15",
 		"?language=en&limit=25",
 		"?page=1&limit=50",
 	}
@@ -844,11 +862,10 @@ func (suite *WorkServiceTestSuite) TestGetWork_WithAuthors() {
 
 	if len(authors) > 0 {
 		author := authors[0].(map[string]interface{})
-		assert.Contains(suite.T(), author, "pseud_id")
-		assert.Contains(suite.T(), author, "pseud_name")
-		assert.Contains(suite.T(), author, "user_id")
-		assert.Contains(suite.T(), author, "username")
-		assert.Contains(suite.T(), author, "is_anonymous")
+		// A person appears only as a pseud: {id, name}, nothing about the account
+		assert.Len(suite.T(), author, 2)
+		assert.Contains(suite.T(), author, "id")
+		assert.Contains(suite.T(), author, "name")
 	}
 }
 
@@ -969,9 +986,8 @@ func (suite *WorkServiceTestSuite) TestGetWork_WorkWithoutLegacyID() {
 	response := testutils.AssertJSONResponse(suite.T(), w, 200)
 	work := response["work"].(map[string]interface{})
 
-	// Legacy ID should be null for modern works
-	assert.Contains(suite.T(), work, "legacy_id", "Work should include legacy_id field")
-	assert.Nil(suite.T(), work["legacy_id"], "Legacy ID should be null for modern works")
+	// A work posted here has no AO3 number, so the field is left out
+	assert.NotContains(suite.T(), work, "legacy_id")
 }
 
 func (suite *WorkServiceTestSuite) TestGetWork_UUIDOnLegacyRoute() {
@@ -1073,11 +1089,10 @@ func (suite *WorkServiceTestSuite) TestProtectedEndpoints_NoAuth() {
 				URL:          endpoint.url,
 				Body:         `{}`,
 				Headers:      map[string]string{"Content-Type": "application/json"},
-				ExpectedCode: 200, // Middleware passes through in test mode
+				ExpectedCode: 401,
 			})
 
-			// In actual implementation, these would be 401, but our test middleware passes through
-			_ = w // Just verify the endpoints exist and don't crash
+			assert.Equal(t, 401, w.Code, "needs a login")
 		})
 	}
 }
@@ -1089,9 +1104,18 @@ func (suite *WorkServiceTestSuite) TestPublicEndpoints_WorkGifts() {
 	// Use one of our test works
 	testWork := suite.testWorks[0]
 
+	// Reading a work's gifts needs a login (a known gap, see docs/FEATURES.md)
 	w := testutils.PerformRequest(router, testutils.TestRequest{
 		Method:       "GET",
 		URL:          "/api/v1/works/" + testWork.ID.String() + "/gifts",
+		ExpectedCode: 401,
+	})
+	assert.Equal(suite.T(), 401, w.Code)
+
+	w = testutils.PerformRequest(router, testutils.TestRequest{
+		Method:       "GET",
+		URL:          "/api/v1/works/" + testWork.ID.String() + "/gifts",
+		Headers:      suite.loginHeader("testuser"),
 		ExpectedCode: 200,
 	})
 
@@ -1122,12 +1146,12 @@ func (suite *WorkServiceTestSuite) TestCreateWork_ValidationErrors() {
 	}{
 		{
 			name:         "missing title",
-			requestBody:  `{"summary": "Test", "language": "en", "rating": "General Audiences", "fandoms": ["Test"], "chapter_content": "Content"}`,
+			requestBody:  `{"summary": "Test", "language": "en", "rating": "general", "fandoms": ["Test"], "chapter_content": "Content"}`,
 			expectedCode: 400,
 		},
 		{
 			name:         "missing language",
-			requestBody:  `{"title": "Test", "summary": "Test", "rating": "General Audiences", "fandoms": ["Test"], "chapter_content": "Content"}`,
+			requestBody:  `{"title": "Test", "summary": "Test", "rating": "general", "fandoms": ["Test"], "chapter_content": "Content"}`,
 			expectedCode: 400,
 		},
 		{
@@ -1137,12 +1161,12 @@ func (suite *WorkServiceTestSuite) TestCreateWork_ValidationErrors() {
 		},
 		{
 			name:         "missing fandoms",
-			requestBody:  `{"title": "Test", "summary": "Test", "language": "en", "rating": "General Audiences", "chapter_content": "Content"}`,
+			requestBody:  `{"title": "Test", "summary": "Test", "language": "en", "rating": "general", "chapter_content": "Content"}`,
 			expectedCode: 400,
 		},
 		{
 			name:         "missing chapter content",
-			requestBody:  `{"title": "Test", "summary": "Test", "language": "en", "rating": "General Audiences", "fandoms": ["Test"]}`,
+			requestBody:  `{"title": "Test", "summary": "Test", "language": "en", "rating": "general", "fandoms": ["Test"]}`,
 			expectedCode: 400,
 		},
 		{
@@ -1152,7 +1176,7 @@ func (suite *WorkServiceTestSuite) TestCreateWork_ValidationErrors() {
 		},
 		{
 			name:         "invalid language",
-			requestBody:  `{"title": "Test", "summary": "Test", "language": "invalid", "rating": "General Audiences", "fandoms": ["Test"], "chapter_content": "Content"}`,
+			requestBody:  `{"title": "Test", "summary": "Test", "language": "invalid", "rating": "general", "fandoms": ["Test"], "chapter_content": "Content"}`,
 			expectedCode: 400,
 		},
 	}
@@ -1162,8 +1186,8 @@ func (suite *WorkServiceTestSuite) TestCreateWork_ValidationErrors() {
 			w := testutils.PerformRequest(router, testutils.TestRequest{
 				Method:       "POST",
 				URL:          "/api/v1/works",
-				Body:         tc.requestBody,
-				Headers:      map[string]string{"Content-Type": "application/json"},
+				Body:         json.RawMessage(tc.requestBody),
+				Headers:      suite.loginHeader("testuser"),
 				ExpectedCode: tc.expectedCode,
 			})
 
@@ -1241,7 +1265,7 @@ func (suite *WorkServiceTestSuite) TestWork_PrivacyFields() {
 	work := response["work"].(map[string]interface{})
 
 	privacyFields := []string{
-		"restricted",
+		"restricted_to_users",
 		"restricted_to_adults",
 		"comment_policy",
 		"moderate_comments",
@@ -1291,6 +1315,7 @@ func (suite *WorkServiceTestSuite) TestEndpoint_ResponseStructures() {
 			w := testutils.PerformRequest(router, testutils.TestRequest{
 				Method:       tc.method,
 				URL:          tc.url,
+				Headers:      suite.loginHeader("testuser"),
 				ExpectedCode: 200,
 			})
 
@@ -1301,6 +1326,12 @@ func (suite *WorkServiceTestSuite) TestEndpoint_ResponseStructures() {
 			}
 		})
 	}
+}
+
+// loginHeader logs a test user in the way setupRouter understands: the
+// bearer token is the user's id.
+func (suite *WorkServiceTestSuite) loginHeader(username string) map[string]string {
+	return map[string]string{"Authorization": "Bearer " + suite.testUsers[username].String()}
 }
 
 func TestWorkServiceTestSuite(t *testing.T) {

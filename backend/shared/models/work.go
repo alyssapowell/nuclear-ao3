@@ -1,6 +1,9 @@
 package models
 
 import (
+	"errors"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -252,6 +255,42 @@ type CreateWorkRequest struct {
 	ChapterNotes    string `json:"chapter_notes"`
 	ChapterEndNotes string `json:"chapter_end_notes"`
 	ChapterContent  string `json:"chapter_content" validate:"required"`
+}
+
+// languageCode is an AO3 language short code: two to four letters ("en", "cmn", "ptBR").
+var languageCode = regexp.MustCompile(`^[A-Za-z]{2,4}$`)
+
+// Validate checks what a new work must have. (The validate tags above are
+// documentation: nothing reads them, so without this a work with no title,
+// language, fandom or text was accepted.)
+func (r *CreateWorkRequest) Validate() error {
+	if strings.TrimSpace(r.Title) == "" {
+		return errors.New("a work needs a title")
+	}
+	if len([]rune(r.Title)) > 200 {
+		return errors.New("the title is too long (200 characters at most)")
+	}
+	if !languageCode.MatchString(r.Language) {
+		return errors.New("a work needs a language, such as \"en\"")
+	}
+	switch r.Rating {
+	case "general", "teen", "mature", "explicit":
+	default:
+		return errors.New("rating must be general, teen, mature or explicit")
+	}
+	fandoms := 0
+	for _, f := range r.Fandoms {
+		if strings.TrimSpace(f) != "" {
+			fandoms++
+		}
+	}
+	if fandoms == 0 {
+		return errors.New("a work needs at least one fandom")
+	}
+	if strings.TrimSpace(r.ChapterContent) == "" {
+		return errors.New("a work needs some text")
+	}
+	return nil
 }
 
 // UpdateWorkRequest represents the request to update work metadata

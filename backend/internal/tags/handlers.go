@@ -188,7 +188,7 @@ func (ts *TagService) SearchTags(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var tags []models.Tag
+	tags := []models.Tag{} // an empty list, not null
 	for rows.Next() {
 		var tag models.Tag
 		err := rows.Scan(
@@ -271,7 +271,7 @@ func (ts *TagService) AutocompleteTags(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var suggestions []models.TagSuggestion
+	suggestions := []models.TagSuggestion{} // an empty list, not null
 	for rows.Next() {
 		var suggestion models.TagSuggestion
 		err := rows.Scan(&suggestion.ID, &suggestion.Name, &suggestion.Type, &suggestion.UseCount, &suggestion.Canonical)
@@ -307,7 +307,7 @@ func (ts *TagService) GetTagsByWork(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var tags []models.Tag
+	tags := []models.Tag{} // an empty list, not null
 	for rows.Next() {
 		var tag models.Tag
 		err := rows.Scan(
@@ -467,7 +467,7 @@ func (ts *TagService) GetPopularTags(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var tags []models.Tag
+	tags := []models.Tag{} // an empty list, not null
 	for rows.Next() {
 		var tag models.Tag
 		err := rows.Scan(
@@ -519,7 +519,7 @@ func (ts *TagService) GetRelatedTags(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var relatedTags []models.TagSuggestion
+	relatedTags := []models.TagSuggestion{} // an empty list, not null
 	for rows.Next() {
 		var tag models.TagSuggestion
 		var relationStrength int
@@ -583,7 +583,7 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var works []gin.H
+	works := []gin.H{} // an empty list, not null
 	for rows.Next() {
 		var work gin.H = make(gin.H)
 		var id, title, summary, prominence string
@@ -677,7 +677,7 @@ func (ts *TagService) SearchFandoms(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var tags []models.Tag
+	tags := []models.Tag{} // an empty list, not null
 	for rows.Next() {
 		var tag models.Tag
 		err := rows.Scan(
@@ -843,7 +843,7 @@ func (ts *TagService) SearchCharacters(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var characters []models.TagSuggestion
+	characters := []models.TagSuggestion{} // an empty list, not null
 	for rows.Next() {
 		var character models.TagSuggestion
 		err := rows.Scan(&character.ID, &character.Name, &character.Type, &character.UseCount, &character.Canonical)
@@ -894,7 +894,7 @@ func (ts *TagService) GetCharacter(c *gin.Context) {
 		LIMIT 10
 	`, characterID)
 
-	var fandoms []gin.H
+	fandoms := []gin.H{} // an empty list, not null
 	if err == nil {
 		defer fandomRows.Close()
 		for fandomRows.Next() {
@@ -984,7 +984,7 @@ func (ts *TagService) SearchRelationships(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var relationships []gin.H
+	relationships := []gin.H{} // an empty list, not null
 	for rows.Next() {
 		var id, name, tagType string
 		var useCount int
@@ -1045,7 +1045,7 @@ func (ts *TagService) GetRelationship(c *gin.Context) {
 		LIMIT 10
 	`, relationshipID)
 
-	var fandoms []gin.H
+	fandoms := []gin.H{} // an empty list, not null
 	if err == nil {
 		defer fandomRows.Close()
 		for fandomRows.Next() {
@@ -1230,7 +1230,7 @@ func (ts *TagService) GetTrendingTags(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var trending []gin.H
+	trending := []gin.H{} // an empty list, not null
 	for rows.Next() {
 		var tag models.TagSuggestion
 		var recentUses int
@@ -1306,7 +1306,7 @@ func (ts *TagService) GetTagUsageStats(c *gin.Context) {
 		LIMIT 10
 	`, tagID)
 
-	var coTags []gin.H
+	coTags := []gin.H{} // an empty list, not null
 	if err == nil {
 		defer cotagRows.Close()
 		for cotagRows.Next() {

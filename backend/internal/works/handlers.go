@@ -1475,18 +1475,26 @@ func (ws *WorkService) DeleteChapter(c *gin.Context) {
 		return
 	}
 
-	// Renumber remaining chapters to close gaps
+	// Renumber remaining chapters to close gaps. (work_id, chapter_number) is
+	// unique and checked row by row, so moving chapter 3 to 2 before chapter 2
+	// has moved would fail. Park them all out of the way first.
+	if _, err = tx.Exec(`UPDATE chapters SET chapter_number = chapter_number + 1000000 WHERE work_id = $1`, workID); err != nil {
+		log.Printf("delete chapter: park chapters: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to renumber chapters"})
+		return
+	}
 	_, err = tx.Exec(`
 		UPDATE chapters 
-		SET chapter_number = new_numbers.new_number, updated_at = $3
+		SET chapter_number = new_numbers.new_number, updated_at = $2
 		FROM (
 			SELECT id, ROW_NUMBER() OVER (ORDER BY chapter_number) as new_number 
 			FROM chapters 
 			WHERE work_id = $1
 		) as new_numbers
-		WHERE chapters.id = new_numbers.id AND chapters.work_id = $1`, workID, workID, time.Now())
+		WHERE chapters.id = new_numbers.id AND chapters.work_id = $1`, workID, time.Now())
 
 	if err != nil {
+		log.Printf("delete chapter: renumber: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to renumber chapters"})
 		return
 	}
@@ -5054,7 +5062,7 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var gifts []interface{}
+	gifts := []interface{}{} // an empty list, not null
 	for rows.Next() {
 		var gift models.Gift
 		var pseudName, recipientName sql.NullString
@@ -5207,6 +5215,17 @@ func (ws *WorkService) AddCoAuthor(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "Co-author invitation sent"})
 }
 
+// staffRoleSQL answers with a user's highest staff role ('admin', 'moderator')
+// from user_roles, which is where roles are granted and what the route guard
+// checks, or 'user'. (These handlers used to read users.role, a column nothing
+// sets, so they refused every administrator.)
+const staffRoleSQL = `
+	SELECT CASE
+		WHEN bool_or(role = 'admin') THEN 'admin'
+		WHEN bool_or(role = 'moderator') THEN 'moderator'
+		ELSE 'user' END
+	FROM user_roles WHERE user_id = $1 AND revoked_at IS NULL`
+
 func (ws *WorkService) AdminListWorks(c *gin.Context) {
 	// TODO: Implement admin work listing
 	c.JSON(http.StatusOK, gin.H{"works": []gin.H{}})
@@ -5221,8 +5240,7 @@ func (ws *WorkService) AdminUpdateWorkStatus(c *gin.Context) {
 
 	// Check if user has moderator or admin privileges
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || (role != "moderator" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Moderator or admin access required"})
@@ -5373,8 +5391,7 @@ func (ws *WorkService) AdminDeleteWork(c *gin.Context) {
 
 	// Check if user has admin privileges (only admins can permanently delete)
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || role != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required for permanent deletion"})
@@ -5525,8 +5542,7 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 
 	// Check if user has moderator or admin privileges
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || (role != "moderator" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Moderator or admin access required"})
@@ -5772,8 +5788,7 @@ func (ws *WorkService) AdminUpdateCommentStatus(c *gin.Context) {
 
 	// Check if user has moderator or admin privileges
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || (role != "moderator" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Moderator or admin access required"})
@@ -5787,13 +5802,22 @@ func (ws *WorkService) AdminUpdateCommentStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status         string `json:"status" validate:"required,oneof=published hidden flagged pending_moderation"`
+		Status         string `json:"status" validate:"required,oneof=published hidden"`
 		Reason         string `json:"reason"`          // Moderation reason
 		ResolveReports bool   `json:"resolve_reports"` // Whether to resolve pending reports
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		return
+	}
+	switch req.Status {
+	case "published", "hidden":
+	default:
+		// (the validate tag above is not enforced, and the comments table only
+		// knows published, pending, deleted, spam and hidden; the rest have
+		// their own moderation routes, so the database would answer 500)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid status"})
 		return
 	}
 
@@ -5936,8 +5960,7 @@ func (ws *WorkService) AdminDeleteComment(c *gin.Context) {
 
 	// Check if user has moderator or admin privileges
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || (role != "moderator" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Moderator or admin access required"})
@@ -6149,8 +6172,7 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 
 	// Check if user has moderator or admin privileges
 	var role string
-	err := ws.db.QueryRow(`
-		SELECT COALESCE(role, 'user') FROM users WHERE id = $1`, userID).Scan(&role)
+	err := ws.db.QueryRow(staffRoleSQL, userID).Scan(&role)
 
 	if err != nil || (role != "moderator" && role != "admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Moderator or admin access required"})
@@ -6421,10 +6443,8 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 	// Check if user has admin privileges
 	var isAdmin bool
 	err := ws.db.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM users 
-			WHERE id = $1 AND (role = 'admin' OR role = 'superadmin')
-		)`, userID).Scan(&isAdmin)
+		SELECT EXISTS(SELECT 1 FROM user_roles
+			WHERE user_id = $1 AND role = 'admin' AND revoked_at IS NULL)`, userID).Scan(&isAdmin)
 
 	if err != nil || !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
@@ -6494,7 +6514,7 @@ func (ws *WorkService) AdminGetStatistics(c *gin.Context) {
 	err = ws.db.QueryRow(`
 		SELECT 
 			COUNT(*) as total_users,
-			COUNT(CASE WHEN last_seen_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as active_users,
+			COUNT(CASE WHEN last_login_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as active_users,
 			COUNT(CASE WHEN created_at >= date_trunc('month', CURRENT_DATE) THEN 1 END) as new_users_this_month,
 			COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as new_users_today
 		FROM users`).Scan(

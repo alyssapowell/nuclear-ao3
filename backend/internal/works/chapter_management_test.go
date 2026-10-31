@@ -286,8 +286,8 @@ func (suite *ChapterManagementTestSuite) TestDeleteChapter_InvalidChapterID() {
 }
 
 func (suite *ChapterManagementTestSuite) TestDeleteChapter_Unauthorized() {
-	// Create work without authentication
-	req, _ := http.NewRequest("DELETE", "/api/v1/works/some-id/chapters/some-id", nil)
+	// No login at all (the IDs are well-formed, so only the login is wrong)
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/v1/works/%s/chapters/%s", uuid.New(), uuid.New()), nil)
 	w := httptest.NewRecorder()
 	suite.router.ServeHTTP(w, req)
 
