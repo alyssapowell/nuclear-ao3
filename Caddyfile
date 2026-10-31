@@ -34,6 +34,13 @@
     handle /ws {
         reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
+    # Sign-in for other apps (OAuth2 / OpenID Connect). These are named one
+    # by one because /auth/login, /auth/register and the other account pages
+    # under /auth are the website's own pages and must not go to the app.
+    @oauth path /.well-known/openid-configuration /.well-known/oauth-authorization-server /auth/authorize /auth/token /auth/userinfo /auth/introspect /auth/revoke /auth/register-client /auth/jwks /auth/consent/*
+    handle @oauth {
+        reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
+    }
 
     # The website itself: plain files built by frontend/Dockerfile into /srv.
     # Any address that isn't a file (like /works/123) gets index.html, and the

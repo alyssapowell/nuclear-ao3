@@ -61,11 +61,15 @@ jobs:
           # The dev seed must still load against the current schema.
           PGPASSWORD=postgres psql -h localhost -U postgres -d ao3_nuclear_test -v ON_ERROR_STOP=1 -1 -f migrations/dev/seed.sql
 
-      - name: Run linting
+      - name: Run linting (advisory, does not block)
+        # Advisory until the lint backlog is cleared: a failure here shows as a
+        # warning on the run, but does not fail the job. Remove this line once
+        # "golangci-lint run ./..." passes, so lint failures block merges.
+        continue-on-error: true
         working-directory: backend
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          golangci-lint run ./... || echo "⚠️ Linting completed with warnings"
+          golangci-lint run ./...
 
       - name: Run tests
         working-directory: backend
@@ -81,6 +85,9 @@ jobs:
         with:
           file: backend/coverage.out
           flags: backend
+          # Coverage upload problems (such as a missing token) are reported but
+          # do not fail the build; the tests above are what gate the merge.
+          fail_ci_if_error: false
 
   # Test Frontend
   test-frontend:
@@ -142,14 +149,319 @@ jobs:
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile" \
             -e DOMAIN=:80 -e MONITORING_DOMAIN=:8081 \
             nuclear-ao3/frontend:test
-          sleep 3
+          # Wait up to 30 seconds for the server to answer.
+          deadline=$((SECONDS + 30))
+          until curl -fsS -o /dev/null http://localhost:3333/; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "The web server did not start"
+              docker logs test-web
+              exit 1
+            fi
+            sleep 1
+          done
           # The home page, and a deep link, must both return the app.
           curl -fsS http://localhost:3333/ | grep -q '<div id="root">'
           curl -fsS http://localhost:3333/works/some-id | grep -q '<div id="root">'
-          docker logs test-web
-          docker rm -f test-web
 
-@@E2E@@
+      - name: Remove the test web server
+        if: always()
+        run: docker rm -f test-web
+
+  # The whole Docker Compose stack, started for real and checked for real:
+  # the app, the website through Caddy, monitoring, and the ops scripts.
+  # Nothing in here ignores a failure. See docs/OPS_PIPELINES.md.
+  end-to-end:
+    name: End-to-end (Docker stack, monitoring, ops scripts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check the ops scripts that need no Docker
+        run: |
+          bash scripts/ops/test-dispatch.sh
+          bash scripts/ops/test-offsite.sh
+
+      - name: Make "docker-compose" work (the Makefile uses that name)
+        run: |
+          # The Makefile calls "docker-compose"; GitHub's runners only have the
+          # "docker compose" plugin. This forwards one to the other. Compose run
+          # and exec get -T because CI has no terminal.
+          docker compose version
+          sudo tee /usr/local/bin/docker-compose >/dev/null <<'SHIM'
+          #!/usr/bin/env bash
+          if [ "${1:-}" = run ] || [ "${1:-}" = exec ]; then
+            sub=$1
+            shift
+            exec docker compose "$sub" -T "$@"
+          fi
+          exec docker compose "$@"
+          SHIM
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose version
+
+      - name: Set up .env the way make dev-setup does (without npm)
+        run: |
+          cp .env.example .env
+          # set_env NAME VALUE: drops any earlier NAME= line, then adds this one.
+          set_env() {
+            awk -F= -v k="$1" '$1 != k' .env > .env.tmp
+            mv .env.tmp .env
+            echo "$1=$2" >> .env
+          }
+          grafana_pw=$(openssl rand -hex 16)
+          echo "::add-mask::$grafana_pw"
+          set_env ENVIRONMENT development
+          set_env GRAFANA_ADMIN_PASSWORD "$grafana_pw"
+          set_env SITE_URL http://localhost
+          # ":80" makes Caddy serve plain http. With DOMAIN=localhost it would
+          # redirect every http request to https with a self-made certificate.
+          set_env DOMAIN :80
+          set_env APP_UID "$(id -u)"
+          echo "GRAFANA_ADMIN_PASSWORD=$grafana_pw" >> "$GITHUB_ENV"
+          # Say which settings are present, never their values.
+          grep -o '^[A-Z_]*=' .env | sort -u | tr '\n' ' '
+          echo
+
+      - name: Create the signing key
+        run: |
+          make keys-setup
+          grep -q '^SIGNING_KEY_FILE=/secrets/.' .env
+          make keys-show | tee keys-show.out
+          grep -Eq '^current: +[A-Za-z0-9_-]{8,}' keys-show.out
+          rm keys-show.out
+
+      - name: Start the whole stack
+        run: docker compose up -d --build
+
+      - name: Wait until every service answers
+        run: |
+          # wait_for NAME COMMAND...: runs COMMAND until it succeeds, for up to
+          # 300 seconds in all. Fails the step when the time is up.
+          deadline=$((SECONDS + 300))
+          wait_for() {
+            local name=$1
+            shift
+            until "$@" >/dev/null 2>&1; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "TIMED OUT waiting for: $name"
+                return 1
+              fi
+              sleep 3
+            done
+            echo "ready: $name"
+          }
+          container_healthy() {
+            local id
+            id=$(docker compose ps -q "$1")
+            [ -n "$id" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ]
+          }
+          wait_for "app /health on 127.0.0.1:8088" curl -fsS -m 5 http://127.0.0.1:8088/health
+          wait_for "Caddy http://localhost/health" curl -fsS -m 5 http://localhost/health
+          wait_for "Prometheus /-/ready" curl -fsS -m 5 http://127.0.0.1:9090/-/ready
+          wait_for "Grafana /api/health" curl -fsS -m 5 http://127.0.0.1:3002/api/health
+          wait_for "MailHog /api/v2/messages" curl -fsS -m 5 http://127.0.0.1:8025/api/v2/messages
+          # The ops diagnose script reports a container that is still "starting".
+          for svc in postgres app caddy; do
+            wait_for "$svc container healthy" container_healthy "$svc"
+          done
+
+      - name: Smoke test the app directly (full)
+        run: MAILHOG_URL=http://127.0.0.1:8025 bash scripts/smoke-test.sh http://127.0.0.1:8088
+
+      - name: Smoke test through Caddy (read-only)
+        run: SMOKE_READ_ONLY=1 MAILHOG_URL=http://127.0.0.1:8025 bash scripts/smoke-test.sh http://localhost
+
+      - name: Check that monitoring is really set up
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, re, sys, time, urllib.request
+
+          def get(url, auth=None):
+              req = urllib.request.Request(url)
+              if auth:
+                  token = base64.b64encode(auth.encode()).decode()
+                  req.add_header("Authorization", "Basic " + token)
+              with urllib.request.urlopen(req, timeout=10) as r:
+                  return json.load(r)
+
+          def fail(msg):
+              print("FAIL  " + msg)
+              sys.exit(1)
+
+          def ok(msg):
+              print("PASS  " + msg)
+
+          # Poll FN until it returns a truthy value, for up to SECONDS.
+          def wait_until(what, fn, seconds):
+              end = time.time() + seconds
+              last = None
+              while True:
+                  try:
+                      last = fn()
+                      if last:
+                          return last
+                  except Exception as e:
+                      last = "error: %s" % e
+                  if time.time() >= end:
+                      fail("%s (last answer: %s)" % (what, last))
+                  time.sleep(3)
+
+          graf = "http://127.0.0.1:3002"
+          prom = "http://127.0.0.1:9090"
+          auth = "admin:" + os.environ["GRAFANA_ADMIN_PASSWORD"]
+
+          # Grafana: the datasource and the dashboard come from files.
+          ds = wait_until("Grafana datasource uid prometheus",
+                          lambda: get(graf + "/api/datasources/uid/prometheus", auth), 30)
+          if ds.get("uid") != "prometheus" or ds.get("type") != "prometheus":
+              fail("datasource looks wrong: %r" % ds)
+          ok("Grafana has the Prometheus datasource (uid prometheus)")
+
+          found = wait_until("Grafana dashboard 'Archive overview'",
+                             lambda: [d for d in get(graf + "/api/search?query=Archive", auth)
+                                      if d.get("title") == "Archive overview"], 30)
+          ok("Grafana has the dashboard 'Archive overview' (%s)" % found[0].get("uid"))
+
+          # Prometheus: the app and node-exporter are scraped and healthy.
+          def targets_up():
+              active = get(prom + "/api/v1/targets")["data"]["activeTargets"]
+              health = {}
+              for t in active:
+                  health[t["labels"]["job"]] = t["health"]
+              return health if health.get("app") == "up" and health.get("node") == "up" else None
+          health = wait_until("Prometheus targets app and node both up", targets_up, 60)
+          ok("Prometheus targets are up: %s" % json.dumps(health, sort_keys=True))
+
+          # Prometheus: every alert in monitoring/alerts.yml is loaded.
+          wanted = set(re.findall(r"^\s*-\s*alert:\s*(\w+)", open("monitoring/alerts.yml").read(), re.M))
+          if "AppDown" not in wanted:
+              fail("monitoring/alerts.yml no longer defines AppDown")
+          def rules_loaded():
+              groups = get(prom + "/api/v1/rules")["data"]["groups"]
+              have = {r["name"] for g in groups for r in g["rules"] if r.get("type") == "alerting"}
+              return have if wanted <= have else None
+          have = wait_until("Prometheus loaded the alert rules %s" % sorted(wanted), rules_loaded, 30)
+          ok("Prometheus loaded all %d alert rules" % len(wanted))
+
+          # The app's numbers arrive, and they arrive through Prometheus because
+          # the metrics port is private to the Docker network.
+          def requests_counted():
+              res = get(prom + "/api/v1/query?query=http_requests_total")["data"]["result"]
+              return res or None
+          res = wait_until("http_requests_total has data in Prometheus", requests_counted, 60)
+          ok("http_requests_total has %d series" % len(res))
+          PY
+
+      - name: Check the app's metrics port is not published
+        run: |
+          if published=$(docker compose port app 9091 2>/dev/null) && [ -n "$published" ]; then
+            echo "FAIL  app metrics port 9091 is published at $published"
+            exit 1
+          fi
+          if curl -sS -m 3 -o /dev/null http://127.0.0.1:9091/metrics 2>/dev/null; then
+            echo "FAIL  127.0.0.1:9091 answers from the host"
+            exit 1
+          fi
+          echo "PASS  metrics port 9091 is private to the Docker network"
+
+      - name: Ops - back up the database
+        run: |
+          make ops-backup
+          # Exactly one backup so far, and it must be a readable gzip file.
+          count=$(ls -1 backups/nuclear-*.sql.gz | wc -l)
+          test "$count" -eq 1
+          for f in backups/nuclear-*.sql.gz; do
+            test -s "$f"
+            gunzip -t "$f"
+            echo "PASS  $f is a valid gzip file"
+          done
+
+      - name: Ops - diagnose reports only the missing off-server backup
+        run: |
+          # Off-server backup is not configured in CI, so diagnose is expected
+          # to exit 1 with exactly one problem and no other.
+          rc=0
+          make ops-diagnose > diagnose.out || rc=$?
+          cat diagnose.out
+          test "$rc" -eq 1
+          grep -q '^## Result: PROBLEMS (1)$' diagnose.out
+          grep -q 'Off-server backup is not set up' diagnose.out
+          # And that one problem is the only bullet under the result heading.
+          bullets=$(sed -n '/^## Result: PROBLEMS/,$p' diagnose.out | grep -c '^- ')
+          test "$bullets" -eq 1
+          echo "PASS  diagnose exited 1 with only the off-server backup problem"
+
+      - name: Ops - restore a backup (full round trip)
+        run: |
+          B=http://127.0.0.1:8088/api/v1
+          # psql_q SQL: runs one statement in the database and prints the result.
+          psql_q() {
+            docker compose exec -T postgres sh -c \
+              'PGPASSWORD="$POSTGRES_PASSWORD" psql -At -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' \
+              sh "$1" </dev/null
+          }
+
+          # 1. Write a marker through the API: a new account.
+          marker="ci-marker-$(openssl rand -hex 4)"
+          pw="Marker-$(openssl rand -hex 8)-Pass1"
+          body="{\"username\":\"$marker\",\"email\":\"$marker@example.org\",\"password\":\"$pw\",\"confirm_password\":\"$pw\"}"
+          curl -fsS -o /dev/null -X POST "$B/auth/register" -H 'Content-Type: application/json' -d "$body"
+          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 1
+          echo "marker account $marker is in the database"
+
+          # 2. Back it up. Then wait, so the safety backup that restore takes
+          #    gets a different file name from this one.
+          before=$(ls -1 backups/nuclear-*.sql.gz)
+          make ops-backup
+          backup=$(comm -13 <(echo "$before") <(ls -1 backups/nuclear-*.sql.gz) | head -n 1)
+          test -n "$backup"
+          backup=$(basename "$backup")
+          echo "backup with the marker: $backup"
+          gunzip -t "backups/$backup"
+          sleep 2
+
+          # 3. Delete the marker.
+          psql_q "DELETE FROM users WHERE username = '$marker'"
+          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 0
+
+          # 4. Restore. make asks for the phrase on standard input.
+          printf 'replace the database\n' | make ops-restore FILE="$backup"
+
+          # 5. The marker is back, and the app is healthy.
+          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 1
+          curl -fsS -m 10 http://127.0.0.1:8088/health
+          echo
+          echo "PASS  restore brought the marker account back"
+
+      - name: Ops - list background jobs
+        run: |
+          make jobs | tee jobs.out
+          grep -q 'KIND' jobs.out
+          grep -q 'WAITING' jobs.out
+          rm jobs.out
+
+      - name: Show what happened (only when something failed)
+        if: failure()
+        # No "-e" here: keep printing even if one command fails.
+        shell: bash {0}
+        run: |
+          echo "=== docker compose ps"
+          docker compose ps -a
+          for svc in $(docker compose config --services); do
+            echo
+            echo "=== last 200 log lines: $svc"
+            docker compose logs --no-color --tail=200 "$svc"
+          done
+          echo
+          echo "=== backups/ (names only)"
+          ls -1 backups
+
+      - name: Stop the stack and delete its data
+        if: always()
+        run: docker compose down -v
+
   # Security checks
   security:
     name: 🔒 Security Checks
@@ -165,6 +477,9 @@ jobs:
           scan-ref: '.'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          # Report-only on purpose: findings are uploaded to code scanning below
+          # and do not fail this job (the action's default exit code is 0).
+          exit-code: '0'
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v2
@@ -183,7 +498,7 @@ jobs:
   ci-success:
     name: ✅ CI Success
     runs-on: ubuntu-latest
-    needs: [test-backend, test-frontend, test-docker-build, test-frontend-docker, test-docker-compose, security, integration-test]
+    needs: [test-backend, test-frontend, test-docker-build, test-frontend-docker, security, end-to-end]
     if: always()
     steps:
       - name: Check CI results
@@ -193,17 +508,15 @@ jobs:
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
           echo "Docker Builds: ${{ needs.test-docker-build.result }}"
           echo "Frontend Docker: ${{ needs.test-frontend-docker.result }}"
-          echo "Docker Compose: ${{ needs.test-docker-compose.result }}"
           echo "Security: ${{ needs.security.result }}"
-          echo "Integration: ${{ needs.integration-test.result }}"
+          echo "End-to-end: ${{ needs.end-to-end.result }}"
           
           if [ "${{ needs.test-backend.result }}" = "success" ] && 
              [ "${{ needs.test-frontend.result }}" = "success" ] &&
              [ "${{ needs.test-docker-build.result }}" = "success" ] &&
              [ "${{ needs.test-frontend-docker.result }}" = "success" ] &&
-             [ "${{ needs.test-docker-compose.result }}" = "success" ] &&
              [ "${{ needs.security.result }}" = "success" ] &&
-             [ "${{ needs.integration-test.result }}" = "success" ]; then
+             [ "${{ needs.end-to-end.result }}" = "success" ]; then
             echo "✅ All CI checks passed!"
             echo "PR is ready for review and merge"
           else

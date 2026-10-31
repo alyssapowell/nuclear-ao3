@@ -176,3 +176,17 @@ Backups are kept on the same server. Copy `backups/` somewhere else now and then
 - **ops-upgrade** never restores the database by itself. If a failed upgrade had already applied database migrations, the summary says so, names the backup, and leaves the choice of restoring (with **ops-restore**) to a person.
 - **ops-upgrade** runs the smoke test in read-only mode (`SMOKE_READ_ONLY=1`): it checks the site, the works list, search, logins and the login keys, and changes nothing on the live archive. The full smoke test, which creates accounts and works and reads emails from MailHog, is for development machines and test servers.
 - Each run's summary can be read by anyone who can see the repository's Actions tab. It contains counts, file names and error lines, not passwords.
+
+## What the end-to-end CI job proves
+
+Every pull request runs the `end-to-end` job in `.github/workflows/ci.yml`. It is the first place where the whole Docker Compose stack and the ops scripts run for real, on a fresh machine, with nothing carried over. It fails if any step fails; nothing in it ignores an error.
+
+It starts the stack with `docker compose up -d --build`, waits (with a deadline) until the app, Caddy, Prometheus, Grafana and MailHog answer, and then checks:
+
+- The full smoke test against the app, and the read-only smoke test through Caddy.
+- Grafana has the `prometheus` datasource and the "Archive overview" dashboard, Prometheus scrapes the app and node-exporter successfully, every alert in `monitoring/alerts.yml` is loaded, and `http_requests_total` has data. The app's metrics port is not reachable from outside Docker.
+- `make ops-backup` makes a readable backup. `make ops-diagnose` exits 1 with exactly one problem, the missing off-server backup (CI has none, so that is the expected result; any other problem fails the job).
+- A restore round trip: an account is created through the API, backed up, deleted from the database, brought back with `make ops-restore`, and the app is healthy afterwards.
+- `make jobs` prints the jobs table.
+
+For CI only, the job sets `ENVIRONMENT=development`, `DOMAIN=:80` (so Caddy serves plain http) and creates a throwaway signing key and Grafana password. It does not prove anything about real HTTPS certificates, real email delivery, or off-server backups. If the job fails, its last step prints `docker compose ps`, the last 200 log lines of each service and the names of the files in `backups/` (never `.env` or `secrets/`).
