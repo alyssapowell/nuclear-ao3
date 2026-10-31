@@ -1,55 +1,25 @@
+# Prometheus collects numbers from the app every 15 seconds and checks the
+# alert rules in alerts.yml. Edit nothing here for a normal install.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 rule_files:
-  # - "first_rules.yml"
-  # - "second_rules.yml"
+  - /etc/prometheus/alerts.yml
 
 scrape_configs:
-  # Nuclear AO3 Services
-  - job_name: 'api-gateway'
+  # The Nuclear AO3 app: web traffic, background jobs and database numbers.
+  # Port 9091 is private to the Docker network; it is not published.
+  - job_name: app
     static_configs:
-      - targets: ['api-gateway:8080']
-    metrics_path: /metrics
-    scrape_interval: 15s
+      - targets: ["app:9091"]
 
-  - job_name: 'auth-service'
+  # Prometheus watching itself.
+  - job_name: prometheus
     static_configs:
-      - targets: ['auth-service:8081']
-    metrics_path: /metrics
-    scrape_interval: 15s
+      - targets: ["localhost:9090"]
 
-  - job_name: 'work-service'
+  # The server's own disk (see node-exporter in docker-compose.yml).
+  - job_name: node
     static_configs:
-      - targets: ['work-service:8082']
-    metrics_path: /metrics
-    scrape_interval: 15s
-
-  - job_name: 'tag-service'
-    static_configs:
-      - targets: ['tag-service:8083']
-    metrics_path: /metrics
-    scrape_interval: 15s
-
-  - job_name: 'search-service'
-    static_configs:
-      - targets: ['search-service:8084']
-    metrics_path: /metrics
-    scrape_interval: 15s
-
-  # Infrastructure Services
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['postgres:5432']
-    scrape_interval: 30s
-
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-    scrape_interval: 30s
-
-  # Self-monitoring
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["node-exporter:9100"]

@@ -1,0 +1,55 @@
+# Runs "backup" on the server over SSH. The server's forced command
+# (scripts/ops/dispatch.sh) decides what really runs; this file only names
+# the operation. One-time setup: docs/OPS_PIPELINES.md.
+name: ops-backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '47 2 * * *'  # every day (UTC)
+
+permissions:
+  contents: read
+
+# Only one operation at a time, so a backup and an upgrade can't overlap.
+concurrency:
+  group: ops-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: "Backup: save the database"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Run on the server
+        env:
+          OPS_SSH_KEY: ${{ secrets.OPS_SSH_KEY }}
+          OPS_HOST: ${{ secrets.OPS_HOST }}
+          OPS_USER: ${{ secrets.OPS_USER }}
+          OPS_KNOWN_HOSTS: ${{ secrets.OPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          cmd="backup"
+
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OPS_SSH_KEY" > "$HOME/.ssh/ops_key"
+          printf '%s\n' "$OPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+          # Only the operation and its arguments are sent. The host key must
+          # match the pinned one in OPS_KNOWN_HOSTS or ssh refuses to connect.
+          rc=0
+          ssh -i "$HOME/.ssh/ops_key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 \
+            "$OPS_USER@$OPS_HOST" "$cmd" > "$RUNNER_TEMP/summary.md" || rc=$?
+
+          rm -f "$HOME/.ssh/ops_key"
+          if [ -s "$RUNNER_TEMP/summary.md" ]; then
+            cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The server printed no summary. Read the log of this step." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$rc"

@@ -1,0 +1,61 @@
+# OPTIONAL: email yourself when an alert fires. Off unless you do the steps
+# in docs/MONITORING.md ("Get alerts by email"):
+#   1. copy this file to notifications.yml in this same folder
+#   2. fill in the ALERT_EMAIL_TO and GF_SMTP_* lines in .env
+#   3. docker compose up -d grafana
+#
+# What it does: sends every alert from alerts.yml to the address in
+# ALERT_EMAIL_TO, using one Grafana rule that mirrors Prometheus's firing alerts.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: archive-email
+    receivers:
+      - uid: archive-email
+        type: email
+        settings:
+          addresses: ${ALERT_EMAIL_TO}
+          singleEmail: true
+
+policies:
+  - orgId: 1
+    receiver: archive-email
+    group_by: ["archive_alert"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: archive-alerts
+    folder: Nuclear AO3
+    interval: 1m
+    rules:
+      - uid: archive-prometheus-alerts
+        title: Archive alert firing
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        annotations:
+          summary: "{{ $labels.archive_alert }} is firing. Look it up in docs/MONITORING.md; it says which runbook entry to follow."
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (archive_alert) (label_replace(ALERTS{alertstate="firing"}, "archive_alert", "$1", "alertname", "(.*)"))'
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }

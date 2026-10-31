@@ -2,6 +2,8 @@
 
 What to do when something goes wrong, or when you need to do a routine job. Each section is written so you can follow it without knowing the code.
 
+Most problems below can be handled by pressing **Run workflow** on the GitHub Actions tab and reading the summary; the one-time setup is in [OPS_PIPELINES.md](OPS_PIPELINES.md). Each entry also gives the `make ops-...` command to run on the server instead, and then the manual steps.
+
 Commands assume you're in the repo folder on the server, using Docker Compose. `nuclear` is the app's program; inside Compose you run it as `docker-compose run --rm app nuclear ...`, or use the `make` shortcut shown.
 
 ---
@@ -18,6 +20,8 @@ Commands assume you're in the repo folder on the server, using Docker Compose. `
 There are no built-in accounts or default passwords.
 
 ### Set up the signing key
+
+To check afterwards that the key loads, run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow), or `make ops-diagnose` on the server. It reports a key that can't be read. The key itself has to be made on the server, as below.
 
 The signing key is what proves a login is real. You make it once, and you keep it. It lives in a file in `secrets/` and is never put in the database or the backups.
 
@@ -41,7 +45,7 @@ Do this now and then, or when someone who held a copy of the key leaves. People 
 
 ### Change the signing key right now (it may have leaked)
 
-Anyone with the key can make logins for any account, so don't wait.
+Anyone with the key can make logins for any account, so don't wait. The key has to be replaced on the server by hand (below). Afterwards run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow; `make ops-diagnose` on the server) to confirm the new key loads, and the **ops-logout-everyone** workflow if you also want OAuth tokens and unused authorization codes ended.
 
 1. `make keys`. Save a copy of the new file outside this server.
 2. In `.env`, change `SIGNING_KEY_FILE` to the new file, and make `SIGNING_KEY_PREVIOUS_FILES` empty. Don't list the old key.
@@ -49,11 +53,41 @@ Anyone with the key can make logins for any account, so don't wait.
 4. Every login ends at once and everyone has to log in again. Apps connected through OAuth fetch the new public key from `/auth/jwks` by themselves; if one keeps failing, ask its owner to refresh it.
 5. Destroy the old key file and every copy of it, including old backups of the `secrets/` folder and the copy in your password manager.
 
+### Back up the database
+
+Run the **ops-backup** workflow (Actions tab -> ops-backup -> Run workflow). If GitHub isn't set up or reachable, run `make ops-backup` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+It saves `backups/nuclear-DATE-TIME.sql.gz`, checks that the file is complete, and keeps the newest 14. A backup also runs by itself every day if you kept the schedule in the workflow. The backup holds the **database only**: it does not contain `secrets/` (the signing key) or `.env`. Copy those separately.
+
+Manual steps: `make backup-db`. Copy `backups/` to somewhere that isn't this server now and then.
+
+### Restore the database from a backup
+
+This **replaces the whole database**. Everything saved after the backup was made is lost.
+
+Run the **ops-restore** workflow (Actions tab -> ops-restore -> Run workflow). Type the backup file name (the backup workflow's summary shows it; the file is in `backups/`) and type `replace the database` to confirm. A person who is set as a reviewer must approve it. If GitHub isn't set up, run `make ops-restore FILE=nuclear-DATE-TIME.sql.gz` on the server; it asks you to type the same words. The manual steps follow.
+
+It takes a safety backup of the current database first, stops the app, loads the backup (all of it or nothing), starts the app and checks health.
+
+Manual steps: there is no safe hand-made version of this. Use `make ops-restore` on the server; it is the same script the workflow runs.
+
+### Log everyone out
+
+Use this after a password leak, or when you aren't sure who is logged in. Run the **ops-logout-everyone** workflow (Actions tab -> ops-logout-everyone -> Run workflow; `make ops-logout-everyone` on the server). Or the **ops-logout-user** workflow (`make ops-logout-user USER=name`) for one account. It ends all login sessions, OAuth tokens, unused authorization codes and app permissions, so people and connected apps have to log in again. The summary shows the counts. These need a reviewer's approval on GitHub.
+
+Manual steps: `docker-compose run --rm app nuclear sessions revoke-all`, or `... nuclear sessions revoke <username>`.
+
 ### Give someone a role
 
 `make grant USER=theirname ROLE=tag_wrangler` (or `moderator`, or `admin`). They need to have registered first. Running it again for a role that was revoked restores it.
 
 ### Upgrade to a new version
+
+Run the **ops-upgrade** workflow (Actions tab -> ops-upgrade -> Run workflow) and type the version (a tag such as `v1.4.0`, or a branch). If GitHub isn't set up or reachable, run `make ops-upgrade REF=v1.4.0` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+It backs up, switches versions, rebuilds, waits for the app to be healthy and runs the smoke test. If anything fails it goes back to the previous version by itself, and tells you whether database migrations had run. It never restores the database on its own.
+
+The manual way:
 
 1. **Back up first:** `make backup-db`.
 2. Get the new version and rebuild: `git pull && docker-compose build app`.
@@ -74,6 +108,10 @@ To see what an upgrade will change before starting it: `make migrate-status`.
 
 ### The app won't start: "migration NNN failed, nothing from it was applied"
 
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) to see the error and the state of every part. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+If this happened during an upgrade, the **ops-upgrade** workflow has already put the previous version back and says so in its summary.
+
 The database is exactly as it was before that migration, so nothing is half-done.
 
 1. Read the error after the colon. It names the problem, such as a duplicate value or a missing table.
@@ -81,6 +119,10 @@ The database is exactly as it was before that migration, so nothing is half-done
 3. If you can't tell, roll back to the previous version of the app (`git checkout <previous tag>`, rebuild, start). The older version runs fine because the failed migration was never applied. Then report the error.
 
 ### The app won't start: "Database was created before migrations were tracked"
+
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) to confirm what is wrong. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+If the archive has real data, run the **ops-backup** workflow (`make ops-backup`) before anything else.
 
 The full message says the database "already has tables but no schema_migrations record". It means this database was set up by an older version of Nuclear AO3, which loaded the SQL files through Postgres's first-start scripts. Those stopped at the first error, so there's no way to know which parts were applied. The app refuses to guess, because guessing could run a file twice or skip one.
 
@@ -97,10 +139,16 @@ If it **has real data**:
 
 ### Notifications aren't arriving
 
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) and read the Containers, App health and Background jobs parts. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
 1. In-app notifications: check that the app log has no `PANIC while processing` lines.
 2. Email: see "Emails aren't arriving" below.
 
 ### Emails aren't arriving
+
+Run the **ops-emails** workflow (Actions tab -> ops-emails -> Run workflow) (tick **retry** to send the failed ones again once the mail server works). If GitHub isn't set up or reachable, run `make ops-emails (or make ops-emails RETRY=1)` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+It shows the failed jobs and why, checks that the app can reach the mail server in `.env`, and only retries if it can.
 
 Every email (welcome emails, notification emails) is a background job. If the mail server is down, the app keeps the email and tries again: after 30 seconds, then 1 minute, 2, 4, and so on, for about four hours. Nothing is lost while it waits.
 
@@ -111,11 +159,44 @@ Every email (welcome emails, notification emails) is a background job. If the ma
 
 ### Background jobs are piling up
 
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) to see the counts and the latest failures. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
 `make jobs` shows a large WAITING count and an old OLDEST WAITING time.
 
 - If the failures show the same error over and over, fix that first (for email, see above). Retrying doesn't help until the cause is fixed.
 - If jobs are succeeding but slowly, run more at once: set `JOB_WORKERS` in `.env` (default 2) and restart the app.
 - A job that was running when the app stopped is picked up again after 10 minutes. You don't need to do anything.
+
+### The site isn't responding
+
+The alerts "AppDown" and "DatabaseDown" lead here.
+
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) to see which container is down or what the app answers on `/health`. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+Manual steps:
+
+1. `docker-compose ps` shows which containers are running.
+2. `docker-compose logs --tail 100 app` shows why the app stopped.
+3. `docker-compose up -d` starts anything that is down.
+4. If it started failing right after an upgrade, see "The app won't start" above.
+
+### The disk is nearly full
+
+The alert "DiskAlmostFull" leads here. A full disk stops the database, and the site goes down with it.
+
+Run the **ops-diagnose** workflow (Actions tab -> ops-diagnose -> Run workflow) to see how full it is. If GitHub isn't set up or reachable, run `make ops-diagnose` on the server. Either way you get a short summary of what was found and done. The manual steps follow.
+
+Manual steps: `df -h` shows which disk. Old backups in `backups/` are removed automatically (the newest 14 are kept). `docker system prune -f` removes unused Docker leftovers. Copy backups elsewhere and delete the oldest if you need space.
+
+### The site shows errors or is slow
+
+The alerts "HighErrorRate" and "SlowResponses" lead here.
+
+1. On the Archive overview dashboard (see docs/MONITORING.md), look at "Pages with the most errors" to see which part of the site is failing.
+2. Run the **ops-diagnose** workflow and read the app's recent log lines for the same pages (`docker-compose logs --tail 200 app`).
+3. Check "Database connections". If "in use" stays at "allowed", the database is the bottleneck: look for a long-running query, or restart the app with `docker-compose restart app`.
+4. Check "App memory" and the disk. If the server is out of either, free some or move to a bigger server.
+5. If it began right after an upgrade, run the **ops-upgrade** workflow with the previous version to go back.
 
 ### Search doesn't find a work
 

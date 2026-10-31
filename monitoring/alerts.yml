@@ -1,0 +1,81 @@
+# Alert rules. Each one has a "summary" (what is wrong, in plain words) and a
+# "runbook" (the entry in docs/RUNBOOK.md that says what to do). Keep this list
+# short: every alert should be something a person needs to act on.
+groups:
+  - name: archive
+    rules:
+      - alert: AppDown
+        expr: up{job="app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The archive app has not answered Prometheus for 2 minutes, so the site is probably down."
+          runbook: "docs/RUNBOOK.md#the-site-isnt-responding"
+
+      - alert: HighErrorRate
+        # More than 5% of requests failed on our side. The second condition
+        # ignores quiet periods, where one error in a handful of requests
+        # would look like a huge percentage.
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+          and sum(rate(http_requests_total[5m])) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of requests have failed with a server error for 5 minutes."
+          runbook: "docs/RUNBOOK.md#the-site-shows-errors-or-is-slow"
+
+      - alert: SlowResponses
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "One request in 20 has taken more than 1 second for 10 minutes."
+          runbook: "docs/RUNBOOK.md#the-site-shows-errors-or-is-slow"
+
+      - alert: DatabaseDown
+        expr: nuclear_db_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The app cannot reach the database."
+          runbook: "docs/RUNBOOK.md#the-site-isnt-responding"
+
+      - alert: JobsFailing
+        # nuclear_jobs_failed is a count that goes up each time a background
+        # job gives up for good, so a rise means something new just failed.
+        expr: delta(nuclear_jobs_failed[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Background jobs of kind {{ $labels.kind }} have given up in the last 15 minutes."
+          runbook: "docs/RUNBOOK.md#background-jobs-are-piling-up"
+
+      - alert: JobsBacklog
+        expr: nuclear_jobs_oldest_waiting_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A background job of kind {{ $labels.kind }} has been waiting more than 15 minutes (for email, see Emails aren't arriving)."
+          runbook: "docs/RUNBOOK.md#background-jobs-are-piling-up"
+
+      - alert: DiskAlmostFull
+        # A full disk stops the database from writing, which takes the whole
+        # site down, and it fills up slowly enough that nobody notices.
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay|squashfs"} < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The server's disk has less than 10% free space."
+          runbook: "docs/RUNBOOK.md#the-disk-is-nearly-full"

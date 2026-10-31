@@ -1,7 +1,7 @@
 # Nuclear AO3 Development Makefile
 # Provides convenient commands for database management, testing, and development
 
-.PHONY: help keys keys-show keys-setup migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
+.PHONY: ops-diagnose ops-emails ops-backup ops-upgrade ops-restore ops-logout-everyone ops-logout-user backup-db restore-db help keys keys-show keys-setup migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
 
 # Default target
 help: ## Show this help message
@@ -125,6 +125,12 @@ logs-db: ## Show database logs only
 dev-setup: ## Complete development environment setup
 	@echo "🛠️  Setting up development environment..."
 	@make keys-setup
+	@touch .env
+	@grep -q '^ENVIRONMENT=' .env || echo 'ENVIRONMENT=development' >> .env
+	@if ! grep -q '^GRAFANA_ADMIN_PASSWORD=.' .env; then \
+		grep -v '^GRAFANA_ADMIN_PASSWORD=$$' .env > .env.tmp; \
+		echo "GRAFANA_ADMIN_PASSWORD=$$(openssl rand -base64 24)" >> .env.tmp; mv .env.tmp .env; \
+		echo "Generated a Grafana password in .env (GRAFANA_ADMIN_PASSWORD)."; fi
 	@make db-reset
 	@make services
 	@cd frontend && npm install
@@ -172,17 +178,40 @@ clean-all: ## Complete cleanup including images and volumes
 	@docker system prune -a -f
 
 # Data Management
-backup-db: ## Backup PostgreSQL database
-	@echo "💾 Backing up PostgreSQL database..."
-	@mkdir -p backups
-	@docker exec nuclear-ao3-postgres pg_dump -U ao3_user ao3_nuclear > backups/ao3_backup_$(shell date +%Y%m%d_%H%M%S).sql
-	@echo "✅ Backup saved to backups/ directory"
+backup-db: ## Back up the database to backups/ (same as make ops-backup)
+	@scripts/ops/backup.sh
 
-restore-db: ## Restore PostgreSQL database (requires BACKUP_FILE variable)
-	@if [ -z "$(BACKUP_FILE)" ]; then echo "❌ Please specify BACKUP_FILE=filename"; exit 1; fi
-	@echo "📥 Restoring database from $(BACKUP_FILE)..."
-	@docker exec -i nuclear-ao3-postgres psql -U ao3_user ao3_nuclear < $(BACKUP_FILE)
-	@echo "✅ Database restored"
+restore-db: ## Replace the database with a backup: make restore-db FILE=nuclear-DATE.sql.gz
+	@$(MAKE) --no-print-directory ops-restore FILE="$(FILE)"
+
+# Operations. The same scripts run from GitHub (Actions tab) and here; see
+# docs/OPS_PIPELINES.md. Each prints a short summary of what it found and did.
+ops-diagnose: ## Check that everything is healthy (changes nothing)
+	@scripts/ops/diagnose.sh
+
+ops-emails: ## Why emails aren't arriving; add RETRY=1 to send failed ones again
+	@scripts/ops/emails.sh $(if $(RETRY),--retry,)
+
+ops-backup: ## Back up the database to backups/ (keeps the newest 14)
+	@scripts/ops/backup.sh
+
+ops-upgrade: ## Move to a new version: make ops-upgrade REF=v1.4.0
+	@if [ -z "$(REF)" ]; then echo "usage: make ops-upgrade REF=<tag, branch or commit>"; exit 1; fi
+	@scripts/ops/upgrade.sh "$(REF)"
+
+ops-restore: ## Replace the database with a backup: make ops-restore FILE=nuclear-DATE.sql.gz
+	@if [ -z "$(FILE)" ]; then echo "usage: make ops-restore FILE=nuclear-YYYYmmdd-HHMMSS.sql.gz (see backups/)"; exit 1; fi
+	@echo "This replaces the WHOLE database with $(FILE). Everything saved since is lost."
+	@printf 'Type "replace the database" to go on: '; read answer; \
+	if [ "$$answer" != "replace the database" ]; then echo "Cancelled."; exit 1; fi
+	@scripts/ops/restore.sh "$(FILE)" --i-understand-this-replaces-the-database
+
+ops-logout-everyone: ## Log every account out (everyone logs in again)
+	@scripts/ops/logout-everyone.sh
+
+ops-logout-user: ## Log one account out: make ops-logout-user USER=name
+	@if [ "$(origin USER)" != "command line" ] || [ -z "$(USER)" ]; then echo "usage: make ops-logout-user USER=name"; exit 1; fi
+	@scripts/ops/logout-user.sh "$(USER)"
 
 # Performance and Monitoring
 monitor: ## Open monitoring dashboard

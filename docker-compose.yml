@@ -3,12 +3,12 @@ version: '3.8'
 services:
   # Database
   postgres:
-    image: postgres:15
+    image: postgres:15.14
     container_name: nuclear-ao3-postgres
     environment:
-      POSTGRES_DB: ao3_nuclear
-      POSTGRES_USER: ao3_user
-      POSTGRES_PASSWORD: ao3_password
+      POSTGRES_DB: ${POSTGRES_DB:-ao3_nuclear}
+      POSTGRES_USER: ${POSTGRES_USER:-ao3_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ao3_password}
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     ports:
       - "127.0.0.1:5432:5432"
@@ -31,27 +31,23 @@ services:
         -c min_wal_size=1GB
         -c max_wal_size=4GB
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ao3_user -d ao3_nuclear"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # Redis for caching and sessions
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.2-alpine
     container_name: nuclear-ao3-redis
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
-      - monitoring_data:/shared
-      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
     restart: unless-stopped
-    command: >
-      sh -c "
-        mkdir -p /shared/redis &&
-        ln -sf /shared/redis /data &&
-        redis-server /usr/local/etc/redis/redis.conf
-      "
+    # Redis only holds caches and rate-limit counters; a snapshot now and
+    # then is enough. Settings are here so no extra config file is needed.
+    command: ["redis-server", "--save", "300", "1", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -67,17 +63,20 @@ services:
     environment:
       - PORT=8080
       - METRICS_ADDR=:9091
-      - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
+      - DATABASE_URL=postgres://${POSTGRES_USER:-ao3_user}:${POSTGRES_PASSWORD:-ao3_password}@postgres:5432/${POSTGRES_DB:-ao3_nuclear}?sslmode=disable
       - REDIS_URL=redis:6379
       - JWT_ISSUER=nuclear-ao3
       - SIGNING_KEY_FILE=${SIGNING_KEY_FILE:-}
       - SIGNING_KEY_PREVIOUS_FILES=${SIGNING_KEY_PREVIOUS_FILES:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
-      - SMTP_HOST=smtp
-      - SMTP_PORT=1025
+      - SMTP_HOST=${SMTP_HOST:-smtp}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       - SMTP_FROM=${SMTP_FROM:-noreply@nuclear-ao3.local}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
       - SITE_URL=${SITE_URL:-http://localhost}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
       - JOB_WORKERS=${JOB_WORKERS:-2}
     # The key files are readable only by their owner, so the app must run as
     # the user who owns ./secrets. Linux: set APP_UID in .env to `id -u`.
@@ -123,66 +122,69 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Monitoring - Prometheus
+  # Monitoring - Prometheus: collects numbers from the app and checks the alert
+  # rules. See docs/MONITORING.md.
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.5.0
     container_name: nuclear-ao3-prometheus
     ports:
       - "127.0.0.1:9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - monitoring_data:/shared
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
     restart: unless-stopped
-    command: >
-      sh -c "
-        mkdir -p /shared/prometheus &&
-        ln -sf /shared/prometheus /prometheus &&
-        /bin/prometheus 
-          --config.file=/etc/prometheus/prometheus.yml
-          --storage.tsdb.path=/prometheus
-          --web.console.libraries=/usr/share/prometheus/console_libraries
-          --web.console.templates=/usr/share/prometheus/consoles
-          --storage.tsdb.retention.time=30d
-          --web.enable-lifecycle
-      "
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    depends_on:
+      - app
 
-  # Monitoring - Grafana
+  # Monitoring - reads the server's disk and memory, for the "disk almost
+  # full" alert. Not published outside Docker.
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: nuclear-ao3-node-exporter
+    volumes:
+      - /:/host:ro
+    command:
+      - --path.rootfs=/host
+    restart: unless-stopped
+
+  # Monitoring - Grafana: dashboards. Everything it shows is set up from files
+  # in ./monitoring/grafana, so there is nothing to click through on first run.
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.0.0
     container_name: nuclear-ao3-grafana
     ports:
       - "127.0.0.1:3002:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Compose refuses to start until GRAFANA_ADMIN_PASSWORD is set in .env.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+      # Only used if you turn on email alerts (see docs/MONITORING.md).
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-}
+      - GF_SMTP_ENABLED=${GF_SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${GF_SMTP_HOST:-}
+      - GF_SMTP_USER=${GF_SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${GF_SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS:-}
     volumes:
-      - monitoring_data:/shared
-      - ./monitoring:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
     restart: unless-stopped
-    command: >
-      sh -c "
-        mkdir -p /shared/grafana &&
-        ln -sf /shared/grafana /var/lib/grafana &&
-        /run.sh
-      "
-
-  # Log aggregation - Loki
-  loki:
-    image: grafana/loki:latest
-    container_name: nuclear-ao3-loki
-    ports:
-      - "127.0.0.1:3100:3100"
-    volumes:
-      - monitoring_data:/shared
-    restart: unless-stopped
-    command: >
-      sh -c "
-        mkdir -p /shared/loki &&
-        ln -sf /shared/loki /loki &&
-        /usr/bin/loki -config.file=/etc/loki/local-config.yaml
-      "
 
   # The front door: serves the website and forwards /api to the app.
   # Its image is built from frontend/ and contains the website's files.
@@ -208,13 +210,10 @@ services:
       "
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-      - MONITORING_DOMAIN=${MONITORING_DOMAIN:-monitoring.localhost}
       - DEV_DOMAIN=${DEV_DOMAIN:-dev.localhost}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - APP_HOST=app
       - APP_PORT=8080
-      - GRAFANA_HOST=grafana
-      - GRAFANA_PORT=3000
     depends_on:
       - app
     healthcheck:
@@ -230,10 +229,15 @@ volumes:
   backup_data:       # 50-100GB - Backups
     driver: local
   
-  # Medium shared volume (monitoring + cache)
-  monitoring_data:   # 20GB - Prometheus, Grafana, Loki, Redis
+  redis_data:        # caches and rate-limit counters
     driver: local
-    
+
+  # Prometheus numbers (30 days) and Grafana's own database
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
   # Small shared volume (configs + logs) 
   config_data:       # 10GB - Shared configs and logs
     driver: local

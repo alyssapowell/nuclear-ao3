@@ -1,0 +1,70 @@
+# Runs "restore" on the server over SSH. The server's forced command
+# (scripts/ops/dispatch.sh) decides what really runs; this file only names
+# the operation. One-time setup: docs/OPS_PIPELINES.md.
+name: ops-restore
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_file:
+        description: 'Backup file name, such as nuclear-20260101-120000.sql.gz (shown in the Backup workflow summary)'
+        type: string
+        required: true
+      confirm:
+        description: 'Type exactly: replace the database'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Only one operation at a time, so a backup and an upgrade can't overlap.
+concurrency:
+  group: ops-production
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: "Restore: REPLACE the database with a backup"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production-approval
+    steps:
+      - name: Run on the server
+        env:
+          OPS_SSH_KEY: ${{ secrets.OPS_SSH_KEY }}
+          OPS_HOST: ${{ secrets.OPS_HOST }}
+          OPS_USER: ${{ secrets.OPS_USER }}
+          OPS_KNOWN_HOSTS: ${{ secrets.OPS_KNOWN_HOSTS }}
+          INPUT_FILE: ${{ inputs.backup_file }}
+          INPUT_CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [ "$INPUT_CONFIRM" != "replace the database" ]; then
+            echo "The confirmation text must be exactly: replace the database" >&2; exit 1
+          fi
+          if ! printf '%s' "$INPUT_FILE" | grep -Eq '^nuclear-[0-9]{8}-[0-9]{6}\.sql\.gz$'; then
+            echo "That is not a backup file name." >&2; exit 1
+          fi
+          cmd="restore $INPUT_FILE --i-understand-this-replaces-the-database"
+
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OPS_SSH_KEY" > "$HOME/.ssh/ops_key"
+          printf '%s\n' "$OPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+          # Only the operation and its arguments are sent. The host key must
+          # match the pinned one in OPS_KNOWN_HOSTS or ssh refuses to connect.
+          rc=0
+          ssh -i "$HOME/.ssh/ops_key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 \
+            "$OPS_USER@$OPS_HOST" "$cmd" > "$RUNNER_TEMP/summary.md" || rc=$?
+
+          rm -f "$HOME/.ssh/ops_key"
+          if [ -s "$RUNNER_TEMP/summary.md" ]; then
+            cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The server printed no summary. Read the log of this step." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$rc"

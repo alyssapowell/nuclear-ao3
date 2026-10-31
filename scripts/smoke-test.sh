@@ -73,6 +73,19 @@ account() {
 
 check "site is up" 200 "$(code "$BASE/health")"
 
+# SMOKE_READ_ONLY=1 checks a live archive without changing anything: no
+# accounts, works or emails. This is what upgrades run against the real site.
+if [ "${SMOKE_READ_ONLY:-}" = "1" ]; then
+	check "works list answers" 200 "$(code "$B/works?limit=1")"
+	check "search answers" 200 "$(code "$B/search/works?q=the&limit=1")"
+	check "login keys are published" 200 "$(code "$BASE/auth/jwks")"
+	BAD_LOGIN='{"login":"no-such-account-smoke","password":"not-a-real-password"}'
+	check "login rejects a wrong password" 401 "$(code -X POST "$B/auth/login" -H 'Content-Type: application/json' -d "$BAD_LOGIN")"
+	check "logged-out requests are refused" 401 "$(code "$B/auth/sessions")"
+	if [ "$FAILED" = 0 ]; then echo "All checks passed."; else echo "Some checks failed."; fi
+	exit "$FAILED"
+fi
+
 AUTHOR=$(account); READER=$(account)
 [ -n "$AUTHOR" ] && [ -n "$READER" ]; check "register and log in" 0 $?
 

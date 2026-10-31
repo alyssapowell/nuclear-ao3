@@ -182,8 +182,7 @@ docker run --rm \
 
 ### **Clean Up Old Data**
 ```bash
-# Remove old backups (automated by backup script)
-./scripts/backup-restore.sh cleanup
+# Old backups are removed by "make ops-backup", which keeps the newest 14
 
 # Prune unused volumes (CAREFUL!)
 docker volume prune -f
@@ -195,10 +194,8 @@ docker system prune -f
 ## 🚨 Monitoring Disk Usage
 
 ### **Automated Monitoring**
-The health monitor script (`scripts/health-monitor.sh`) automatically checks:
-- Disk usage > 80% = warning
-- Disk usage > 90% = critical alert
-- Volume size growth trends
+The diagnose script (`make ops-diagnose`, or the `ops-diagnose` workflow, which runs daily) checks:
+- Disk usage of the repo folder and of Docker's folder; 90% or more is reported as a problem
 
 ### **Manual Monitoring**
 ```bash
@@ -248,7 +245,7 @@ docker run --rm \
 ```
 
 ### **Volume Backup Strategy**
-1. **Automated daily backups** (handled by `backup-restore.sh`)
+1. **Automated daily backups** (the `ops-backup` workflow, or `make ops-backup`)
 2. **Weekly full system snapshots** (Hetzner server snapshots)
 3. **Monthly off-site backups** (download critical data)
 4. **Before major updates** (manual backup)

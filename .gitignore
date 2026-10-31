@@ -180,3 +180,6 @@ frontend/accessibility-validation-results.json
 
 # Login signing keys: never commit
 secrets/
+
+# Database backups made by scripts/ops/backup.sh
+backups/

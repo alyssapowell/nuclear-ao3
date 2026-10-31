@@ -181,7 +181,7 @@ These were fixed by merging the backend into one program with one login check (`
 
 ### Still open
 
-- **Grafana uses admin/admin and `:latest` images**, and is published on the monitoring domain. To fix in the monitoring step.
+- ~~**Grafana used admin/admin and `:latest` images**, and was published on the monitoring domain.~~ **Fixed 2026-10-30:** Compose refuses to start without `GRAFANA_ADMIN_PASSWORD`, every image is pinned, and Grafana is only on 127.0.0.1 (reached through an SSH tunnel).
 - **Most top-level guides describe the old six-service system** (APP_EXPLORER_GUIDE, AUTHENTICATION_GUIDE, DEPLOYMENT_GUIDE, DEPLOYMENT_SETUP, DEVELOPMENT_WORKFLOW, TESTING, VOLUME_SIZING_GUIDE). To be rewritten or removed in the docs pass. SERVICES.md, which described services that no longer exist, was removed 2026-10-30, along with the unused `shared/middleware`, `shared/server`, `shared/database` and `shared/elasticsearch` code.
 - **The works service logs SQL details and other debug output** at startup and on every request.
 - **The login endpoint has no stricter limit** than general browsing (100 requests a minute per IP), which is loose for password guessing.
@@ -199,6 +199,5 @@ These were fixed by merging the backend into one program with one login check (`
 - ~~The dashboard, subscriptions page, work page and subscribe/gift buttons never knew who was logged in~~: they used a stub `useAuth` that always returned nobody, so the dashboard showed "Loading" forever. **Fixed 2026-10-30:** they use the real one (`src/utils/auth.ts`). It now returns the same objects between renders, because the subscriptions page re-fetched in a loop until rate-limited.
 - ~~Search never returned anything~~: works were never sent to Elasticsearch (the code that did it had no callers), and the website's search client crashed on its own address handling. A search with no matches also showed every work instead. **Fixed 2026-10-30** by the move to Postgres search.
 - **The works and auth test suites use the developer's own Postgres** (`localhost:5432/ao3_nuclear`) instead of a fresh database, so results depend on that machine. They should use `internal/testdb`, which builds a migrated database per test, as the search tests do.
-- **`scripts/backup-restore.sh` and `scripts/health-monitor.sh` name the old staging containers** (`nuclear-ao3-staging-*`), so they don't work with `docker-compose.yml`. `make backup-db` does work. Due for replacement in the monitoring and runbook work.
 - **Work gifts need a login to read** (`GET /works/:work_id/gifts` is behind `RequireUser`). On AO3, gifts show to everyone.
 - **API endpoints the website calls that fail** (seen 2026-10-30 with a fresh database): `GET /my/bookmarks` returns 500 ("Failed to count bookmarks"); the profile and pseud endpoints return 404; work gifts return 401 for logged-out readers, so the work page shows "Error loading gifts".

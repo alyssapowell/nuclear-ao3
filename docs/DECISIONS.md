@@ -52,7 +52,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **Why:** A checklist only works if someone reads it, every time, through every change of who runs the site. A check the server does itself at every start never gets skipped.
 
-**Next:** default or weak passwords in `.env`, Grafana's admin/admin, email links pointing at localhost in production, and a signing key that isn't the one the admin saved.
+**Also checked at startup (2026-10-30):** unless `ENVIRONMENT=development`, the server refuses to start with an example or short database password, a `SITE_URL` that isn't public `https://`, or mail going to the development mail catcher. An unset `ENVIRONMENT` counts as production. Every message names the setting and how to fix it. Separately, the server won't start without the admin's signing key, and Compose won't start Grafana without a password.
 
 ## 2026-10-29: Monitoring ships ready to use
 

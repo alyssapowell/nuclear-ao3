@@ -57,12 +57,6 @@
     }
 }
 
-# Monitoring dashboard (Grafana)
-{$MONITORING_DOMAIN:monitoring.localhost} {
-    reverse_proxy {$GRAFANA_HOST:grafana}:{$GRAFANA_PORT:3000}
-    
-    log {
-        output file /var/log/caddy/monitoring.log
-        format json
-    }
-}
+# Grafana is not published here on purpose: it shows the archive's inner
+# workings, so it stays on 127.0.0.1 and is reached through an SSH tunnel
+# (see docs/MONITORING.md).

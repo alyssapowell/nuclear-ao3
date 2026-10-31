@@ -37,6 +37,11 @@
 //	                          do with it. Needs no database.
 //	nuclear keys show         print the ID of the current signing key and of
 //	                          each previous key, to match against a saved copy
+//	nuclear sessions revoke-all
+//	                          end every login session and revoke every OAuth
+//	                          token, unused code and app consent, so everyone has to log in again
+//	nuclear sessions revoke <username>
+//	                          the same for one account
 //	nuclear grant <username> <role>
 //	                          give an existing account a role: admin,
 //	                          moderator or tag_wrangler. This is how a new
@@ -93,6 +98,22 @@ func main() {
 	if len(os.Args) > 1 {
 		os.Exit(runCommand(db, os.Args[1:]))
 	}
+	// Refuse to run a public archive on example settings: example passwords,
+	// email links to localhost, the development mail catcher.
+	if problems := platform.Preflight(os.Getenv); len(problems) > 0 {
+		fatal := false
+		for _, p := range problems {
+			if p.Fatal {
+				fatal = true
+				log.Printf("startup: %s", p)
+			} else {
+				log.Printf("warning (allowed because ENVIRONMENT=development): %s", p)
+			}
+		}
+		if fatal {
+			log.Fatalf("startup: fix the settings above in .env and start again. On your own computer, set ENVIRONMENT=development to allow them.")
+		}
+	}
 	if platform.Env("MIGRATE_ON_START", "true") != "false" {
 		if _, err := migrations.Up(context.Background(), db); err != nil {
 			log.Fatalf("startup: %v", err)
@@ -124,11 +145,6 @@ func main() {
 	exportSvc.Start()
 	searchSvc := search.New(db)
 
-	// Test mode skips rate limits and approves OAuth consent by itself, so a
-	// real server must never run in it.
-	if os.Getenv("GIN_MODE") == gin.TestMode {
-		log.Fatalf("startup: GIN_MODE=test turns off security checks and is only for automated tests; unset it")
-	}
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -139,7 +155,8 @@ func main() {
 		"127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"), ",")); err != nil {
 		log.Fatalf("startup: TRUSTED_PROXIES: %v", err)
 	}
-	r.Use(gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
+	platform.RegisterDBMetrics(db)
+	r.Use(platform.Metrics(), gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
 		authSvc.RateLimitMiddleware())
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
@@ -263,6 +280,10 @@ func runCommand(db *sql.DB, args []string) int {
 		}
 		log.Printf("jobs retry: %d job(s) queued again", n)
 		return 0
+	case len(args) == 2 && args[0] == "sessions" && args[1] == "revoke-all":
+		return revokeSessions(ctx, db, "")
+	case len(args) == 3 && args[0] == "sessions" && args[1] == "revoke":
+		return revokeSessions(ctx, db, args[2])
 	case len(args) == 3 && args[0] == "grant":
 		if err := grantRole(ctx, db, args[1], args[2]); err != nil {
 			log.Printf("grant: %v", err)
@@ -271,7 +292,7 @@ func runCommand(db *sql.DB, args []string) int {
 		log.Printf("grant: %s now has the %s role", args[1], args[2])
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | grant <username> <role> | keys generate|show]\n", strings.Join(args, " "))
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | keys generate|show]\n", strings.Join(args, " "))
 		return 2
 	}
 }
@@ -317,6 +338,73 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// revokeSessions ends login sessions and revokes OAuth tokens: for every
+// account when username is empty, otherwise for that one account. It does
+// all of it or none of it, and prints how many of each it ended.
+func revokeSessions(ctx context.Context, db *sql.DB, username string) int {
+	n, err := RevokeSessions(ctx, db, username)
+	if err != nil {
+		log.Printf("sessions: %v", err)
+		return 1
+	}
+	who := "every account"
+	if username != "" {
+		who = username
+	}
+	fmt.Printf("revoked %d login session(s), %d access token(s), %d refresh token(s), %d unused authorization code(s) and %d app consent(s) for %s\n",
+		n.Sessions, n.AccessTokens, n.RefreshTokens, n.Codes, n.Consents, who)
+	return 0
+}
+
+// Revoked says how many of each thing RevokeSessions ended.
+type Revoked struct{ Sessions, AccessTokens, RefreshTokens, Codes, Consents int64 }
+
+// RevokeSessions does the work of "nuclear sessions revoke[-all]". Only
+// sessions and tokens that were still live are counted.
+func RevokeSessions(ctx context.Context, db *sql.DB, username string) (Revoked, error) {
+	var r Revoked
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return r, err
+	}
+	defer tx.Rollback()
+
+	// With no username, "$1 = ''" is true for every row.
+	if username != "" {
+		var id string
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE username = $1`, username).Scan(&id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return r, fmt.Errorf("no account named %q", username)
+			}
+			return r, err
+		}
+	}
+	for _, q := range []struct {
+		dst *int64
+		sql string
+	}{
+		{&r.Sessions, `UPDATE user_sessions SET is_active = false
+			WHERE is_active AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+		{&r.AccessTokens, `UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now()
+			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+		{&r.RefreshTokens, `UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now()
+			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+		// An unused code could still be swapped for new tokens.
+		{&r.Codes, `UPDATE authorization_codes SET used_at = now()
+			WHERE used_at IS NULL AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+		// Apps must ask the user for permission again.
+		{&r.Consents, `UPDATE user_consents SET is_revoked = true, revoked_at = now()
+			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+	} {
+		res, err := tx.ExecContext(ctx, q.sql, username)
+		if err != nil {
+			return r, err
+		}
+		*q.dst, _ = res.RowsAffected()
+	}
+	return r, tx.Commit()
 }
 
 // grantRole gives an existing user a role, or restores it if it was revoked.
