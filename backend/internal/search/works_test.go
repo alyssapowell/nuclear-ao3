@@ -110,12 +110,20 @@ func TestWhoCanFindWhat(t *testing.T) {
 		t.Error("a work restricted to users should be found when logged in")
 	}
 
-	if _, err := a.db.Exec(`INSERT INTO user_blocks (blocker_id, blocked_id, block_type) VALUES ($1, $2, 'full')`,
+	// A block does not hide works: the blocked reader still finds them all
+	// (only comments close), so the search can't hint which pseuds are linked.
+	before := a.search(t, q, &a.reader)
+	if _, err := a.db.Exec(`INSERT INTO user_blocks (blocker_id, blocked_id, pseud_id, pseud_name)
+		SELECT $1, $2, p.id, p.name FROM pseuds p WHERE p.user_id = $2 AND p.is_default`,
 		a.author, a.reader); err != nil {
 		t.Fatal(err)
 	}
-	if found := a.search(t, q, &a.reader); len(found) != 0 {
-		t.Errorf("someone the author blocked should find none of their works, found %d", len(found))
+	if after := a.search(t, q, &a.reader); len(after) != len(before) {
+		t.Errorf("someone the author blocked should still find all their works: found %d, was %d", len(after), len(before))
+	}
+	// The block works the other way too; the author still finds the reader's works.
+	if after := a.search(t, q, &a.author); len(after) == 0 {
+		t.Errorf("the blocker should still find works")
 	}
 }
 

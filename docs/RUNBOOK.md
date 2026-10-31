@@ -239,7 +239,7 @@ Search reads the works table directly. There's no separate index that can fall b
 
 1. **Is it posted?** Drafts never appear in search.
 2. **Is it restricted to logged-in users?** Then it only appears for readers who are logged in.
-3. **Has the reader blocked or muted the creator, or has the creator blocked the reader?** Then it's hidden from that reader.
+3. **Has the reader muted a pseud that created it?** Then it's hidden from that reader only. (A block does not hide works: a blocked reader still finds and reads them, but sees comments as disabled.)
 4. **Is it anonymous?** Then searching by creator won't find it (on purpose), but searching its title will.
 5. **Is it in a collection that hasn't revealed its works yet?** Then it stays out of search until the reveal.
 

@@ -327,10 +327,22 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	}
 
 	// You can only comment on a work you're allowed to see (not a draft, not
-	// restricted when logged out, not from an author who blocked you).
+	// restricted when logged out).
 	var canView bool
 	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", req.WorkID, userID).Scan(&canView); err != nil || !canView {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
+		return
+	}
+
+	// A block between the commenter and one of the work's creators closes
+	// comments and replies on it (AO3 comment.rb:49-55). This comes before
+	// anything that looks at other comments, which the commenter can't see.
+	if blocked, err := ws.blockedFromWork(c, *req.WorkID, userID); err != nil {
+		log.Printf("create comment: blocked_from_work: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+		return
+	} else if blocked {
+		c.JSON(http.StatusForbidden, commentsDisabledBody())
 		return
 	}
 
@@ -364,6 +376,22 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		if err != nil || !exists || !visible {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Parent comment not found"})
 			return
+		}
+		// Nobody can reply to a comment by an account they're blocked with
+		// (AO3 comment.rb:40-46). Both ways, though a blocker can't see the
+		// blocked person's comments, so that case already ended above.
+		if userID != nil {
+			var replyBlocked bool
+			if err := ws.db.QueryRow(`SELECT accounts_blocked(c.user_id, $2) FROM comments c WHERE c.id = $1`,
+				req.ParentCommentID, *userID).Scan(&replyBlocked); err != nil {
+				log.Printf("create comment: reply block: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
+				return
+			}
+			if replyBlocked {
+				c.JSON(http.StatusForbidden, gin.H{"error": "replies_disabled", "message": "You can't reply to this comment."})
+				return
+			}
 		}
 		switch {
 		case iced:
@@ -505,13 +533,15 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 
 	var authorID sql.NullString
 	var iced, hidden bool
-	var visible, hasReplies bool
+	var visible, hasReplies, blocked bool
 	err = ws.db.QueryRowContext(c.Request.Context(), `
 		SELECT c.user_id, c.iced, c.hidden_by_admin,
 		       can_user_view_comment(c.id, $2),
-		       EXISTS (SELECT 1 FROM comments r WHERE r.parent_comment_id = c.id AND NOT r.is_deleted)
-		FROM comments c WHERE c.id = $1 AND NOT c.is_deleted`,
-		commentID, *userID).Scan(&authorID, &iced, &hidden, &visible, &hasReplies)
+		       EXISTS (SELECT 1 FROM comments r WHERE r.parent_comment_id = c.id AND NOT r.is_deleted),
+		       blocked_from_work(COALESCE(c.work_id, ch.work_id), $2)
+		FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
+		WHERE c.id = $1 AND NOT c.is_deleted`,
+		commentID, *userID).Scan(&authorID, &iced, &hidden, &visible, &hasReplies, &blocked)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 		return
@@ -521,6 +551,11 @@ func (ws *WorkService) UpdateComment(c *gin.Context) {
 		return
 	}
 
+	// A block closes editing too (AO3 comments_controller.rb:37).
+	if blocked {
+		c.JSON(http.StatusForbidden, commentsDisabledBody())
+		return
+	}
 	// A comment the viewer cannot see does not exist to them.
 	if !visible {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
@@ -749,7 +784,8 @@ func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uui
 
 // commentRecipients are the people a new comment is for: the work's authors,
 // and for a reply, whoever wrote the comment being replied to (on the same
-// work). Anyone who has blocked the commenter is left out.
+// work). Anyone who has blocked the commenter's account is left out, whichever
+// of its pseuds wrote the comment.
 func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID, commenterID *uuid.UUID) []uuid.UUID {
 	rows, err := ws.db.Query(`
 		SELECT r.user_id FROM (
@@ -760,7 +796,7 @@ func (ws *WorkService) commentRecipients(workID uuid.UUID, parentID, commenterID
 		) r
 		WHERE $3::uuid IS NULL OR NOT EXISTS (
 			SELECT 1 FROM user_blocks b
-			WHERE b.blocker_id = r.user_id AND b.blocked_id = $3 AND b.block_type IN ('full', 'comments'))`,
+			WHERE b.blocker_id = r.user_id AND b.blocked_id = $3)`,
 		workID, parentID, commenterID)
 	if err != nil {
 		log.Printf("comment recipients for work %s: %v", workID, err)

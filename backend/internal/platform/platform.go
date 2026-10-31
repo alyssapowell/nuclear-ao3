@@ -9,6 +9,7 @@ package platform
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,8 +30,14 @@ func Env(key, def string) string {
 }
 
 // OpenDB connects to Postgres using DATABASE_URL and checks the connection.
+// There is no built-in address: guessing one could connect a command, or a
+// server that applies migrations, to the wrong database.
 func OpenDB() (*sql.DB, error) {
-	db, err := sql.Open("postgres", Env("DATABASE_URL", "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable"))
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		return nil, errors.New("DATABASE_URL is not set; set it to the archive's Postgres address (see .env.example)")
+	}
+	db, err := sql.Open("postgres", url)
 	if err != nil {
 		return nil, err
 	}

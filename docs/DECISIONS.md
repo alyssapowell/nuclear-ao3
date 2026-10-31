@@ -8,6 +8,36 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: Blocks are account-wide in both directions, and the blocked person can still read
+
+**Decision:**
+- **A block is between two accounts and works both ways, across all pseuds.** The blocker picks a pseud (`POST /api/v1/blocks {pseud_id}`), which blocks the account behind it. That account, under any pseud, is blocked from the blocker's account, under any pseud, and the other way round.
+- **Works stay readable.** The blocked person still finds the blocker's works in search and lists and reads them and their chapters. Only the comments close: the work page carries `comments_disabled_for_you: true` (the page shows "Comments are disabled"), the comment list for them is empty, and posting, replying or editing a comment, or giving kudos, is a 403 (`comments_disabled`, `kudos_disabled`). A creator is never blocked from their own work; a co-creator's block closes the work for the blocked person even if the other creator hasn't blocked them. Guests are unaffected. Admins and moderators are not subject to blocks.
+- **The blocker does not see comments from the blocked account**, under any pseud, anywhere (on their own works, on replies to their comments, and on other people's works). The blocked person still sees the blocker's comments on other people's works, as in AO3, but cannot reply to them (`replies_disabled`).
+- **Notifications:** nobody is notified about anything done by an account they blocked, whichever pseud it used.
+- **Other interactions follow AO3:** a work can't be gifted to someone with a block against one of its creators (`gift_blocked`); bookmarks and subscriptions are not affected (AO3 has no rule for them).
+- **Mutes are per pseud** (`POST /api/v1/mutes {pseud_id}`). A mute hides that pseud's works and comments from the muter only and never covers the account's other pseuds. It does not apply to a work or comment that hides its creator, since hiding it would tell the muter who wrote it.
+- **Lists show what the person picked**, as `{id, name}`. They never carry an account id, a username or another pseud. Blocking a second pseud of an account already blocked adds a second entry and answers like any other block, so it can't be used to learn that two pseuds belong together; removing a block matches only the pseud that was picked, for the same reason.
+- **AO3's @mentions don't exist**, so the rebuild's version (which resolved `@name` to an account) is gone. Comments keep their text as written. **Collections** name their organiser as a pseud `{id, name, role}`, chosen at creation (the default pseud if none), as AO3 records collection participants by pseud.
+
+**Why:** The owner wants a block to be a real safety tool: the other person can't comment on, reply to or leave kudos on the blocker's work under any name, and the blocker doesn't have to read them. Hiding the works from the blocked person would have been simpler, but then a work vanishing for one reader would show exactly which pseuds are linked to the blocked account. So the works stay readable and only comments close.
+
+**Accepted cost:** this can, thinly, hint that two pseuds are linked: a person who is blocked sees "Comments are disabled" on every work by the blocker's account, whatever pseud it is under, and if they are blocked by a stranger's account they can compare which works are closed to them. The owner accepted this because it is needed for safety, and kept works readable to keep the hint as small as possible. Mutes are per pseud so muting can't link pseuds at all.
+
+**Differences from AO3:**
+- AO3's block is one way (the blocker can still comment on the blocked person's works) and is by user. Here it is both ways, by account.
+- AO3 hides nothing from the blocked person; here they see comments as disabled on the blocker's works.
+- AO3 shows the blocker the blocked person's comments; here they're hidden.
+- AO3's mute is by user; here it is by pseud.
+- AO3 has one kind of block; the old "comments" and "works" types became full blocks (migration 041).
+
+**What it costs:**
+- A pseud can only be blocked or muted if you can find it; there is no way to block "the account" without naming a pseud, on purpose.
+- If someone deletes the pseud you blocked, the block stays and your list keeps the name you picked.
+- Existing blocks and mutes were moved to the account's default pseud (migration 041). The owner of a comment hidden by a mute or block loses sight of the replies under it too, as with spam.
+
+---
+
 ## 2026-10-30: The public API names people by pseud only, and drops the account pages
 
 **Decision:**
@@ -28,7 +58,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - There is no "everything by this person" page, and there won't be one: it would connect a person's pseuds.
 - A subscriber follows what is posted under that pseud only. Someone who writes as two pseuds needs two subscriptions.
 - A pseud page for a person with several pseuds shows only that pseud's works. The "your works" page (`/my/works`) is still all of yours.
-- Not done here: collections still show their maintainer's `user_id` and `username` (`/collections`), muted-user lists and block/mute routes still take account ids, and `@name` mentions in comments still resolve usernames. They are listed in FEATURES.md.
+- Collections, the block and mute routes and `@name` mentions were done in the entry above (migration 041).
 
 ---
 
@@ -146,7 +176,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **How search was done (2026-10-30):** The audit found that nothing ever reached Elasticsearch: the code that sent works to it had no callers, so search was empty. The website used only two endpoints, work search and suggestions.
 - `backend/internal/search` is now about 500 lines instead of about 5,300. It queries the works table directly. A `search_vector` column, which Postgres keeps current by itself (migration 028), weights matches in the title first, then tags, then the summary. Chapter text isn't searched; AO3 doesn't do that either.
-- Visibility goes through the same `can_user_view_work` function as the work page, so search can't show a draft, a work restricted to logged-in users, or a work by someone who blocked the reader. Searching by creator never matches anonymous works.
+- Visibility goes through the same `can_user_view_work` function as the work page, so search can't show a draft or a work restricted to logged-in users. (A block no longer hides works: a blocked reader still finds them; see the entry on blocks.) Searching by creator never matches anonymous works.
 - Results name creators by pseud only (id and name), never by account or username.
 - Filters follow AO3: words, title, creator, the four tag types, excluded tags, rating, warnings, categories, language, word count, kudos and comment minimums, complete or in progress, crossovers, single chapter, and updated within. The website's "Relationship focus", "Relationship scope", "Hide gen fic", "Exclude poorly tagged" and "Quality score" options were dropped. AO3 has none of them and the server never applied them.
 - Removed endpoints: tag, user, collection and series search; "advanced" and "smart" search; facets; quality analysis; popular and trending terms; search history; saved searches and alerts; search analytics; index management. Nothing on the website used them, and AO3 has none of them except tag and people search, which can come back as plain queries when the website needs them.

@@ -49,6 +49,15 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 		return
 	}
 
+	// A reader who is blocked from this work's creators still reads it, but
+	// sees comments as disabled and no comment count.
+	if blocked, err := ws.blockedFromWork(c, workID, userID); err != nil {
+		log.Printf("blocked_from_work(%s): %v", workID, err)
+	} else if blocked {
+		work.CommentsDisabledForYou = true
+		work.Comments = 0
+	}
+
 	// Fetch authors (what the viewer may see depends on who they are)
 	authors, err := ws.fetchWorkAuthors(ctx, workID, userID)
 	if err != nil {
@@ -76,7 +85,8 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 		return
 	}
 
-	if !ws.canViewWork(ctx, workID, ws.getUserIDFromContext(c)) {
+	viewer := ws.getUserIDFromContext(c)
+	if !ws.canViewWork(ctx, workID, viewer) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
@@ -85,6 +95,10 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work stats"})
 		return
+	}
+	// A reader blocked from this work's creators sees no comment count.
+	if blocked, _ := ws.blockedFromWork(c, workID, viewer); blocked {
+		stats["comments"] = 0
 	}
 
 	c.JSON(http.StatusOK, stats)

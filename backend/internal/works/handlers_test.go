@@ -1059,10 +1059,11 @@ func (suite *WorkServiceTestSuite) TestProtectedEndpoints_NoAuth() {
 		{"POST", "/api/v1/works/" + uuid.New().String() + "/orphan"},
 		{"GET", "/api/v1/works/" + uuid.New().String() + "/authors"},
 		{"POST", "/api/v1/works/" + uuid.New().String() + "/co-authors"},
-		{"POST", "/api/v1/users/" + uuid.New().String() + "/mute"},
-		{"DELETE", "/api/v1/users/" + uuid.New().String() + "/mute"},
-		{"GET", "/api/v1/users/" + uuid.New().String() + "/mute-status"},
-		{"GET", "/api/v1/my/muted-users"},
+		{"POST", "/api/v1/mutes"},
+		{"DELETE", "/api/v1/mutes/" + uuid.New().String()},
+		{"GET", "/api/v1/mutes"},
+		{"POST", "/api/v1/blocks"},
+		{"GET", "/api/v1/blocks"},
 	}
 
 	for _, endpoint := range protectedEndpoints {

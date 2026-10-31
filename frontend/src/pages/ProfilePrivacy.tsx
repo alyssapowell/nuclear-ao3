@@ -3,12 +3,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import PrivacyWizard from '@/components/privacy/PrivacyWizard';
 
+// A block is shown as the pseud that was picked, and nothing else about the
+// account behind it.
 interface BlockedUser {
-  id: string;
-  username: string;
-  blocked_at: string;
-  block_type: 'content' | 'interaction' | 'complete';
-  reason?: string;
+  pseud: { id: string; name: string };
+  created_at: string;
 }
 
 interface Comment {
@@ -53,36 +52,19 @@ export default function PrivacySettingsPage() {
 
   const loadBlockedUsers = async (token: string) => {
     try {
-      const response = await fetch('/api/v1/profile/blocked-users', {
+      const response = await fetch('/api/v1/blocks', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        setBlockedUsers(data.blocked_users || []);
+        setBlockedUsers(data.blocks || []);
       }
     } catch (error) {
-      console.warn('Blocked users API not available, using demo data');
-      // Demo data for development
-      setBlockedUsers([
-        {
-          id: '1',
-          username: 'problematic_user',
-          blocked_at: '2024-10-15T10:30:00Z',
-          block_type: 'complete',
-          reason: 'Harassment in comments'
-        },
-        {
-          id: '2',
-          username: 'spam_account',
-          blocked_at: '2024-10-10T15:20:00Z',
-          block_type: 'interaction',
-          reason: 'Spamming comments'
-        }
-      ]);
+      console.error('Failed to load blocks:', error);
     }
   };
 
@@ -124,12 +106,12 @@ export default function PrivacySettingsPage() {
     }
   };
 
-  const unblockUser = async (userId: string) => {
+  const unblockUser = async (pseudId: string) => {
     try {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch(`/api/v1/users/${userId}/block`, {
+      const response = await fetch(`/api/v1/blocks/${pseudId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -138,12 +120,10 @@ export default function PrivacySettingsPage() {
       });
 
       if (response.ok) {
-        setBlockedUsers(prev => prev.filter(user => user.id !== userId));
+        setBlockedUsers(prev => prev.filter(b => b.pseud.id !== pseudId));
       }
     } catch (error) {
-      console.error('Failed to unblock user:', error);
-      // For demo, just remove from list
-      setBlockedUsers(prev => prev.filter(user => user.id !== userId));
+      console.error('Failed to unblock:', error);
     }
   };
 
@@ -284,39 +264,22 @@ export default function PrivacySettingsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No blocked users</h3>
-          <p className="text-gray-700">You haven't blocked any users yet.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No blocked pseuds</h3>
+          <p className="text-gray-700">You haven't blocked anyone yet.</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {blockedUsers.map((user) => (
-            <div key={user.id} className="bg-white border border-gray-200 rounded-lg p-6">
+          {blockedUsers.map((block) => (
+            <div key={block.pseud.id} className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <h3 className="font-medium text-gray-900">{user.username}</h3>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      user.block_type === 'complete' 
-                        ? 'bg-red-100 text-red-800'
-                        : user.block_type === 'interaction'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {user.block_type === 'complete' ? 'Complete Block' : 
-                       user.block_type === 'interaction' ? 'Interaction Block' : 'Content Block'}
-                    </span>
-                  </div>
+                  <h3 className="font-medium text-gray-900">{block.pseud.name}</h3>
                   <p className="text-sm text-gray-700 mt-1">
-                    Blocked {new Date(user.blocked_at).toLocaleDateString()}
+                    Blocked {new Date(block.created_at).toLocaleDateString()}
                   </p>
-                  {user.reason && (
-                    <p className="text-sm text-gray-700 mt-2">
-                      <span className="font-medium">Reason:</span> {user.reason}
-                    </p>
-                  )}
                 </div>
                 <Button
-                  onClick={() => unblockUser(user.id)}
+                  onClick={() => unblockUser(block.pseud.id)}
                   variant="outline"
                   size="sm"
                   className="ml-4"
@@ -330,11 +293,11 @@ export default function PrivacySettingsPage() {
       )}
 
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-        <h3 className="font-semibold text-yellow-900 mb-2">About User Blocking</h3>
+        <h3 className="font-semibold text-yellow-900 mb-2">About blocking</h3>
         <div className="text-sm text-yellow-800 space-y-2">
-          <p><strong>Complete Block:</strong> Hides all content from this user and prevents all interactions.</p>
-          <p><strong>Interaction Block:</strong> Prevents the user from commenting on your works or contacting you.</p>
-          <p><strong>Content Block:</strong> Hides the user's works from your searches and recommendations.</p>
+          <p>Blocking a pseud blocks the person behind it, under every pseud they have, and works both ways.</p>
+          <p>You can still read each other's works, but comments are closed between you: neither of you can comment, reply or leave kudos on the other's works, and you won't see comments from the person you blocked.</p>
+          <p>You won't be notified about anything they do.</p>
         </div>
       </div>
     </div>

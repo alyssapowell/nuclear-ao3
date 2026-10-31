@@ -1611,7 +1611,10 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 		comments = append(comments, comment)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"comments": comments})
+	// A reader blocked from the work's creators gets no comments (the query
+	// above already left them out) and is told comments are disabled.
+	disabled, _ := ws.blockedFromWork(c, workID, userUUID)
+	c.JSON(http.StatusOK, gin.H{"comments": comments, "comments_disabled_for_you": disabled})
 }
 
 func (ws *WorkService) GetKudos(c *gin.Context) {
@@ -1749,6 +1752,16 @@ func (ws *WorkService) GiveKudos(c *gin.Context) {
 	}
 	if !canView {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
+		return
+	}
+
+	// A block between the giver and one of the work's creators closes kudos
+	// (AO3 kudo.rb:14). Creators are never blocked from their own work.
+	if blocked, err := ws.blockedFromWork(c, workID, userUUID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check work permissions"})
+		return
+	} else if blocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "kudos_disabled", "message": "Kudos are disabled."})
 		return
 	}
 
@@ -2730,6 +2743,46 @@ func (ws *WorkService) RemoveWorkFromSeries(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Work removed from series successfully"})
 }
 
+// collectionOrganiserJoin joins the pseud a collection's owner shows as (op).
+// It falls back to the owner's default pseud if the chosen one is gone. The
+// owner's account is never selected for an answer.
+const collectionOrganiserJoin = `LEFT JOIN pseuds op ON op.id = COALESCE(c.pseud_id,
+			(SELECT dp.id FROM pseuds dp WHERE dp.user_id = c.user_id AND dp.is_default))`
+
+// organiserScan holds the organiser pseud of one collection row.
+type organiserScan struct {
+	id, name sql.NullString
+}
+
+// list is how collection answers name their organisers: pseuds only, as
+// {id, name, role}. AO3 records owners, moderators and members by pseud
+// (collection_participants.pseud_id); this archive has an owner so far.
+func (o organiserScan) list() []gin.H {
+	if !o.id.Valid {
+		return []gin.H{}
+	}
+	return []gin.H{{"id": o.id.String, "name": o.name.String, "role": "owner"}}
+}
+
+// organiserPseud picks the pseud a new collection shows its owner as: the
+// one asked for if it is theirs, otherwise their default.
+func (ws *WorkService) organiserPseud(owner uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
+	if requested != nil {
+		var ok bool
+		if err := ws.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM pseuds WHERE id = $1 AND user_id = $2)`,
+			*requested, owner).Scan(&ok); err != nil {
+			return uuid.Nil, err
+		}
+		if !ok {
+			return uuid.Nil, errNotYourPseud
+		}
+		return *requested, nil
+	}
+	var id uuid.UUID
+	err := ws.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, owner).Scan(&id)
+	return id, err
+}
+
 func (ws *WorkService) SearchCollections(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -2763,9 +2816,9 @@ func (ws *WorkService) SearchCollections(c *gin.Context) {
 			(SELECT COUNT(*) FROM collection_items ci JOIN works cw ON cw.id = ci.work_id
 			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $4::uuid)),
 			c.created_at, c.updated_at,
-			u.username
+			op.id, op.name
 		FROM collections c
-		JOIN users u ON c.user_id = u.id
+		` + collectionOrganiserJoin + `
 		WHERE (c.name ILIKE $1 OR c.title ILIKE $1 OR c.description ILIKE $1)
 		ORDER BY c.updated_at DESC
 		LIMIT $2 OFFSET $3`
@@ -2781,12 +2834,12 @@ func (ws *WorkService) SearchCollections(c *gin.Context) {
 	var collections []gin.H
 	for rows.Next() {
 		var collection models.Collection
-		var username string
+		var org organiserScan
 		err := rows.Scan(
 			&collection.ID, &collection.Name, &collection.Title, &collection.Description,
 			&collection.UserID, &collection.IsOpen, &collection.IsModerated,
 			&collection.IsAnonymous, &collection.WorkCount, &collection.CreatedAt,
-			&collection.UpdatedAt, &username)
+			&collection.UpdatedAt, &org.id, &org.name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan collection"})
 			return
@@ -2794,7 +2847,7 @@ func (ws *WorkService) SearchCollections(c *gin.Context) {
 
 		collections = append(collections, gin.H{
 			"collection": collection,
-			"maintainer": username,
+			"organisers": org.list(),
 		})
 	}
 
@@ -2828,20 +2881,20 @@ func (ws *WorkService) GetCollection(c *gin.Context) {
 	}
 
 	var collection models.Collection
-	var username string
+	var org organiserScan
 	err = ws.db.QueryRow(`
 		SELECT c.id, c.name, c.title, c.description, c.user_id, c.is_open, 
 			c.is_moderated, c.is_anonymous,
 			(SELECT COUNT(*) FROM collection_items ci JOIN works cw ON cw.id = ci.work_id
 			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $2::uuid)),
 			c.created_at, c.updated_at,
-			u.username
+			op.id, op.name
 		FROM collections c
-		JOIN users u ON c.user_id = u.id
+		`+collectionOrganiserJoin+`
 		WHERE c.id = $1`, collectionID, ws.getUserIDFromContext(c)).Scan(
 		&collection.ID, &collection.Name, &collection.Title, &collection.Description,
 		&collection.UserID, &collection.IsOpen, &collection.IsModerated, &collection.IsAnonymous,
-		&collection.WorkCount, &collection.CreatedAt, &collection.UpdatedAt, &username)
+		&collection.WorkCount, &collection.CreatedAt, &collection.UpdatedAt, &org.id, &org.name)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
@@ -2854,7 +2907,7 @@ func (ws *WorkService) GetCollection(c *gin.Context) {
 
 	response := gin.H{
 		"collection": collection,
-		"maintainer": username,
+		"organisers": org.list(),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -3061,6 +3114,9 @@ func (ws *WorkService) CreateCollection(c *gin.Context) {
 		IsOpen      bool   `json:"is_open"`
 		IsModerated bool   `json:"is_moderated"`
 		IsAnonymous bool   `json:"is_anonymous"`
+		// PseudID is the pseud the collection's owner shows as. It must be
+		// one of the creator's own; left out, their default pseud is used.
+		PseudID *uuid.UUID `json:"pseud_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -3072,6 +3128,17 @@ func (ws *WorkService) CreateCollection(c *gin.Context) {
 	userUUID, parseErr := uuid.Parse(userIDStr)
 	if parseErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	pseudID, pseudErr := ws.organiserPseud(userUUID, req.PseudID)
+	if pseudErr == errNotYourPseud {
+		c.JSON(http.StatusForbidden, gin.H{"error": "That pseud isn't yours"})
+		return
+	}
+	if pseudErr != nil {
+		log.Printf("create collection: pseud: %v", pseudErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create collection"})
 		return
 	}
 
@@ -3102,9 +3169,9 @@ func (ws *WorkService) CreateCollection(c *gin.Context) {
 	}
 
 	_, err = ws.db.Exec(`
-		INSERT INTO collections (id, name, title, description, user_id, is_open, is_moderated, is_anonymous, work_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		collection.ID, collection.Name, collection.Title, collection.Description, collection.UserID,
+		INSERT INTO collections (id, name, title, description, user_id, pseud_id, is_open, is_moderated, is_anonymous, work_count, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+		collection.ID, collection.Name, collection.Title, collection.Description, collection.UserID, pseudID,
 		collection.IsOpen, collection.IsModerated, collection.IsAnonymous, collection.WorkCount,
 		collection.CreatedAt, collection.UpdatedAt)
 
@@ -3113,7 +3180,9 @@ func (ws *WorkService) CreateCollection(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"collection": collection})
+	var org organiserScan
+	ws.db.QueryRow(`SELECT id, name FROM pseuds WHERE id = $1`, pseudID).Scan(&org.id, &org.name)
+	c.JSON(http.StatusCreated, gin.H{"collection": collection, "organisers": org.list()})
 }
 
 func (ws *WorkService) UpdateCollection(c *gin.Context) {
@@ -3130,12 +3199,13 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        *string `json:"name"`
-		Title       *string `json:"title"`
-		Description *string `json:"description"`
-		IsOpen      *bool   `json:"is_open"`
-		IsModerated *bool   `json:"is_moderated"`
-		IsAnonymous *bool   `json:"is_anonymous"`
+		Name        *string    `json:"name"`
+		Title       *string    `json:"title"`
+		Description *string    `json:"description"`
+		IsOpen      *bool      `json:"is_open"`
+		IsModerated *bool      `json:"is_moderated"`
+		IsAnonymous *bool      `json:"is_anonymous"`
+		PseudID     *uuid.UUID `json:"pseud_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -3206,6 +3276,20 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 		args = append(args, *req.IsAnonymous)
 		argIndex++
 	}
+	if req.PseudID != nil {
+		pseudID, pseudErr := ws.organiserPseud(userUUID, req.PseudID)
+		if pseudErr == errNotYourPseud {
+			c.JSON(http.StatusForbidden, gin.H{"error": "That pseud isn't yours"})
+			return
+		}
+		if pseudErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update collection"})
+			return
+		}
+		updates = append(updates, fmt.Sprintf("pseud_id = $%d", argIndex))
+		args = append(args, pseudID)
+		argIndex++
+	}
 
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No fields to update"})
@@ -3230,17 +3314,17 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 
 	// Fetch updated collection
 	var collection models.Collection
-	var username string
+	var org organiserScan
 	err = ws.db.QueryRow(`
 		SELECT c.id, c.name, c.title, c.description, c.user_id, c.is_open, 
 			c.is_moderated, c.is_anonymous, c.work_count, c.created_at, c.updated_at,
-			u.username
+			op.id, op.name
 		FROM collections c
-		JOIN users u ON c.user_id = u.id
+		`+collectionOrganiserJoin+`
 		WHERE c.id = $1`, collectionID).Scan(
 		&collection.ID, &collection.Name, &collection.Title, &collection.Description,
 		&collection.UserID, &collection.IsOpen, &collection.IsModerated, &collection.IsAnonymous,
-		&collection.WorkCount, &collection.CreatedAt, &collection.UpdatedAt, &username)
+		&collection.WorkCount, &collection.CreatedAt, &collection.UpdatedAt, &org.id, &org.name)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated collection"})
@@ -3249,7 +3333,7 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"collection": collection,
-		"maintainer": username,
+		"organisers": org.list(),
 	})
 }
 
@@ -4212,9 +4296,9 @@ func (ws *WorkService) GetMyCollections(c *gin.Context) {
 	query := `
 		SELECT c.id, c.name, c.title, c.description, c.user_id, c.is_open,
 			c.is_moderated, c.is_anonymous, c.work_count, c.created_at, c.updated_at,
-			u.username
+			op.id, op.name
 		FROM collections c
-		JOIN users u ON c.user_id = u.id
+		` + collectionOrganiserJoin + `
 		WHERE c.user_id = $1
 		ORDER BY c.updated_at DESC
 		LIMIT $2 OFFSET $3`
@@ -4229,12 +4313,12 @@ func (ws *WorkService) GetMyCollections(c *gin.Context) {
 	var collections []gin.H
 	for rows.Next() {
 		var collection models.Collection
-		var username string
+		var org organiserScan
 		err := rows.Scan(
 			&collection.ID, &collection.Name, &collection.Title, &collection.Description,
 			&collection.UserID, &collection.IsOpen, &collection.IsModerated,
 			&collection.IsAnonymous, &collection.WorkCount, &collection.CreatedAt,
-			&collection.UpdatedAt, &username)
+			&collection.UpdatedAt, &org.id, &org.name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan collection"})
 			return
@@ -4253,7 +4337,7 @@ func (ws *WorkService) GetMyCollections(c *gin.Context) {
 
 		collections = append(collections, gin.H{
 			"collection":    collection,
-			"maintainer":    username,
+			"organisers":    org.list(),
 			"pending_count": pendingCount,
 		})
 	}
@@ -4716,80 +4800,6 @@ func (ws *WorkService) ModerateComment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Comment moderation updated"})
 }
 
-func (ws *WorkService) BlockUser(c *gin.Context) {
-	blockedUserID, err := uuid.Parse(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	blockerID, exists := c.Get("user_uuid")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	var req struct {
-		BlockType string `json:"block_type" validate:"required,oneof=full comments works"`
-		Reason    string `json:"reason"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
-		return
-	}
-
-	// Can't block yourself
-	if blockerID.(uuid.UUID) == blockedUserID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot block yourself"})
-		return
-	}
-
-	// Create or update block
-	blockID := uuid.New()
-	now := time.Now()
-
-	_, err = ws.db.Exec(`
-		INSERT INTO user_blocks (id, blocker_id, blocked_id, block_type, reason, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (blocker_id, blocked_id)
-		DO UPDATE SET block_type = EXCLUDED.block_type, reason = EXCLUDED.reason`,
-		blockID, blockerID, blockedUserID, req.BlockType, req.Reason, now)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to block user"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "User blocked successfully"})
-}
-
-func (ws *WorkService) UnblockUser(c *gin.Context) {
-	blockedUserID, err := uuid.Parse(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	blockerID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	_, err = ws.db.Exec(`
-		DELETE FROM user_blocks 
-		WHERE blocker_id = $1 AND blocked_id = $2`,
-		blockerID, blockedUserID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unblock user"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "User unblocked successfully"})
-}
-
 func (ws *WorkService) ReportComment(c *gin.Context) {
 	commentID, err := uuid.Parse(c.Param("comment_id"))
 	if err != nil {
@@ -4878,177 +4888,6 @@ func (ws *WorkService) ReportWork(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Report submitted successfully"})
 }
 
-// User muting handlers (matching AO3's implementation)
-
-func (ws *WorkService) MuteUser(c *gin.Context) {
-	mutedUserID, err := uuid.Parse(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	muterID, exists := c.Get("user_uuid")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	var req struct {
-		Reason string `json:"reason"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
-		return
-	}
-
-	// Can't mute yourself
-	if muterID.(uuid.UUID) == mutedUserID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot mute yourself"})
-		return
-	}
-
-	// Check mute limit (similar to AO3's limits)
-	var muteCount int
-	err = ws.db.QueryRow("SELECT count_user_mutes($1)", muterID).Scan(&muteCount)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check mute limit"})
-		return
-	}
-
-	maxMutes := 100 // Similar to AO3's limits
-	if muteCount >= maxMutes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Maximum muted users limit reached"})
-		return
-	}
-
-	// Create or update mute
-	muteID := uuid.New()
-	now := time.Now()
-
-	_, err = ws.db.Exec(`
-		INSERT INTO user_mutes (id, muter_id, muted_id, reason, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (muter_id, muted_id)
-		DO UPDATE SET reason = EXCLUDED.reason, updated_at = EXCLUDED.updated_at`,
-		muteID, muterID, mutedUserID, req.Reason, now, now)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mute user"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "User muted successfully"})
-}
-
-func (ws *WorkService) UnmuteUser(c *gin.Context) {
-	mutedUserID, err := uuid.Parse(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	muterID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	_, err = ws.db.Exec(`
-		DELETE FROM user_mutes 
-		WHERE muter_id = $1 AND muted_id = $2`,
-		muterID, mutedUserID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unmute user"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "User unmuted successfully"})
-}
-
-func (ws *WorkService) GetMutedUsers(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	// Get user's muted list using the helper function
-	rows, err := ws.db.Query("SELECT * FROM get_user_muted_list($1)", userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch muted users"})
-		return
-	}
-	defer rows.Close()
-
-	type MutedUser struct {
-		UserID   uuid.UUID `json:"user_id"`
-		Username string    `json:"username"`
-		Reason   string    `json:"reason"`
-		MutedAt  time.Time `json:"muted_at"`
-	}
-
-	mutedUsers := []MutedUser{}
-	for rows.Next() {
-		var mutedUser MutedUser
-		err := rows.Scan(&mutedUser.UserID, &mutedUser.Username, &mutedUser.Reason, &mutedUser.MutedAt)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan muted user"})
-			return
-		}
-		mutedUsers = append(mutedUsers, mutedUser)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"muted_users": mutedUsers})
-}
-
-func (ws *WorkService) GetMuteStatus(c *gin.Context) {
-	targetUserID, err := uuid.Parse(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	// Check if user has muted the target user
-	var isMuted bool
-	err = ws.db.QueryRow("SELECT is_user_muted($1, $2)", userID, targetUserID).Scan(&isMuted)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check mute status"})
-		return
-	}
-
-	var muteInfo struct {
-		IsMuted bool      `json:"is_muted"`
-		Reason  string    `json:"reason,omitempty"`
-		MutedAt time.Time `json:"muted_at,omitempty"`
-	}
-
-	muteInfo.IsMuted = isMuted
-
-	// If muted, get additional details
-	if isMuted {
-		err = ws.db.QueryRow(`
-			SELECT reason, created_at 
-			FROM user_mutes 
-			WHERE muter_id = $1 AND muted_id = $2`,
-			userID, targetUserID).Scan(&muteInfo.Reason, &muteInfo.MutedAt)
-		if err != nil {
-			// Still return the mute status even if we can't get details
-			c.JSON(http.StatusOK, gin.H{"is_muted": true})
-			return
-		}
-	}
-
-	c.JSON(http.StatusOK, muteInfo)
-}
-
 // AO3 Core Features Handlers
 
 // Work gifting
@@ -5090,6 +4929,26 @@ func (ws *WorkService) GiftWork(c *gin.Context) {
 		return
 	}
 
+	// A work can't be gifted to someone who has a block with one of its
+	// creators (AO3 work.rb:194-216). The answer doesn't say which way.
+	if req.PseudID != nil {
+		var giftBlocked bool
+		if err := ws.db.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1 FROM creatorships c
+				JOIN pseuds cp ON cp.id = c.pseud_id
+				JOIN pseuds rp ON rp.id = $2
+				WHERE c.creation_id = $1 AND c.creation_type = 'Work' AND c.approved
+				  AND accounts_blocked(cp.user_id, rp.user_id))`, workID, *req.PseudID).Scan(&giftBlocked); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create gift"})
+			return
+		}
+		if giftBlocked {
+			c.JSON(http.StatusForbidden, gin.H{"error": "gift_blocked", "message": "That person can't be given this gift."})
+			return
+		}
+	}
+
 	// Create gift
 	giftID := uuid.New()
 	now := time.Now()
@@ -5107,7 +4966,7 @@ func (ws *WorkService) GiftWork(c *gin.Context) {
 	_, err = ws.db.Exec(`
 		INSERT INTO gifts (id, work_id, pseud_id, recipient_name, rejected, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		gift.ID, gift.WorkID, gift.PseudID, gift.RecipientName,
+		gift.ID, gift.WorkID, gift.PseudID, sql.NullString{String: gift.RecipientName, Valid: gift.RecipientName != ""},
 		gift.Rejected, gift.CreatedAt, gift.UpdatedAt)
 
 	if err != nil {

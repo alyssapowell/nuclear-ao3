@@ -43,7 +43,7 @@ func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
 	// Use test database
 	testDB := os.Getenv("TEST_DATABASE_URL")
 	if testDB == "" {
-		testDB = "postgres://ao3_user:ao3_password@localhost/ao3_nuclear_test?sslmode=disable"
+		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
 	}
 
 	db, err := sql.Open("postgres", testDB)

@@ -50,6 +50,10 @@ type Work struct {
 	// an admin has hidden (its creator, or an admin), so the page can say so.
 	HiddenByAdmin bool `json:"hidden_by_admin,omitempty"`
 	Spam          bool `json:"spam,omitempty"`
+	// CommentsDisabledForYou is set when a block between the reader and one of
+	// the work's creators closes comments (and kudos) for this reader. The
+	// work itself stays readable. The page shows "Comments are disabled".
+	CommentsDisabledForYou bool `json:"comments_disabled_for_you,omitempty"`
 }
 
 // Chapter represents a chapter within a work
@@ -207,7 +211,7 @@ type Collection struct {
 	Name        string    `json:"name" db:"name" validate:"required,min=1,max=100"`
 	Title       string    `json:"title" db:"title" validate:"required,min=1,max=200"`
 	Description string    `json:"description" db:"description"`
-	UserID      uuid.UUID `json:"user_id" db:"user_id"` // Collection maintainer
+	UserID      uuid.UUID `json:"-" db:"user_id"`       // Collection owner; never shown: organisers are named by pseud
 	IsOpen      bool      `json:"is_open" db:"is_open"` // Can anyone add works?
 	IsModerated bool      `json:"is_moderated" db:"is_moderated"`
 	IsAnonymous bool      `json:"is_anonymous" db:"is_anonymous"`

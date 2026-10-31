@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +31,10 @@ func (suite *UserProfileHandlersTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 
 	// Setup test database connection
-	dbURL := "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable"
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	suite.Require().NoError(err)
 
@@ -60,8 +64,6 @@ func (suite *UserProfileHandlersTestSuite) SetupSuite() {
 		api.GET("/pseudonyms", suite.authService.GetUserPseudonyms)
 		api.POST("/users/:username/friend-request", suite.authService.SendFriendRequest)
 		api.PUT("/friend-requests/:relationshipId", suite.authService.RespondToFriendRequest)
-		api.POST("/users/:username/block", suite.authService.BlockUser)
-		api.DELETE("/users/:username/block", suite.authService.UnblockUser)
 		api.GET("/dashboard", suite.authService.GetUserDashboard)
 	}
 }
@@ -248,70 +250,6 @@ func (suite *UserProfileHandlersTestSuite) TestSendFriendRequest_ToSelf() {
 	suite.router.ServeHTTP(w, req)
 
 	assert.Equal(suite.T(), http.StatusBadRequest, w.Code)
-}
-
-func (suite *UserProfileHandlersTestSuite) TestBlockUser_Success() {
-	// Create target user
-	targetUserID := uuid.New()
-	targetUsername := fmt.Sprintf("target_%s", targetUserID.String()[:8])
-	suite.db.Exec(`
-		INSERT INTO users (id, username, email, password_hash, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, 'hashed', true, NOW(), NOW())
-	`, targetUserID, targetUsername, fmt.Sprintf("%s@example.com", targetUsername))
-	defer suite.db.Exec("DELETE FROM users WHERE id = $1", targetUserID)
-
-	requestBody := map[string]interface{}{
-		"block_type": "full",
-		"reason":     "Testing block functionality",
-	}
-
-	body, _ := json.Marshal(requestBody)
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/api/v1/users/%s/block", targetUsername), bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	w := httptest.NewRecorder()
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusCreated, w.Code)
-
-	// Verify block was created
-	var count int
-	suite.db.QueryRow(`
-		SELECT COUNT(*) FROM user_blocks 
-		WHERE blocker_id = $1 AND blocked_id = $2 AND block_type = 'full'
-	`, suite.testUserID, targetUserID).Scan(&count)
-	assert.Equal(suite.T(), 1, count)
-}
-
-func (suite *UserProfileHandlersTestSuite) TestUnblockUser_Success() {
-	// Create target user and block them first
-	targetUserID := uuid.New()
-	targetUsername := fmt.Sprintf("target_%s", targetUserID.String()[:8])
-	suite.db.Exec(`
-		INSERT INTO users (id, username, email, password_hash, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, 'hashed', true, NOW(), NOW())
-	`, targetUserID, targetUsername, fmt.Sprintf("%s@example.com", targetUsername))
-	defer suite.db.Exec("DELETE FROM users WHERE id = $1", targetUserID)
-
-	// Create block
-	suite.db.Exec(`
-		INSERT INTO user_blocks (id, blocker_id, blocked_id, block_type, reason, created_at)
-		VALUES (uuid_generate_v4(), $1, $2, 'full', 'test', NOW())
-	`, suite.testUserID, targetUserID)
-
-	req, _ := http.NewRequest("DELETE", fmt.Sprintf("/api/v1/users/%s/block", targetUsername), nil)
-	w := httptest.NewRecorder()
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-
-	// Verify block was removed
-	var count int
-	suite.db.QueryRow(`
-		SELECT COUNT(*) FROM user_blocks 
-		WHERE blocker_id = $1 AND blocked_id = $2
-	`, suite.testUserID, targetUserID).Scan(&count)
-	assert.Equal(suite.T(), 0, count)
 }
 
 func (suite *UserProfileHandlersTestSuite) TestGetUserDashboard_Success() {

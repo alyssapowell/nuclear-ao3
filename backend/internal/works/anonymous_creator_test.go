@@ -61,17 +61,14 @@ func TestReplyNotificationKeepsHiddenCreatorHidden(t *testing.T) {
 		t.Errorf("open work: %s | %s", message, data)
 	}
 
-	// A mention in a hidden creator's reply carries no account id either.
+	// AO3 has no @mentions: a comment keeps its text as written and
+	// notifies nobody for a name in it.
 	e.exec(`DELETE FROM notifications`)
 	hidden := e.work(writer, "Hidden", "published")
 	e.exec(`UPDATE works SET is_anonymous = true WHERE id = $1`, hidden)
 	e.exec(`INSERT INTO comments (work_id, user_id, pseudonym_id, content) VALUES ($1, $2, $3, 'thanks @reader')`, hidden, writer, moon)
-	var mdata string
-	if err := e.db.QueryRow(`SELECT data::text FROM notifications WHERE user_id = $1 AND type = 'comment_mention'`, reader).Scan(&mdata); err != nil {
-		t.Fatalf("mention notification: %v", err)
-	}
-	if strings.Contains(mdata, writer.String()) || strings.Contains(mdata, "mentioning") {
-		t.Errorf("mention notification names the author: %s", mdata)
+	if n := e.count(`SELECT count(*) FROM notifications WHERE user_id = $1`, reader); n != 0 {
+		t.Errorf("an @name in a comment notified the reader (%d notifications)", n)
 	}
 
 	// A guest is called by the guest name, then "Someone", never a username.

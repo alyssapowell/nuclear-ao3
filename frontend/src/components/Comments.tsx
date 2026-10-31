@@ -35,6 +35,9 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  // Set by the server when a block closes comments for this reader. The work
+  // stays readable; there are just no comments to show or add.
+  const [commentsDisabled, setCommentsDisabled] = useState(false);
 
   // Fetch comments on mount
   useEffect(() => {
@@ -74,6 +77,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
       setLoading(true);
       const data = await getWorkComments(workId, authToken);
       setComments(data.comments || []);
+      setCommentsDisabled(Boolean(data.comments_disabled_for_you));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load comments');
     } finally {
@@ -495,6 +499,15 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
       <div className="flex items-center justify-center py-8">
         <div className="loading-spinner mr-3"></div>
         <span>Loading comments...</span>
+      </div>
+    );
+  }
+
+  if (commentsDisabled) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold text-slate-900">Comments</h2>
+        <p className="notice" role="status">Comments are disabled</p>
       </div>
     );
   }

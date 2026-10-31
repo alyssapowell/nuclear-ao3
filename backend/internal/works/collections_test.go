@@ -218,9 +218,11 @@ func (suite *CollectionsTestSuite) TestGetCollection() {
 	assert.True(suite.T(), ok)
 	assert.Equal(suite.T(), "get-test-collection", collection["name"])
 
-	maintainer, ok := response["maintainer"].(string)
+	// Organisers are named by pseud ({id, name}); never by username.
+	organisers, ok := response["organisers"].([]interface{})
 	assert.True(suite.T(), ok)
-	assert.Equal(suite.T(), "colltest", maintainer)
+	assert.Len(suite.T(), organisers, 1)
+	assert.NotContains(suite.T(), w.Body.String(), "user_id")
 
 	// Cleanup
 	suite.db.Exec("DELETE FROM collections WHERE id = $1", collectionID)

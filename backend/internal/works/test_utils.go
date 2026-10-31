@@ -2,6 +2,7 @@ package works
 
 import (
 	"database/sql"
+	"os"
 	"testing"
 	"time"
 
@@ -16,7 +17,13 @@ type TestDBConfig struct {
 
 // SetupTestDB creates a database connection for testing
 func SetupTestDB(t *testing.T) *TestDBConfig {
-	db, err := sql.Open("postgres", "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear?sslmode=disable")
+	// Never a built-in address: these helpers delete rows, so they only ever
+	// run against a database someone named on purpose.
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("set TEST_DATABASE_URL to a throwaway test database; these tests delete rows")
+	}
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}

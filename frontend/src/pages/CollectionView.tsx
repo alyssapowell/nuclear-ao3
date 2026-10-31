@@ -7,7 +7,8 @@ export default function CollectionPage() {
   const collectionId = params.id as string;
   
   const [collection, setCollection] = useState<Collection | null>(null);
-  const [maintainer, setMaintainer] = useState<string>('');
+  // Organisers are pseuds ({id, name}); the answer never names an account.
+  const [organisers, setOrganisers] = useState<{ id: string; name: string; role: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +25,7 @@ export default function CollectionPage() {
       const data = await getCollection(collectionId);
       
       setCollection(data.collection);
-      setMaintainer(data.maintainer || 'Unknown');
+      setOrganisers(data.organisers || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load collection');
     } finally {
@@ -77,12 +78,9 @@ export default function CollectionPage() {
             <div className="text-lg text-slate-600 mb-2">@{collection.name}</div>
             <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
               <span>maintained by</span>
-              <Link 
-                to={`/users/${collection.user_id}`}
-                className="text-orange-700 hover:text-orange-700 font-medium"
-              >
-                {maintainer}
-              </Link>
+              <span className="text-slate-800 font-medium">
+                {organisers.length > 0 ? organisers.map(o => o.name).join(', ') : 'Unknown'}
+              </span>
             </div>
           </div>
           

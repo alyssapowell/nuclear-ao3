@@ -123,17 +123,18 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			protected.PUT("/comments/:comment_id/freeze", d.ActiveAccount, workService.FreezeComment)     // PUT /api/v1/comments/123/freeze
 			protected.PUT("/comments/:comment_id/unfreeze", d.ActiveAccount, workService.UnfreezeComment) // PUT /api/v1/comments/123/unfreeze
 
-			// User blocking and reports
-			protected.POST("/users/:user_id/block", workService.BlockUser)            // POST /api/v1/users/123/block
-			protected.DELETE("/users/:user_id/block", workService.UnblockUser)        // DELETE /api/v1/users/123/block
+			// Blocks and mutes are by pseud. A block is between two accounts
+			// and works both ways; a mute hides one pseud for the muter.
+			protected.POST("/blocks", workService.CreateBlock)             // POST /api/v1/blocks {pseud_id}
+			protected.GET("/blocks", workService.ListBlocks)               // GET /api/v1/blocks
+			protected.DELETE("/blocks/:pseud_id", workService.DeleteBlock) // DELETE /api/v1/blocks/{pseud_id}
+			protected.POST("/mutes", workService.CreateMute)               // POST /api/v1/mutes {pseud_id}
+			protected.GET("/mutes", workService.ListMutes)                 // GET /api/v1/mutes
+			protected.DELETE("/mutes/:pseud_id", workService.DeleteMute)   // DELETE /api/v1/mutes/{pseud_id}
+
+			// Reports
 			protected.POST("/comments/:comment_id/report", workService.ReportComment) // POST /api/v1/comments/123/report
 			protected.POST("/works/:work_id/report", workService.ReportWork)          // POST /api/v1/works/123/report
-
-			// User muting (matching AO3's implementation)
-			protected.POST("/users/:user_id/mute", workService.MuteUser)            // POST /api/v1/users/123/mute
-			protected.DELETE("/users/:user_id/mute", workService.UnmuteUser)        // DELETE /api/v1/users/123/mute
-			protected.GET("/users/:user_id/mute-status", workService.GetMuteStatus) // GET /api/v1/users/123/mute-status
-			protected.GET("/my/muted-users", workService.GetMutedUsers)             // GET /api/v1/my/muted-users
 
 			// Core AO3 Features: Pseuds, Gifting, Orphaning, Co-authors
 			protected.POST("/pseuds", d.ActiveAccount, workService.CreatePseud)                    // POST /api/v1/pseuds

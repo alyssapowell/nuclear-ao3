@@ -98,8 +98,9 @@ func New(db *sql.DB, mail *email.Config) *NotificationService {
 
 	coreNotificationSvc.SetBlockChecker(func(ctx context.Context, recipient, actor uuid.UUID) bool {
 		var blocked bool
+		// A block is by account, so it covers every pseud the actor has.
 		err := db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM user_blocks
-			WHERE blocker_id = $1 AND blocked_id = $2 AND block_type IN ('full', 'comments'))`,
+			WHERE blocker_id = $1 AND blocked_id = $2)`,
 			recipient, actor).Scan(&blocked)
 		return err != nil || blocked // if we can't tell, don't notify
 	})

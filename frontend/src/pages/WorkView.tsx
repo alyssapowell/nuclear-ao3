@@ -37,6 +37,9 @@ interface Work {
   kudos: number;
   comments: number;
   bookmarks: number;
+  // True when a block closes comments and kudos for this reader. The work is
+  // still readable.
+  comments_disabled_for_you?: boolean;
   offline_reading_override?: 'files_and_pwa' | 'pwa_only' | 'none' | 'use_default';
   author_default_offline_reading?: 'files_and_pwa' | 'pwa_only' | 'none';
 }
@@ -301,11 +304,13 @@ export default function WorkPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-              <KudosButton 
-                workId={work.id}
-                initialKudos={work.kudos}
-                authToken={token || undefined}
-              />
+              {!work.comments_disabled_for_you && (
+                <KudosButton 
+                  workId={work.id}
+                  initialKudos={work.kudos}
+                  authToken={token || undefined}
+                />
+              )}
               
               <BookmarkButton 
                 workId={work.id}

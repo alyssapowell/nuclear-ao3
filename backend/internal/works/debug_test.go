@@ -2,6 +2,7 @@ package works
 
 import (
 	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -10,7 +11,10 @@ import (
 
 func TestDatabaseConnection(t *testing.T) {
 	// Test database connection
-	dbURL := "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable"
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		t.Skip("set TEST_DATABASE_URL to a throwaway test database")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	assert.NoError(t, err)
 	defer db.Close()

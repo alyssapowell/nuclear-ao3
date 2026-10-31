@@ -797,13 +797,17 @@ func TestAuditEndpoint(t *testing.T) {
 	e.expect(400, "GET", "/api/v1/admin/audit?limit=0", adminTok, nil)
 }
 
-func TestModeratorsAndAdminsSeeThroughBlocks(t *testing.T) {
+// A block does not hide the blocker's works. The blocked reader and a
+// moderator both read the work.
+func TestBlocksDoNotHideWorks(t *testing.T) {
 	e := newEnv(t)
 	creator, _ := e.user("creator")
 	blocked, blockedTok := e.user("blocked")
 	mod, modTok := e.user("mod", "moderator")
 	work := e.work(creator, "Blocked from this")
-	e.exec(`INSERT INTO user_blocks (blocker_id, blocked_id, block_type) VALUES ($1, $2, 'full'), ($1, $3, 'full')`, creator, blocked, mod)
-	e.expect(404, "GET", "/api/v1/work/"+work.String(), blockedTok, nil)
+	e.exec(`INSERT INTO user_blocks (blocker_id, blocked_id, pseud_id, pseud_name)
+		SELECT $1, u.id, p.id, p.name FROM users u JOIN pseuds p ON p.user_id = u.id AND p.is_default
+		WHERE u.id IN ($2, $3)`, creator, blocked, mod)
+	e.expect(200, "GET", "/api/v1/work/"+work.String(), blockedTok, nil)
 	e.expect(200, "GET", "/api/v1/work/"+work.String(), modTok, nil)
 }

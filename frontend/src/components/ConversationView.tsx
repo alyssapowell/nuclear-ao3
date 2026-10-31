@@ -143,19 +143,9 @@ export default function ConversationView({
     }
   };
 
-  // Format comment with @mentions for context
-  const formatCommentContent = (comment: FlattenedComment) => {
-    if (comment.level === 0 || !comment.replyToUsername) {
-      return comment.content;
-    }
-    
-    // Add @mention if it's not already in the content
-    const mention = `@${comment.replyToUsername}`;
-    if (!comment.content.startsWith(mention)) {
-      return `${mention} ${comment.content}`;
-    }
-    return comment.content;
-  };
+  // A comment is shown as written. (AO3 has no @mentions, so nothing is
+  // added to the text.)
+  const formatCommentContent = (comment: FlattenedComment) => comment.content;
 
   if (loading) {
     return (

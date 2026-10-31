@@ -1,23 +1,20 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 
+// Blocks the person behind a pseud. The block applies to every pseud they
+// have and works both ways: works stay readable, comments are closed.
 interface UserBlockingButtonProps {
-  username: string;
-  userId?: string;
+  pseudId: string;
+  pseudName: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'text' | 'icon' | 'button';
-  onBlockSuccess?: (username: string) => void;
+  onBlockSuccess?: (pseudName: string) => void;
   className?: string;
 }
 
-interface BlockUserRequest {
-  block_type: 'content' | 'interaction' | 'complete';
-  reason?: string;
-}
-
 export default function UserBlockingButton({
-  username,
-  userId,
+  pseudId,
+  pseudName,
   size = 'sm',
   variant = 'text',
   onBlockSuccess,
@@ -27,43 +24,35 @@ export default function UserBlockingButton({
   const [isBlocked, setIsBlocked] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleBlock = async (blockType: 'content' | 'interaction' | 'complete', reason?: string) => {
+  const handleBlock = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
       if (!token) {
-        alert('You must be logged in to block users');
+        alert('You must be logged in to block');
         return;
       }
 
-      // Use userId if provided, otherwise try username-based endpoint
-      const endpoint = userId 
-        ? `/api/v1/users/${userId}/block`
-        : `/api/v1/users/${encodeURIComponent(username)}/block`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/v1/blocks', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          block_type: blockType,
-          reason: reason || 'User blocked via interface'
-        } as BlockUserRequest)
+        body: JSON.stringify({ pseud_id: pseudId })
       });
 
       if (response.ok) {
         setIsBlocked(true);
         setShowBlockModal(false);
-        onBlockSuccess?.(username);
+        onBlockSuccess?.(pseudName);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || 'Failed to block user');
+        alert(errorData.message || errorData.error || 'Failed to block');
       }
     } catch (error) {
-      console.error('Failed to block user:', error);
-      alert('Failed to block user. Please try again.');
+      console.error('Failed to block:', error);
+      alert('Failed to block. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,16 +63,11 @@ export default function UserBlockingButton({
     try {
       const token = localStorage.getItem('auth_token');
       if (!token) {
-        alert('You must be logged in to unblock users');
+        alert('You must be logged in to unblock');
         return;
       }
 
-      // Use userId if provided, otherwise try username-based endpoint
-      const endpoint = userId 
-        ? `/api/v1/users/${userId}/block`
-        : `/api/v1/users/${encodeURIComponent(username)}/block`;
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/v1/blocks/${pseudId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -93,14 +77,14 @@ export default function UserBlockingButton({
 
       if (response.ok) {
         setIsBlocked(false);
-        onBlockSuccess?.(username);
+        onBlockSuccess?.(pseudName);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(errorData.error || 'Failed to unblock user');
+        alert(errorData.message || errorData.error || 'Failed to unblock');
       }
     } catch (error) {
-      console.error('Failed to unblock user:', error);
-      alert('Failed to unblock user. Please try again.');
+      console.error('Failed to unblock:', error);
+      alert('Failed to unblock. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -114,7 +98,7 @@ export default function UserBlockingButton({
             onClick={handleUnblock}
             disabled={loading}
             className={`text-green-600 hover:text-green-700 ${className}`}
-            title="Unblock user"
+            title="Unblock"
           >
             ✓
           </button>
@@ -136,7 +120,7 @@ export default function UserBlockingButton({
         <button
           onClick={() => setShowBlockModal(true)}
           className={`text-gray-400 hover:text-red-600 ${className}`}
-          title="Block user"
+          title="Block"
         >
           🚫
         </button>
@@ -161,7 +145,7 @@ export default function UserBlockingButton({
         size={size}
         className={`text-red-600 border-red-300 hover:bg-red-50 ${className}`}
       >
-        Block User
+        Block
       </Button>
     );
   };
@@ -171,46 +155,12 @@ export default function UserBlockingButton({
       <div className="bg-white rounded-lg max-w-md w-full">
         <div className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Block {username}?
+            Block {pseudName}?
           </h3>
-          
-          <p className="text-sm text-gray-700 mb-6">
-            Choose how you want to block this user:
-          </p>
 
-          <div className="space-y-4">
-            <button
-              onClick={() => handleBlock('content')}
-              disabled={loading}
-              className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            >
-              <div className="font-medium text-gray-900">Hide Content</div>
-              <div className="text-sm text-gray-700">
-                Hide their works from your searches and recommendations
-              </div>
-            </button>
-
-            <button
-              onClick={() => handleBlock('interaction')}
-              disabled={loading}
-              className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-            >
-              <div className="font-medium text-gray-900">Block Interactions</div>
-              <div className="text-sm text-gray-700">
-                Prevent them from commenting on your works or contacting you
-              </div>
-            </button>
-
-            <button
-              onClick={() => handleBlock('complete')}
-              disabled={loading}
-              className="w-full text-left p-4 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50"
-            >
-              <div className="font-medium text-red-900">Complete Block</div>
-              <div className="text-sm text-red-600">
-                Hide all content and prevent all interactions
-              </div>
-            </button>
+          <div className="text-sm text-gray-700 mb-6 space-y-2">
+            <p>This blocks the person behind this pseud, under every pseud they have.</p>
+            <p>You can still read each other's works, but neither of you can comment, reply or leave kudos on the other's works, and you won't see comments from them or be notified about what they do.</p>
           </div>
 
           <div className="flex justify-end space-x-3 mt-6">
@@ -220,6 +170,13 @@ export default function UserBlockingButton({
               disabled={loading}
             >
               Cancel
+            </Button>
+            <Button
+              onClick={handleBlock}
+              disabled={loading}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {loading ? 'Blocking...' : 'Block'}
             </Button>
           </div>
         </div>

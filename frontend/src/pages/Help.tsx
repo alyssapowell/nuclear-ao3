@@ -154,8 +154,10 @@ export default function HelpPage() {
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">Can I block other users?</h3>
                 <p className="text-gray-700">
-                  Yes! You can mute users to hide their works and comments from your view. 
-                  This is a client-side filter that doesn't affect the blocked user's experience.
+                  Yes. Muting a pseud hides that pseud's works and comments from your view only; it doesn't
+                  cover the person's other pseuds and they aren't told. Blocking a pseud blocks the person behind
+                  it, under every pseud: you can still read each other's works, but comments are closed between
+                  you and you aren't notified about anything they do.
                 </p>
               </div>
             </div>

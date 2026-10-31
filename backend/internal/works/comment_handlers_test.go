@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -32,7 +33,10 @@ func (suite *CommentHandlersTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 
 	// Setup test database connection
-	dbURL := "postgres://ao3_user:ao3_password@localhost/ao3_nuclear?sslmode=disable"
+	dbURL := os.Getenv("TEST_DATABASE_URL")
+	if dbURL == "" {
+		suite.T().Skip("set TEST_DATABASE_URL to a throwaway test database; this suite deletes rows")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	suite.Require().NoError(err)
 

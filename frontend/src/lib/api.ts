@@ -1508,7 +1508,6 @@ export interface Collection {
   name: string;
   title: string;
   description?: string;
-  user_id: string;
   is_open: boolean;
   is_moderated: boolean;
   is_anonymous: boolean;
