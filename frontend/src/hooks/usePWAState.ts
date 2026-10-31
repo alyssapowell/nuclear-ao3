@@ -135,8 +135,11 @@ export function usePWAState(): [PWAState, PWAActions] {
     }
 
     try {
-      const result = await state.installPrompt.prompt();
-      const accepted = result.outcome === 'accepted';
+      // The reader's answer comes from `userChoice`; what prompt() itself
+      // resolves with differs between browsers.
+      await state.installPrompt.prompt();
+      const choice = await state.installPrompt.userChoice;
+      const accepted = choice?.outcome === 'accepted';
 
       setState(prev => ({
         ...prev,

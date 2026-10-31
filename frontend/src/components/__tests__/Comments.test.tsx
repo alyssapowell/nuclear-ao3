@@ -1,5 +1,5 @@
 import type { MockedFunction } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Comments from '../Comments';
 import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos } from '@/lib/api';
@@ -36,7 +36,8 @@ describe('Comments', () => {
       id: '1',
       work_id: 'work-1',
       content: 'This is a great story!',
-      username: 'TestUser',
+      pseud: { id: 'pseud-1', name: 'TestUser' },
+      author_type: 'user' as const,
       status: 'published' as const,
       is_anonymous: false,
       kudos_count: 5,
@@ -49,7 +50,8 @@ describe('Comments', () => {
       work_id: 'work-1',
       parent_comment_id: '1',
       content: 'Thank you for reading!',
-      username: 'Author',
+      pseud: { id: 'pseud-2', name: 'Author' },
+      author_type: 'user' as const,
       status: 'published' as const,
       is_anonymous: false,
       kudos_count: 2,
@@ -67,7 +69,8 @@ describe('Comments', () => {
         id: '3',
         work_id: 'work-1',
         content: 'New comment',
-        username: 'NewUser',
+        pseud: { id: 'pseud-3', name: 'NewUser' },
+        author_type: 'user' as const,
         status: 'published' as const,
         is_anonymous: false,
         kudos_count: 0,
@@ -335,16 +338,12 @@ describe('Comments', () => {
     });
 
     // Find and click the kudos button for the second comment (which has_kudos: true)
-    const kudosButtons = screen.getAllByRole('button');
-    const secondCommentKudosButton = kudosButtons.find(button => 
-      button.textContent?.includes('2')
-    );
-    
-    if (secondCommentKudosButton) {
-      await act(async () => {
-        fireEvent.click(secondCommentKudosButton);
-      });
-    }
+    const secondComment = screen.getByText('Thank you for reading!').closest('.prose')!.parentElement!;
+    const secondCommentKudosButton = within(secondComment).getByRole('button', { name: '2' });
+
+    await act(async () => {
+      fireEvent.click(secondCommentKudosButton);
+    });
 
     await waitFor(() => {
       expect(mockRemoveCommentKudos).toHaveBeenCalledWith('work-1', '2', 'test-token');

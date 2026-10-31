@@ -35,7 +35,7 @@ jobs:
       run: npm ci
     
     - name: Run TypeScript check
-      run: npm run type-check
+      run: npx tsc --noEmit
     
     - name: Build application
       run: npm run build
@@ -43,6 +43,6 @@ jobs:
         CI: true
     
     - name: Run unit tests
-      run: npm test
+      run: npx vitest run
       env:
         CI: true

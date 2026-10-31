@@ -206,7 +206,9 @@ export default function UserProfileSettings({ authToken }: UserProfileSettingsPr
   if (!profile) {
     return (
       <div className="text-center py-8">
-        <p className="text-slate-600">Unable to load profile. Please try again.</p>
+        <p className="text-slate-600" role={error ? 'alert' : undefined}>
+          {error ?? 'Unable to load profile. Please try again.'}
+        </p>
       </div>
     );
   }

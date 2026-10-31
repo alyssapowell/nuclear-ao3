@@ -137,7 +137,7 @@ describe('UserProfileSettings', () => {
       expect(screen.getByText('Profile Settings')).toBeInTheDocument();
     });
 
-    const privacyTab = screen.getByText('🔒 Privacy');
+    const privacyTab = screen.getByRole('tab', { name: /Privacy/i });
     fireEvent.click(privacyTab);
 
     expect(screen.getByText('Privacy Settings')).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe('UserProfileSettings', () => {
     });
 
     // Switch to privacy tab
-    const privacyTab = screen.getByRole('button', { name: /Privacy/i });
+    const privacyTab = screen.getByRole('tab', { name: /Privacy/i });
     fireEvent.click(privacyTab);
 
     // Find and toggle adult content switch - it's the first checkbox (unchecked)
@@ -182,11 +182,11 @@ describe('UserProfileSettings', () => {
       expect(screen.getByText('Profile Settings')).toBeInTheDocument();
     });
 
-    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    const pseudonymsTab = screen.getByRole('tab', { name: /Pseudonyms/i });
     fireEvent.click(pseudonymsTab);
 
     await waitFor(() => {
-      expect(screen.getByText('Pseudonyms')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Pseudonyms' })).toBeInTheDocument();
       expect(screen.getByText('TestPseudo')).toBeInTheDocument();
       expect(screen.getByText('Default')).toBeInTheDocument();
     });
@@ -200,7 +200,7 @@ describe('UserProfileSettings', () => {
     });
 
     // Switch to pseudonyms tab
-    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    const pseudonymsTab = screen.getByRole('tab', { name: /Pseudonyms/i });
     fireEvent.click(pseudonymsTab);
 
     // Click add pseudonym button
@@ -220,7 +220,7 @@ describe('UserProfileSettings', () => {
     });
 
     // Switch to pseudonyms tab
-    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    const pseudonymsTab = screen.getByRole('tab', { name: /Pseudonyms/i });
     fireEvent.click(pseudonymsTab);
 
     // Click add pseudonym button
@@ -257,16 +257,17 @@ describe('UserProfileSettings', () => {
     });
 
     // Switch to pseudonyms tab
-    const pseudonymsTab = screen.getByRole('button', { name: /Pseudonyms/i });
+    const pseudonymsTab = screen.getByRole('tab', { name: /Pseudonyms/i });
     fireEvent.click(pseudonymsTab);
 
     // Click add pseudonym button
     const addButton = screen.getByText('Add Pseudonym');
     fireEvent.click(addButton);
 
-    // Try to submit without name
+    // The button is disabled while the name is empty, so submit the form itself.
     const createButton = screen.getByText('Create Pseudonym');
-    fireEvent.click(createButton);
+    expect(createButton).toBeDisabled();
+    fireEvent.submit(createButton.closest('form')!);
 
     await waitFor(() => {
       expect(screen.getByText('Pseudonym name is required')).toBeInTheDocument();
@@ -294,7 +295,7 @@ describe('UserProfileSettings', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Profile updated successfully!')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Profile updated successfully!');
     });
   });
 

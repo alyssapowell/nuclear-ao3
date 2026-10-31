@@ -133,9 +133,9 @@ describe('SmartRecommendations', () => {
       render(<SmartRecommendations {...defaultProps} />);
 
       // Check that suggestions are rendered as clickable elements
-      expect(screen.getByRole('button', { name: 'Reader' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Angst' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Slow Burn' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Reader' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Angst' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Slow Burn' })).toBeInTheDocument();
     });
 
     it('calls onApplyRecommendation when a suggestion is clicked', async () => {
@@ -208,7 +208,8 @@ describe('SmartRecommendations', () => {
     it('arranges cards in a stacked layout', () => {
       render(<SmartRecommendations {...defaultProps} />);
 
-      const container = screen.getByText('Smart Tag Suggestions').closest('div');
+      // The header row sits inside the stacked wrapper.
+      const container = screen.getByText('Smart Tag Suggestions').closest('div')!.parentElement;
       expect(container).toHaveClass('space-y-4');
     });
   });
@@ -301,7 +302,11 @@ describe('SmartRecommendations', () => {
       render(<SmartRecommendations recommendations={[largeSuggestionRec]} onApplyRecommendation={vi.fn()} />);
 
       expect(screen.getByText('Large Suggestion Set')).toBeInTheDocument();
-      expect(screen.getAllByRole('button')).toHaveLength(50);
+      // Three pills plus the "show more" toggle until it is expanded.
+      expect(screen.getAllByRole('button')).toHaveLength(4);
+      fireEvent.click(screen.getByRole('button', { name: /show 47 more suggestions/i }));
+      // All 50 pills plus the "show less" toggle.
+      expect(screen.getAllByRole('button')).toHaveLength(51);
     });
 
     it('handles very long suggestion names gracefully', () => {
@@ -333,9 +338,9 @@ describe('SmartRecommendations', () => {
 
       render(<SmartRecommendations recommendations={[specialCharRec]} onApplyRecommendation={vi.fn()} />);
 
-      expect(screen.getByRole('button', { name: 'Reader/OC' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Hurt & Comfort' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Pre-Canon' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Reader/OC' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Hurt & Comfort' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+ Pre-Canon' })).toBeInTheDocument();
     });
   });
 

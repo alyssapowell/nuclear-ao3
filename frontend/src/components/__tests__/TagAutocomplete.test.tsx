@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
@@ -29,10 +30,27 @@ const defaultProps = {
   tagType: 'character' as const,
 };
 
-const renderTagAutocomplete = (props = {}) => {
-  return render(
-    <TagAutocomplete {...defaultProps} {...props} />
+// TagAutocomplete is a controlled input: it only searches once its parent
+// feeds the typed text back as `value`. This wrapper does that, and still
+// reports every change to the onChange spy.
+function Controlled(props: Partial<React.ComponentProps<typeof TagAutocomplete>>) {
+  const { value: initial = '', onChange, ...rest } = props;
+  const [value, setValue] = useState(initial);
+  return (
+    <TagAutocomplete
+      {...defaultProps}
+      {...rest}
+      value={value}
+      onChange={(v) => {
+        setValue(v);
+        onChange?.(v);
+      }}
+    />
   );
+}
+
+const renderTagAutocomplete = (props = {}) => {
+  return render(<Controlled {...props} />);
 };
 
 describe('TagAutocomplete', () => {
@@ -197,8 +215,7 @@ describe('TagAutocomplete', () => {
       expect(input).toHaveAttribute('role', 'combobox');
     });
 
-    it.skip('updates ARIA attributes when suggestions are shown', async () => {
-      // TODO: Fix timing issue with debounced search in test environment
+    it('updates ARIA attributes when suggestions are shown', async () => {
       const user = userEvent.setup();
       renderTagAutocomplete();
 

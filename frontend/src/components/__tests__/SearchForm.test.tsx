@@ -196,22 +196,19 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       expect(tagGroup).not.toBeInTheDocument();
     });
 
-    it.skip('announces tag changes to screen readers', async () => {
-      // TODO: Fix live region timing in tests
+    it('announces tag changes to screen readers', async () => {
       const user = userEvent.setup();
-      renderSearchForm();
+      const { container } = renderSearchForm();
+      const announcer = container.querySelector<HTMLElement>('.sr-only[aria-live]')!;
 
       const relationshipsInput = screen.getByLabelText(/relationships/i);
       await user.type(relationshipsInput, 'Test Tag');
       await user.keyboard('{Enter}');
 
       // Live region should announce the addition
-      const liveRegion = screen.queryByRole('status', { hidden: true });
-      if (liveRegion) {
-        await waitFor(() => {
-          expect(liveRegion).toHaveTextContent(/added test tag to relationships/i);
-        });
-      }
+      await waitFor(() => {
+        expect(announcer).toHaveTextContent(/added test tag to relationships/i);
+      });
     });
   });
 
@@ -299,8 +296,7 @@ describe('SearchForm - Accessibility-First Implementation', () => {
 
     });
 
-    it.skip('applies advanced filters correctly', async () => {
-      // TODO: Need specific mock for advanced filter test
+    it('applies advanced filters correctly', async () => {
       const user = userEvent.setup();
       renderSearchForm({}, mockSearchWorksMocks);
 
@@ -326,6 +322,10 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       await waitFor(() => {
         expect(mockOnResults).toHaveBeenCalled();
       }, { timeout: 3000 });
+      expect(mockedSearchWorks).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ wordCountMin: 1000, language: ['en'] })
+      );
     });
   });
 
@@ -345,10 +345,10 @@ describe('SearchForm - Accessibility-First Implementation', () => {
   });
 
   describe('Screen Reader Announcements', () => {
-    it.skip('announces search results count', async () => {
-      // TODO: Fix live region detection in tests
+    it('announces search results count', async () => {
       const user = userEvent.setup();
-      renderSearchForm({}, mockSearchWorksMocks);
+      const { container } = renderSearchForm({}, mockSearchWorksMocks);
+      const announcer = container.querySelector<HTMLElement>('.sr-only[aria-live]')!;
 
       const titleInput = screen.getByLabelText(/title/i);
       await user.type(titleInput, 'Harry Potter');
@@ -356,35 +356,27 @@ describe('SearchForm - Accessibility-First Implementation', () => {
       const submitButton = screen.getByRole('button', { name: /search works/i });
       await user.click(submitButton);
 
-      const liveRegion = screen.queryByRole('status', { hidden: true });
-      if (liveRegion) {
-        await waitFor(() => {
-          expect(liveRegion).toHaveTextContent(/search completed/i);
-        });
-      }
+      await waitFor(() => {
+        expect(announcer).toHaveTextContent('Search completed. Found 1 results.');
+      });
     });
 
-    it.skip('announces advanced search state changes', async () => {
-      // TODO: Fix live region detection in tests
+    it('announces advanced search state changes', async () => {
       const user = userEvent.setup();
-      renderSearchForm();
+      const { container } = renderSearchForm();
+      const announcer = container.querySelector<HTMLElement>('.sr-only[aria-live]')!;
 
       const advancedToggle = screen.getByRole('button', { name: /show advanced search/i });
       await user.click(advancedToggle);
 
-      const liveRegion = screen.queryByRole('status', { hidden: true });
-      if (liveRegion) {
-        await waitFor(() => {
-          expect(liveRegion).toHaveTextContent(/advanced search options expanded/i);
-        });
-      }
+      await waitFor(() => {
+        expect(announcer).toHaveTextContent(/advanced search options expanded/i);
+      });
 
       await user.click(screen.getByRole('button', { name: /hide advanced search/i }));
-      if (liveRegion) {
-        await waitFor(() => {
-          expect(liveRegion).toHaveTextContent(/advanced search options collapsed/i);
-        });
-      }
+      await waitFor(() => {
+        expect(announcer).toHaveTextContent(/advanced search options collapsed/i);
+      });
     });
   });
 

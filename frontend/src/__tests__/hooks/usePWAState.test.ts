@@ -51,6 +51,7 @@ describe('usePWAState', () => {
 
   afterEach(() => {
     resetMocks();
+    vi.unstubAllGlobals();
     // Restore original event listeners
     window.addEventListener = originalAddEventListener;
     window.removeEventListener = originalRemoveEventListener;
@@ -360,12 +361,9 @@ describe('usePWAState', () => {
         writable: true
       });
 
-      // Mock window.location.reload
+      // jsdom's location.reload can't be replaced, so swap the whole location.
       const mockReload = vi.fn();
-      Object.defineProperty(window.location, 'reload', {
-        value: mockReload,
-        writable: true
-      });
+      vi.stubGlobal('location', { reload: mockReload });
 
       const { result } = renderHook(() => usePWAState());
       const [, actions] = result.current;

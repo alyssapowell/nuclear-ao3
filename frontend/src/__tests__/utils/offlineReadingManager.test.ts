@@ -7,6 +7,8 @@ import {
   simulateServiceWorkerMessage,
   simulateStorageQuota,
   simulateNetworkStatus,
+  respondWithOfflineWorks,
+  mockServiceWorkerRegistration,
   waitFor
 } from '../test-utils';
 
@@ -20,12 +22,16 @@ describe('OfflineReadingManager', () => {
     mockStorage = mocks.mockStorage;
     localStorageMock = mocks.localStorageMock;
     
+    // By default the service worker has no offline works to report.
+    respondWithOfflineWorks([]);
+
     // Reset singleton instance
     (OfflineReadingManager as any).instance = undefined;
     manager = OfflineReadingManager.getInstance();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     resetMocks();
   });
 
@@ -53,9 +59,10 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle service worker not available', () => {
-      // Remove service worker support
+      // Remove service worker support, then start a fresh manager
       delete (global.navigator as any).serviceWorker;
-      
+      (OfflineReadingManager as any).instance = undefined;
+
       const manager = OfflineReadingManager.getInstance();
       expect(manager.isReady()).toBe(false);
     });
@@ -81,58 +88,31 @@ describe('OfflineReadingManager', () => {
   });
 
   describe('Offline Works Management', () => {
-    beforeEach(() => {
-      // Mock MessageChannel communication
-      const originalMessageChannel = global.MessageChannel;
-      global.MessageChannel = vi.fn().mockImplementation(() => ({
-        port1: {
-          onmessage: null,
-          postMessage: vi.fn(),
-          close: vi.fn()
-        },
-        port2: {
-          onmessage: null,
-          postMessage: vi.fn(),
-          close: vi.fn()
-        }
-      }));
+    beforeEach(async () => {
+      await waitFor(0); // let the manager finish connecting to the service worker
     });
 
     it('should get offline works', async () => {
-      const mockWorks = [mockOfflineWork];
-      
-      // Mock the message channel response
-      const messageChannel = new (global.MessageChannel as any)();
-      setTimeout(() => {
-        if (messageChannel.port1.onmessage) {
-          messageChannel.port1.onmessage(new MessageEvent('message', {
-            data: { works: mockWorks }
-          }));
-        }
-      }, 10);
+      respondWithOfflineWorks([mockOfflineWork]);
 
       const works = await manager.getOfflineWorks();
-      expect(works).toEqual(mockWorks);
+      expect(works).toEqual([mockOfflineWork]);
     });
 
     it('should handle empty offline works', async () => {
-      const messageChannel = new (global.MessageChannel as any)();
-      setTimeout(() => {
-        if (messageChannel.port1.onmessage) {
-          messageChannel.port1.onmessage(new MessageEvent('message', {
-            data: { works: [] }
-          }));
-        }
-      }, 10);
-
       const works = await manager.getOfflineWorks();
       expect(works).toEqual([]);
     });
 
     it('should handle service worker communication timeout', async () => {
-      // Don't respond to the message channel
-      const works = await manager.getOfflineWorks();
-      expect(works).toEqual([]);
+      // The service worker never answers; the manager gives up after 5 seconds.
+      respondWithOfflineWorks();
+      vi.useFakeTimers();
+
+      const pending = manager.getOfflineWorks();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(await pending).toEqual([]);
     });
 
     it('should cache work with consent', async () => {
@@ -153,6 +133,7 @@ describe('OfflineReadingManager', () => {
       );
       
       expect(result).toBe(false);
+      expect(mockServiceWorkerRegistration.active.postMessage).not.toHaveBeenCalled();
     });
 
     it('should remove work from cache', async () => {
@@ -172,27 +153,21 @@ describe('OfflineReadingManager', () => {
 
   describe('Cache Statistics', () => {
     it('should get cache statistics', async () => {
+      await waitFor(0);
       simulateStorageQuota(1000000000, 50000000); // 1GB quota, 50MB used
-      
-      const messageChannel = new (global.MessageChannel as any)();
-      setTimeout(() => {
-        if (messageChannel.port1.onmessage) {
-          messageChannel.port1.onmessage(new MessageEvent('message', {
-            data: { works: [mockOfflineWork] }
-          }));
-        }
-      }, 10);
+      respondWithOfflineWorks([mockOfflineWork]);
 
       const stats = await manager.getCacheStats();
       
       expect(stats.totalWorks).toBe(1);
       expect(stats.expiredWorks).toBe(0);
-      expect(stats.storageUsed).toBe('48.8 MB');
+      expect(stats.storageUsed).toBe('47.7 MB');
       expect(stats.storageQuota).toBe('954 MB');
       expect(stats.utilizationPercentage).toBe(5);
     });
 
     it('should handle storage estimation unavailable', async () => {
+      await waitFor(0);
       // Mock storage not supported
       delete (global.navigator as any).storage;
       
@@ -205,22 +180,15 @@ describe('OfflineReadingManager', () => {
   });
 
   describe('Cache Management Operations', () => {
-    beforeEach(() => {
-      // Mock works with some expired
+    beforeEach(async () => {
+      await waitFor(0);
+      // Two cached works, one of them expired
       const expiredWork = {
         ...mockOfflineWork,
         workId: 'expired-work',
         isExpired: true
       };
-      
-      const messageChannel = new (global.MessageChannel as any)();
-      setTimeout(() => {
-        if (messageChannel.port1.onmessage) {
-          messageChannel.port1.onmessage(new MessageEvent('message', {
-            data: { works: [mockOfflineWork, expiredWork] }
-          }));
-        }
-      }, 10);
+      respondWithOfflineWorks([mockOfflineWork, expiredWork]);
     });
 
     it('should clear expired works', async () => {
@@ -234,8 +202,9 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should check if specific work is cached', async () => {
-      const isCached = await manager.isWorkCached(mockWorkData.id);
-      expect(typeof isCached).toBe('boolean');
+      expect(await manager.isWorkCached(mockWorkData.id)).toBe(true);
+      expect(await manager.isWorkCached('expired-work')).toBe(false);
+      expect(await manager.isWorkCached('never-cached')).toBe(false);
     });
 
     it('should get work cache status', async () => {
@@ -246,6 +215,9 @@ describe('OfflineReadingManager', () => {
 
   describe('Utility Functions', () => {
     it('should format time remaining correctly', () => {
+      // Freeze the clock so the remaining time is exact.
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-06-01T12:00:00Z'));
       const now = Date.now();
       
       // Test expired
@@ -396,6 +368,7 @@ describe('OfflineReadingManager', () => {
     });
 
     it('should handle storage estimation failures', async () => {
+      await waitFor(0);
       mockStorage.estimate.mockRejectedValue(new Error('Storage error'));
       
       const stats = await manager.getCacheStats();

@@ -1,158 +1,134 @@
 import type { MockedFunction } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import NotificationBell from '../components/notifications/NotificationBell';
-import NotificationList from '../components/notifications/NotificationList';
+import '@testing-library/jest-dom';
+import { NotificationBell, type Notification } from '../components/notifications/NotificationBell';
 import { useNotifications } from '../hooks/useNotifications';
-import { useAuth } from '../utils/auth';
 
-// Mock dependencies
-vi.mock('../hooks/useNotifications', () => ({
-  useNotifications: vi.fn(),
+vi.mock('../hooks/useNotifications', () => ({ useNotifications: vi.fn() }));
+vi.mock('../hooks/useWebSocket', () => ({
+  useWebSocket: () => ({
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    sendMessage: vi.fn(),
+    isConnected: false,
+    reconnectAttempts: 0,
+  }),
 }));
-
-vi.mock('../utils/auth', () => ({
-  useAuth: vi.fn(),
-  getAuthState: vi.fn(),
-  isAuthenticated: vi.fn(),
-}));
-
-
 const mockUseNotifications = useNotifications as MockedFunction<typeof useNotifications>;
-const mockUseAuth = useAuth as MockedFunction<typeof useAuth>;
 
-const mockNotifications = [
+// Notifications name people by display name only (actor_name), never by account.
+const mockNotifications: Notification[] = [
   {
     id: '1',
-    type: 'comment',
     title: 'New comment on your work',
-    message: 'User commented on "Test Work"',
-    timestamp: new Date('2023-01-01T10:00:00Z'),
-    read: false,
-    workId: 'work-1',
-    userId: 'user-1',
+    description: 'Someone commented on "Test Work"',
+    is_read: false,
+    created_at: '2023-01-01T10:00:00Z',
+    actor_name: 'Commenter',
+    priority: 'medium',
+    source_type: 'comment',
   },
   {
     id: '2',
-    type: 'kudos',
     title: 'New kudos received',
-    message: 'User gave kudos to "Test Work"',
-    timestamp: new Date('2023-01-01T09:00:00Z'),
-    read: true,
-    workId: 'work-1',
-    userId: 'user-2',
+    description: 'Someone gave kudos to "Test Work"',
+    is_read: true,
+    created_at: '2023-01-01T09:00:00Z',
+    actor_name: 'Anonymous Creator',
+    priority: 'low',
+    source_type: 'work',
   },
   {
     id: '3',
-    type: 'follow',
-    title: 'New follower',
-    message: 'User started following you',
-    timestamp: new Date('2023-01-01T08:00:00Z'),
-    read: false,
-    userId: 'user-3',
+    title: 'New chapter posted',
+    description: 'A work you subscribe to was updated',
+    is_read: false,
+    created_at: '2023-01-01T08:00:00Z',
+    actor_name: 'Writer',
+    priority: 'high',
+    source_type: 'work',
   },
 ];
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  
-  mockUseAuth.mockReturnValue({
-    user: { id: '1', username: 'testuser' },
-    isLoading: false,
-    isAuthenticated: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    register: vi.fn(),
+const hook = {
+  notifications: mockNotifications,
+  loading: false,
+  error: null,
+  fetchNotifications: vi.fn().mockResolvedValue(undefined),
+  markAsRead: vi.fn().mockResolvedValue(undefined),
+  deleteNotification: vi.fn().mockResolvedValue(undefined),
+  getUnreadCount: vi.fn().mockResolvedValue(2),
+  createTestNotification: vi.fn().mockResolvedValue(undefined),
+};
+
+// setup.ts gives every test a fake localStorage; this logs the reader in or out.
+const logIn = (token: string | null) => {
+  vi.mocked(localStorage.getItem).mockImplementation((key: string) => (key === 'auth_token' ? token : null));
+};
+
+const openBell = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('button', { name: /^notifications/i }));
+};
+
+describe('Notification System', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hook.fetchNotifications.mockResolvedValue(undefined);
+    hook.markAsRead.mockResolvedValue(undefined);
+    hook.deleteNotification.mockResolvedValue(undefined);
+    hook.getUnreadCount.mockResolvedValue(2);
+    mockUseNotifications.mockReturnValue(hook);
+    logIn('real-token');
   });
 
-  // Mock localStorage for SSR safety
-  Object.defineProperty(window, 'localStorage', {
-    value: {
-      getItem: vi.fn(),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
-    },
-    writable: true,
-  });
-});
+  describe('NotificationBell', () => {
+    it('shows nothing to a reader who is not logged in', async () => {
+      logIn(null);
+      const { container } = render(<NotificationBell />);
 
-describe('Notification System Tests', () => {
-  describe('NotificationBell Component', () => {
-    test('renders notification bell with unread count', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationBell />);
-
-      expect(screen.getByRole('button', { name: /notifications/i })).toBeInTheDocument();
-      expect(screen.getByText('2')).toBeInTheDocument(); // Unread count badge
+      await waitFor(() => expect(container).toBeEmptyDOMElement());
+      expect(hook.fetchNotifications).not.toHaveBeenCalled();
     });
 
-    test('does not show badge when no unread notifications', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications.map(n => ({ ...n, read: true })),
-        unreadCount: 0,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
+    it('loads notifications and shows the unread count', async () => {
       render(<NotificationBell />);
 
-      expect(screen.getByRole('button', { name: /notifications/i })).toBeInTheDocument();
-      expect(screen.queryByText('0')).not.toBeInTheDocument();
+      const bell = await screen.findByRole('button', { name: 'Notifications (2 unread)' });
+      expect(within(bell).getByText('2')).toBeInTheDocument();
+      expect(hook.fetchNotifications).toHaveBeenCalled();
     });
 
-    test('opens notification dropdown on click', async () => {
+    it('shows no badge when nothing is unread', async () => {
+      hook.getUnreadCount.mockResolvedValue(0);
+      render(<NotificationBell />);
+
+      const bell = await screen.findByRole('button', { name: 'Notifications' });
+      expect(within(bell).queryByText('0')).not.toBeInTheDocument();
+    });
+
+    it('caps a large count at 99+', async () => {
+      hook.getUnreadCount.mockResolvedValue(250);
+      render(<NotificationBell />);
+
+      expect(await screen.findByText('99+')).toBeInTheDocument();
+    });
+
+    it('opens the dropdown with the notifications', async () => {
       const user = userEvent.setup();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      await user.click(bellButton);
+      await openBell(user);
 
-      // Should show notification dropdown
-      expect(screen.getByText(/new comment on your work/i)).toBeInTheDocument();
-      expect(screen.getByText(/new kudos received/i)).toBeInTheDocument();
+      expect(screen.getByText('New comment on your work')).toBeInTheDocument();
+      expect(screen.getByText('New kudos received')).toBeInTheDocument();
+      expect(screen.getByText('Commenter')).toBeInTheDocument();
+      // Notifications name people, but never link to them.
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
     });
 
-    test('closes dropdown when clicking outside', async () => {
+    it('closes the dropdown when the reader clicks outside', async () => {
       const user = userEvent.setup();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
       render(
         <div>
           <NotificationBell />
@@ -160,531 +136,93 @@ describe('Notification System Tests', () => {
         </div>
       );
 
-      // Open dropdown
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      await user.click(bellButton);
+      await openBell(user);
+      expect(screen.getByText('New comment on your work')).toBeInTheDocument();
 
-      expect(screen.getByText(/new comment on your work/i)).toBeInTheDocument();
-
-      // Click outside
       await user.click(screen.getByTestId('outside'));
 
-      // Dropdown should close
       await waitFor(() => {
-        expect(screen.queryByText(/new comment on your work/i)).not.toBeInTheDocument();
+        expect(screen.queryByText('New comment on your work')).not.toBeInTheDocument();
       });
     });
 
-    test('handles SSR safety when localStorage is undefined', () => {
-      // Mock SSR environment
-      const originalWindow = global.window;
-      delete (global as any).window;
-
-      mockUseNotifications.mockReturnValue({
-        notifications: [],
-        unreadCount: 0,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      expect(() => render(<NotificationBell />)).not.toThrow();
-
-      global.window = originalWindow;
-    });
-
-    test('shows loading state correctly', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: [],
-        unreadCount: 0,
-        isLoading: true,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
+    it('closes the dropdown with its close button', async () => {
+      const user = userEvent.setup();
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      expect(bellButton).toBeInTheDocument();
-      // Loading indicator should be present
-      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+      await openBell(user);
+      await user.click(screen.getByRole('button', { name: 'Close notifications' }));
+
+      expect(screen.queryByText('New comment on your work')).not.toBeInTheDocument();
     });
 
-    test('handles keyboard navigation', async () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
+    it('marks an unread notification read when it is clicked', async () => {
+      const user = userEvent.setup();
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      bellButton.focus();
+      await openBell(user);
+      await user.click(screen.getByText('New comment on your work'));
 
-      // Press Enter to open
-      fireEvent.keyDown(bellButton, { key: 'Enter' });
-      
-      expect(screen.getByText(/new comment on your work/i)).toBeInTheDocument();
-
-      // Press Escape to close
-      fireEvent.keyDown(document, { key: 'Escape' });
-      
-      await waitFor(() => {
-        expect(screen.queryByText(/new comment on your work/i)).not.toBeInTheDocument();
-      });
-    });
-  });
-
-  describe('NotificationList Component', () => {
-    test('renders list of notifications correctly', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      expect(screen.getByText(/new comment on your work/i)).toBeInTheDocument();
-      expect(screen.getByText(/new kudos received/i)).toBeInTheDocument();
-      expect(screen.getByText(/new follower/i)).toBeInTheDocument();
+      expect(hook.markAsRead).toHaveBeenCalledWith('1');
+      expect(await screen.findByRole('button', { name: 'Notifications (1 unread)' })).toBeInTheDocument();
     });
 
-    test('distinguishes between read and unread notifications', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      const notifications = screen.getAllByRole('listitem');
-      
-      // First notification (unread) should have distinct styling
-      expect(notifications[0]).toHaveClass('unread');
-      
-      // Second notification (read) should not have unread styling
-      expect(notifications[1]).not.toHaveClass('unread');
-    });
-
-    test('marks notification as read when clicked', async () => {
+    it('leaves an already read notification alone when it is clicked', async () => {
       const user = userEvent.setup();
-      const mockMarkAsRead = vi.fn();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: mockMarkAsRead,
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
+      render(<NotificationBell />);
 
-      render(<NotificationList />);
+      await openBell(user);
+      await user.click(screen.getByText('New kudos received'));
 
-      const firstNotification = screen.getByText(/new comment on your work/i);
-      await user.click(firstNotification);
-
-      expect(mockMarkAsRead).toHaveBeenCalledWith('1');
+      expect(hook.markAsRead).not.toHaveBeenCalled();
     });
 
-    test('handles mark all as read action', async () => {
+    it('marks every unread notification read', async () => {
       const user = userEvent.setup();
-      const mockMarkAllAsRead = vi.fn();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: mockMarkAllAsRead,
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
+      render(<NotificationBell />);
 
-      render(<NotificationList />);
+      await openBell(user);
+      await user.click(screen.getByRole('button', { name: /mark all read/i }));
 
-      const markAllButton = screen.getByRole('button', { name: /mark all as read/i });
-      await user.click(markAllButton);
-
-      expect(mockMarkAllAsRead).toHaveBeenCalled();
+      expect(hook.markAsRead).toHaveBeenCalledTimes(2);
+      expect(hook.markAsRead).toHaveBeenCalledWith('1');
+      expect(hook.markAsRead).toHaveBeenCalledWith('3');
+      expect(await screen.findByRole('button', { name: 'Notifications' })).toBeInTheDocument();
     });
 
-    test('handles notification deletion', async () => {
+    it('deletes a notification without opening it', async () => {
       const user = userEvent.setup();
-      const mockDeleteNotification = vi.fn();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: mockDeleteNotification,
-        fetchNotifications: vi.fn(),
-      });
+      render(<NotificationBell />);
 
-      render(<NotificationList />);
-
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
+      await openBell(user);
+      const deleteButtons = screen.getAllByRole('button', { name: 'Delete notification' });
       await user.click(deleteButtons[0]);
 
-      expect(mockDeleteNotification).toHaveBeenCalledWith('1');
-    });
-
-    test('shows empty state when no notifications', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: [],
-        unreadCount: 0,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      expect(screen.getByText(/no notifications/i)).toBeInTheDocument();
-    });
-
-    test('shows loading state', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: [],
-        unreadCount: 0,
-        isLoading: true,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      expect(screen.getByText(/loading notifications/i)).toBeInTheDocument();
-    });
-
-    test('handles error state', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: [],
-        unreadCount: 0,
-        isLoading: false,
-        error: 'Failed to load notifications',
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      expect(screen.getByText(/failed to load notifications/i)).toBeInTheDocument();
-    });
-
-    test('groups notifications by date', () => {
-      const todayNotifications = [
-        {
-          ...mockNotifications[0],
-          timestamp: new Date(),
-        },
-        {
-          ...mockNotifications[1],
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-        },
-      ];
-
-      mockUseNotifications.mockReturnValue({
-        notifications: todayNotifications,
-        unreadCount: 1,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      expect(screen.getByText(/today/i)).toBeInTheDocument();
-    });
-
-    test('handles pagination for large notification lists', async () => {
-      const user = userEvent.setup();
-      const manyNotifications = Array.from({ length: 25 }, (_, i) => ({
-        ...mockNotifications[0],
-        id: `notification-${i}`,
-        title: `Notification ${i}`,
-      }));
-
-      mockUseNotifications.mockReturnValue({
-        notifications: manyNotifications.slice(0, 20), // First page
-        unreadCount: 5,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      // Should show first 20 notifications
-      expect(screen.getAllByRole('listitem')).toHaveLength(20);
-
-      // Should have load more button
-      const loadMoreButton = screen.getByRole('button', { name: /load more/i });
-      expect(loadMoreButton).toBeInTheDocument();
-
-      await user.click(loadMoreButton);
-      // Implementation would load more notifications
+      expect(hook.deleteNotification).toHaveBeenCalledWith('1');
+      expect(hook.markAsRead).not.toHaveBeenCalled();
     });
   });
 
-  describe('Notification System Integration', () => {
-    test('real-time notification updates', async () => {
-      const mockFetchNotifications = vi.fn();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: mockFetchNotifications,
-      });
-
-      render(<NotificationBell />);
-
-      // Simulate real-time update
-      const event = new CustomEvent('notification-update', {
-        detail: { newNotification: mockNotifications[0] }
-      });
-      window.dispatchEvent(event);
-
-      expect(mockFetchNotifications).toHaveBeenCalled();
-    });
-
-    test('handles WebSocket connection for real-time updates', () => {
-      // Mock WebSocket
-      const mockWebSocket = {
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        close: vi.fn(),
-      };
-      
-      global.WebSocket = vi.fn(() => mockWebSocket) as any;
-
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationBell />);
-
-      expect(global.WebSocket).toHaveBeenCalled();
-      expect(mockWebSocket.addEventListener).toHaveBeenCalledWith('message', expect.any(Function));
-    });
-
-    test('persists notification preferences', async () => {
+  describe('NotificationDropdown states', () => {
+    it('says when the reader is all caught up', async () => {
       const user = userEvent.setup();
-      const mockSetItem = vi.spyOn(Storage.prototype, 'setItem');
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
+      mockUseNotifications.mockReturnValue({ ...hook, notifications: [] });
       render(<NotificationBell />);
 
-      // Open settings menu
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      await user.click(bellButton);
+      await openBell(user);
 
-      const settingsButton = screen.getByRole('button', { name: /settings/i });
-      await user.click(settingsButton);
-
-      // Toggle notification preference
-      const emailToggle = screen.getByLabelText(/email notifications/i);
-      await user.click(emailToggle);
-
-      expect(mockSetItem).toHaveBeenCalledWith(
-        'notification-preferences',
-        expect.stringContaining('email')
-      );
+      expect(screen.getByText('No notifications')).toBeInTheDocument();
+      expect(screen.getByText("You're all caught up!")).toBeInTheDocument();
     });
 
-    test('handles notification permission requests', async () => {
+    it('shows a loading message while notifications load', async () => {
       const user = userEvent.setup();
-      
-      // Mock Notification API
-      global.Notification = {
-        permission: 'default',
-        requestPermission: vi.fn().mockResolvedValue('granted'),
-      } as any;
-
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
+      mockUseNotifications.mockReturnValue({ ...hook, loading: true });
       render(<NotificationBell />);
 
-      const bellButton = screen.getByRole('button', { name: /notifications/i });
-      await user.click(bellButton);
+      await openBell(user);
 
-      const enableButton = screen.getByRole('button', { name: /enable browser notifications/i });
-      await user.click(enableButton);
-
-      expect(Notification.requestPermission).toHaveBeenCalled();
-    });
-
-    test('filters notifications by type', async () => {
-      const user = userEvent.setup();
-      
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationList />);
-
-      // Filter by comments only
-      const filterDropdown = screen.getByRole('combobox', { name: /filter by type/i });
-      await user.selectOptions(filterDropdown, 'comment');
-
-      // Should only show comment notifications
-      expect(screen.getByText(/new comment on your work/i)).toBeInTheDocument();
-      expect(screen.queryByText(/new kudos received/i)).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Notification Accessibility', () => {
-    test('provides proper ARIA labels and announcements', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationBell />);
-
-      const bellButton = screen.getByRole('button');
-      expect(bellButton).toHaveAttribute('aria-label');
-      expect(bellButton).toHaveAttribute('aria-expanded', 'false');
-    });
-
-    test('announces new notifications to screen readers', () => {
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationBell />);
-
-      // Should have live region for announcements
-      const liveRegion = screen.getByRole('status');
-      expect(liveRegion).toBeInTheDocument();
-    });
-
-    test('supports high contrast mode', () => {
-      // Mock high contrast mode
-      Object.defineProperty(window, 'matchMedia', {
-        writable: true,
-        value: vi.fn().mockImplementation(query => ({
-          matches: query === '(prefers-contrast: high)',
-          media: query,
-          onchange: null,
-          addListener: vi.fn(),
-          removeListener: vi.fn(),
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-          dispatchEvent: vi.fn(),
-        })),
-      });
-
-      mockUseNotifications.mockReturnValue({
-        notifications: mockNotifications,
-        unreadCount: 2,
-        isLoading: false,
-        error: null,
-        markAsRead: vi.fn(),
-        markAllAsRead: vi.fn(),
-        deleteNotification: vi.fn(),
-        fetchNotifications: vi.fn(),
-      });
-
-      render(<NotificationBell />);
-
-      const bellButton = screen.getByRole('button');
-      expect(bellButton).toHaveClass('high-contrast');
+      expect(screen.getByText('Loading notifications...')).toBeInTheDocument();
     });
   });
 });

@@ -110,9 +110,12 @@ export class MockMessageChannel {
       postMessage: vi.fn(),
       close: vi.fn()
     };
+    // What the service worker posts back on port2 arrives on port1, as in a browser.
     this.port2 = {
       onmessage: null,
-      postMessage: vi.fn(),
+      postMessage: vi.fn((data: unknown) => {
+        this.port1.onmessage?.({ data } as MessageEvent);
+      }),
       close: vi.fn()
     };
   }
@@ -123,17 +126,20 @@ export const setupGlobalMocks = () => {
   // Mock navigator
   Object.defineProperty(global.navigator, 'serviceWorker', {
     value: mockServiceWorker,
-    writable: true
+    writable: true,
+    configurable: true
   });
 
   Object.defineProperty(global.navigator, 'storage', {
     value: mockStorage,
-    writable: true
+    writable: true,
+    configurable: true
   });
 
   Object.defineProperty(global.navigator, 'onLine', {
     value: true,
-    writable: true
+    writable: true,
+    configurable: true
   });
 
   // Mock window
@@ -187,11 +193,21 @@ export const setupGlobalMocks = () => {
 // Reset all mocks
 export const resetMocks = () => {
   vi.clearAllMocks();
-  mockServiceWorkerRegistration.active.postMessage.mockClear();
+  mockServiceWorkerRegistration.active.postMessage.mockReset();
   mockServiceWorkerRegistration.addEventListener.mockClear();
   mockServiceWorker.addEventListener.mockClear();
   mockServiceWorker.removeEventListener.mockClear();
-  mockStorage.estimate.mockClear();
+  mockStorage.estimate.mockReset().mockResolvedValue(mockStorageEstimate);
+};
+
+// Makes the service worker answer GET_OFFLINE_WORKS with these works.
+// Pass nothing to make it stay silent, so the request times out.
+export const respondWithOfflineWorks = (works?: unknown[]) => {
+  mockServiceWorkerRegistration.active.postMessage.mockImplementation(
+    (message: { type: string }, ports?: Array<{ postMessage: (data: unknown) => void }>) => {
+      if (works && message.type === 'GET_OFFLINE_WORKS') ports?.[0].postMessage({ works });
+    }
+  );
 };
 
 // Helper to simulate service worker messages
@@ -224,7 +240,8 @@ export const simulateStorageQuota = (quota: number, usage: number) => {
 export const simulateNetworkStatus = (isOnline: boolean) => {
   Object.defineProperty(global.navigator, 'onLine', {
     value: isOnline,
-    writable: true
+    writable: true,
+    configurable: true
   });
   
   // Trigger online/offline events
@@ -233,7 +250,11 @@ export const simulateNetworkStatus = (isOnline: boolean) => {
   
   // Find and call event listeners
   const calls = (global.window.addEventListener as Mock).mock.calls;
-  const listeners = calls.filter(call => call[0] === eventType);
+  const removed = (global.window.removeEventListener as Mock).mock.calls;
+  // A listener that has been removed no longer hears the event.
+  const listeners = calls.filter(call =>
+    call[0] === eventType && !removed.some(r => r[0] === eventType && r[1] === call[1])
+  );
   
   listeners.forEach(([, listener]) => {
     listener(event);

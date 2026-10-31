@@ -1,345 +1,115 @@
-import type { Mocked } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+/**
+ * What a reader who is not logged in can do. Giving kudos and leaving a guest
+ * comment are tested with the real components in KudosButton.test.tsx and
+ * Comments.test.tsx; this file covers search, which has no login at all.
+ */
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { jest } from '@jest/globals';
-
-// Mock the API functions
-vi.mock('../lib/api', () => ({
-  giveKudos: vi.fn(),
-  createComment: vi.fn(),
-  searchWorks: vi.fn(),
-  getPopularSearches: vi.fn(),
-  getTrendingSearches: vi.fn(),
-}));
-
-// Mock Next.js router
-vi.mock('react-router-dom', async () =>
-  (await import('@/test/router-mock')).routerMock({
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
-  }));
-
 import SearchPage from '../pages/Search';
-import * as api from '../lib/api';
+import { searchWorks } from '../lib/api';
 
-const mockApi = api as Mocked<typeof api>;
+const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+
+const apiReply = (body: unknown) =>
+  Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+
+// setup.ts gives every test a fake localStorage; this logs the reader in or out.
+const logIn = (token: string | null) => {
+  vi.mocked(localStorage.getItem).mockImplementation((key: string) => (key === 'auth_token' ? token : null));
+};
+
+const oneWork = {
+  total: 1,
+  works: [
+    {
+      id: 'work-1',
+      title: 'Test Work',
+      authors: [{ id: 'pseud-1', name: 'Test Pseud' }],
+      anonymous: false,
+      summary: 'Test summary',
+      word_count: 1000,
+      chapter_count: 1,
+      rating: 'General Audiences',
+      language: 'English',
+      relationships: [],
+      characters: [],
+      freeform_tags: [],
+      fandoms: [],
+    },
+  ],
+};
 
 describe('Anonymous Features', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Clear localStorage to simulate logged out state
-    Object.defineProperty(window, 'localStorage', {
-      value: {
-        getItem: vi.fn(() => null),
-        setItem: vi.fn(),
-        removeItem: vi.fn(),
-        clear: vi.fn(),
-      },
-      writable: true,
-    });
-  });
-
-  describe('Anonymous Kudos', () => {
-    it('should allow giving kudos without authentication', async () => {
-      const mockGiveKudos = mockApi.giveKudos.mockResolvedValue({ success: true });
-      
-      // Mock a work component that has kudos functionality
-      const TestWorkComponent = () => {
-        const handleKudos = async () => {
-          try {
-            // This should work without auth token
-            await api.giveKudos('work-123');
-          } catch (error) {
-            console.error('Kudos failed:', error);
-          }
-        };
-
-        return (
-          <div>
-            <button onClick={handleKudos} data-testid="kudos-button">
-              Give Kudos
-            </button>
-          </div>
-        );
-      };
-
-      render(<TestWorkComponent />);
-      
-      const kudosButton = screen.getByTestId('kudos-button');
-      await userEvent.click(kudosButton);
-
-      await waitFor(() => {
-        expect(mockGiveKudos).toHaveBeenCalledWith('work-123');
-        // Should be called without auth token (undefined)
-        expect(mockGiveKudos).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    it('should handle kudos API call without auth header', async () => {
-      const mockGiveKudos = mockApi.giveKudos.mockResolvedValue({ success: true });
-      
-      // Direct API call without auth
-      await api.giveKudos('work-456');
-      
-      expect(mockGiveKudos).toHaveBeenCalledWith('work-456');
-    });
-
-    it('should show appropriate error when anonymous kudos fails', async () => {
-      const mockGiveKudos = mockApi.giveKudos.mockRejectedValue(
-        new Error('Anonymous kudos not allowed')
-      );
-      
-      const TestWorkComponent = () => {
-        const [error, setError] = React.useState<string | null>(null);
-        
-        const handleKudos = async () => {
-          try {
-            await api.giveKudos('work-123');
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Kudos failed');
-          }
-        };
-
-        return (
-          <div>
-            <button onClick={handleKudos} data-testid="kudos-button">
-              Give Kudos
-            </button>
-            {error && <div data-testid="error-message">{error}</div>}
-          </div>
-        );
-      };
-
-      render(<TestWorkComponent />);
-      
-      const kudosButton = screen.getByTestId('kudos-button');
-      await userEvent.click(kudosButton);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('error-message')).toHaveTextContent('Anonymous kudos not allowed');
-      });
-    });
-  });
-
-  describe('Anonymous Comments', () => {
-    it('should allow adding comments without authentication', async () => {
-      const mockAddComment = mockApi.createComment.mockResolvedValue({ 
-        id: 'comment-123',
-        content: 'Great work!',
-        author: 'Anonymous',
-        created_at: new Date().toISOString()
-      });
-      
-      const TestCommentComponent = () => {
-        const [comment, setComment] = React.useState('');
-        
-        const handleSubmit = async () => {
-          try {
-            // This should work without auth token
-        await api.createComment('work-123', {
-          content: 'Great work!',
-          name: 'Anonymous User'
-        });
-
-        expect(mockAddComment).toHaveBeenCalledWith('work-123', {
-          content: 'Great work!',
-          name: 'Anonymous User'
-        });
-          } catch (error) {
-            console.error('Comment failed:', error);
-          }
-        };
-
-        return (
-          <div>
-            <textarea 
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              data-testid="comment-input"
-              placeholder="Add a comment..."
-            />
-            <button onClick={handleSubmit} data-testid="submit-comment">
-              Submit Comment
-            </button>
-          </div>
-        );
-      };
-
-      render(<TestCommentComponent />);
-      
-      const commentInput = screen.getByTestId('comment-input');
-      const submitButton = screen.getByTestId('submit-comment');
-      
-      await userEvent.type(commentInput, 'Great work!');
-      await userEvent.click(submitButton);
-
-      await waitFor(() => {
-        expect(mockAddComment).toHaveBeenCalledWith('work-123', {
-          content: 'Great work!',
-          anonymous: true
-        });
-      });
-    });
-
-    it('should handle anonymous comment submission correctly', async () => {
-      const mockAddComment = mockApi.createComment.mockResolvedValue({ 
-        id: 'comment-456',
-        content: 'Anonymous feedback',
-        author: 'Anonymous',
-        created_at: new Date().toISOString()
-      });
-      
-      // Direct API call for anonymous comment
-      await api.createComment('work-789', {
-        content: 'Anonymous feedback',
-        anonymous: true
-      });
-      
-      expect(mockAddComment).toHaveBeenCalledWith('work-789', {
-        content: 'Anonymous feedback',
-        anonymous: true
-      });
-    });
+    logIn(null);
+    fetchMock.mockImplementation(() => apiReply(oneWork));
   });
 
   describe('Search Page When Logged Out', () => {
-    it('should render search page without authentication', async () => {
-      // Mock search API
-      mockApi.searchWorks.mockResolvedValue({
-        works: [],
-        total: 0,
-        facets: {}
-      });
-
-      // Render search page component
-      const { container } = render(<SearchPage />);
-      
-      // Should not throw ReferenceError
-      expect(container).toBeInTheDocument();
-      
-      // Should show search form
-      await waitFor(() => {
-        expect(screen.getByRole('textbox')).toBeInTheDocument();
-      });
-    });
-
-    it('should handle search functionality when logged out', async () => {
-      const mockSearchResults = {
-        works: [
-          {
-            id: 'work-1',
-            title: 'Test Work',
-            author: 'Test Author',
-            summary: 'Test summary',
-            word_count: 1000,
-            chapter_count: 1,
-            rating: 'General Audiences',
-            status: 'complete',
-            language: 'English',
-            published_date: '2023-01-01T00:00:00Z',
-            updated_date: '2023-01-01T00:00:00Z',
-            relationships: [],
-            characters: [],
-            freeform_tags: [],
-            fandoms: []
-          }
-        ],
-        total: 1,
-        facets: {}
-      };
-
-      mockApi.searchWorks.mockResolvedValue(mockSearchResults);
-
+    it('should render the search form', () => {
       render(<SearchPage />);
-      
-      // Wait for component to load
-      await waitFor(() => {
-        expect(screen.getByRole('textbox')).toBeInTheDocument();
-      });
 
-      // Perform a search
-      const searchInput = screen.getByRole('textbox');
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      
-      await userEvent.type(searchInput, 'test query');
-      await userEvent.click(searchButton);
-
-      // Should call search API without auth
-      await waitFor(() => {
-        expect(mockApi.searchWorks).toHaveBeenCalled();
-      });
+      expect(screen.getByPlaceholderText(/search by title/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /search works/i })).toBeInTheDocument();
     });
 
-    it('should not crash when accessing search-related state while logged out', () => {
-      // Test that no uninitialized variables are accessed
-      expect(() => {
-        render(<SearchPage />);
-      }).not.toThrow();
+    it('should search and show results without logging in', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await user.type(screen.getByPlaceholderText(/search by title/i), 'test query');
+      await user.click(screen.getByRole('button', { name: /search works/i }));
+
+      expect(await screen.findByRole('button', { name: /test work/i })).toBeInTheDocument();
+      const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/api/v1/search/works?');
+      expect(url).toContain('q=test+query');
+    });
+
+    it('should send no Authorization header', async () => {
+      await searchWorks('test');
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(init.headers).not.toHaveProperty('Authorization');
+    });
+
+    it('should send the token once logged in, so restricted works are included', async () => {
+      logIn('real-token');
+
+      await searchWorks('test');
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(init.headers).toHaveProperty('Authorization', 'Bearer real-token');
     });
   });
 
   describe('Authentication State Edge Cases', () => {
-    it('should handle missing localStorage gracefully', () => {
-      // Simulate environment where localStorage is not available
-      Object.defineProperty(window, 'localStorage', {
-        value: undefined,
-        writable: true,
-      });
+    it('should still search when the stored token is garbage', async () => {
+      logIn('invalid-token-data');
+      const user = userEvent.setup();
+      render(<SearchPage />);
 
-      expect(() => {
-        render(<SearchPage />);
-      }).not.toThrow();
+      await user.type(screen.getByPlaceholderText(/search by title/i), 'test');
+      await user.click(screen.getByRole('button', { name: /search works/i }));
+
+      // The server decides whether the token is any good; the page just searches.
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      expect(await screen.findByRole('button', { name: /test work/i })).toBeInTheDocument();
     });
 
-    it('should handle corrupted auth token gracefully', () => {
-      // Simulate corrupted token in localStorage
-      Object.defineProperty(window, 'localStorage', {
-        value: {
-          getItem: vi.fn(() => 'invalid-token-data'),
-          setItem: vi.fn(),
-          removeItem: vi.fn(),
-          clear: vi.fn(),
-        },
-        writable: true,
-      });
+    it('should show the error when the server turns the search down', async () => {
+      fetchMock.mockImplementation(() =>
+        Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({ error: 'Invalid token' }) } as Response)
+      );
+      const user = userEvent.setup();
+      render(<SearchPage />);
 
-      expect(() => {
-        render(<SearchPage />);
-      }).not.toThrow();
-    });
+      await user.type(screen.getByPlaceholderText(/search by title/i), 'test');
+      await user.click(screen.getByRole('button', { name: /search works/i }));
 
-    it('should handle network errors during anonymous operations gracefully', async () => {
-      mockApi.giveKudos.mockRejectedValue(new Error('Network error'));
-      
-      const TestComponent = () => {
-        const [error, setError] = React.useState<string | null>(null);
-        
-        const handleKudos = async () => {
-          try {
-            await api.giveKudos('work-123');
-          } catch (err) {
-            setError('Network error occurred');
-          }
-        };
-
-        return (
-          <div>
-            <button onClick={handleKudos} data-testid="kudos-button">
-              Give Kudos
-            </button>
-            {error && <div data-testid="error">{error}</div>}
-          </div>
-        );
-      };
-
-      render(<TestComponent />);
-      
-      const button = screen.getByTestId('kudos-button');
-      await userEvent.click(button);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('error')).toHaveTextContent('Network error occurred');
-      });
+      expect(await screen.findByRole('alert')).toHaveTextContent('Invalid token');
     });
   });
 });

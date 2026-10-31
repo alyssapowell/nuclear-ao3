@@ -19,6 +19,12 @@ interface Collection {
   updated_at: string;
 }
 
+// The API wraps each collection with the pseuds that organise it.
+interface CollectionItem {
+  collection: Collection;
+  organisers?: Array<{ id: string; name: string; role?: string }>;
+}
+
 interface Pagination {
   page: number;
   limit: number;
@@ -27,14 +33,14 @@ interface Pagination {
 }
 
 interface CollectionsResponse {
-  collections: Collection[];
+  collections: CollectionItem[];
   pagination: Pagination;
 }
 
 export default function CollectionsPage() {
   const [activeTab, setActiveTab] = useState<'browse' | 'my'>('browse');
   const [searchQuery, setSearchQuery] = useState('');
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pagination, setPagination] = useState<Pagination>({
@@ -146,7 +152,7 @@ export default function CollectionsPage() {
     return num.toString();
   };
 
-  const CollectionCard = ({ collection }: { collection: Collection }) => (
+  const CollectionCard = ({ collection, organisers }: CollectionItem) => (
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
@@ -158,7 +164,7 @@ export default function CollectionsPage() {
           </a>
           <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
-            Collection by {collection.name}
+            Collection by {organisers?.length ? organisers.map((o) => o.name).join(', ') : collection.name}
           </p>
         </div>
         
@@ -287,6 +293,7 @@ export default function CollectionsPage() {
           <button
             onClick={handleSearch}
             disabled={loading}
+            aria-label="Search collections"
             className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Search className="w-4 h-4" />
@@ -320,8 +327,8 @@ export default function CollectionsPage() {
         ) : collections.length > 0 ? (
           <>
             <div className="space-y-4 mb-8">
-              {collections.map((collection) => (
-                <CollectionCard key={collection.id} collection={collection} />
+              {collections.map((item) => (
+                <CollectionCard key={item.collection.id} {...item} />
               ))}
             </div>
 

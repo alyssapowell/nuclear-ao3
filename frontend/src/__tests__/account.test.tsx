@@ -59,6 +59,55 @@ describe('Login', () => {
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/auth/forgot-password')
   })
 
+  describe('on success', () => {
+    const loggedIn = {
+      status: 200,
+      body: { access_token: 'token-12345', user: { id: 'u1', username: 'alice' } },
+    }
+    const logInAs = async () => {
+      render(<Login />)
+      await userEvent.type(screen.getByLabelText('Username or email'), 'alice')
+      await userEvent.type(screen.getByLabelText('Password'), 'secret1')
+      await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
+    }
+    // The page ends by setting window.location.href, which jsdom can't follow.
+    const location = { origin: 'http://localhost', href: '', pathname: '/auth/login', search: '' }
+    beforeEach(() => {
+      location.href = ''
+      vi.stubGlobal('location', location)
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('keeps the token and the user, tells the navigation, then goes home', async () => {
+      mockApi({ 'POST /login': loggedIn })
+      const onAuthChange = vi.fn()
+      window.addEventListener('authChange', onAuthChange)
+      await logInAs()
+      await waitFor(() => expect(location.href).toBe('/'))
+      window.removeEventListener('authChange', onAuthChange)
+
+      expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 'token-12345')
+      expect(localStorage.setItem).toHaveBeenCalledWith('user', JSON.stringify(loggedIn.body.user))
+      expect(onAuthChange).toHaveBeenCalled()
+    })
+
+    it('goes back to the page that asked for a login', async () => {
+      h.search = 'redirect=/works/12'
+      mockApi({ 'POST /login': loggedIn })
+      await logInAs()
+      await waitFor(() => expect(location.href).toBe('/works/12'))
+    })
+
+    it('ignores a redirect to another site', async () => {
+      h.search = 'redirect=https://evil.example/phish'
+      mockApi({ 'POST /login': loggedIn })
+      await logInAs()
+      await waitFor(() => expect(location.href).toBe('/'))
+    })
+  })
+
   it('offers to resend the activation email when not activated (username asks for an email)', async () => {
     mockApi({
       'POST /login': { status: 403, body: { error: 'not_activated' } },

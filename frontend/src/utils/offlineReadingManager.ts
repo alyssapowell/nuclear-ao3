@@ -94,7 +94,7 @@ export class OfflineReadingManager {
 
   // Check if service worker is ready
   isReady(): boolean {
-    return this.serviceWorkerReady && !!navigator.serviceWorker.controller;
+    return this.serviceWorkerReady && !!navigator.serviceWorker?.controller;
   }
 
   // Get all offline works
@@ -132,12 +132,16 @@ export class OfflineReadingManager {
 
   // Cache work with author consent
   async cacheWork(workId: string, workData: any, consentLevel: 'files_and_pwa' | 'pwa_only'): Promise<boolean> {
+    // Only works whose author allows offline copies are cached.
+    if (consentLevel !== 'files_and_pwa' && consentLevel !== 'pwa_only') {
+      console.warn('[OfflineManager] Not caching a work without consent:', workId);
+      return false;
+    }
+
     if (!this.isReady()) {
       console.warn('[OfflineManager] Service Worker not ready');
       return false;
     }
-
-
 
     try {
       navigator.serviceWorker.controller?.postMessage({

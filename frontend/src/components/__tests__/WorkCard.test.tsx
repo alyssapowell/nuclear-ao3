@@ -8,7 +8,7 @@ describe('WorkCard', () => {
     title: 'Test Work Title',
     summary: 'This is a test summary for the work that should be displayed.',
     language: 'en',
-    rating: 'teen',
+    rating: 'Teen And Up Audiences',
     status: 'published',
     word_count: 25000,
     chapter_count: 5,
@@ -51,7 +51,7 @@ describe('WorkCard', () => {
   it('displays rating with correct styling', () => {
     render(<WorkCard work={mockWork} />);
     
-    const ratingBadge = screen.getByText('teen');
+    const ratingBadge = screen.getByText('Teen And Up Audiences');
     expect(ratingBadge).toBeInTheDocument();
     expect(ratingBadge).toHaveClass('bg-blue-100', 'text-blue-800');
   });

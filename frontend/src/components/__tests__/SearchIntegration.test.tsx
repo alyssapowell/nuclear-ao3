@@ -1,609 +1,287 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import type { MockedFunction } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import SearchPage from '@/pages/Search';
+import { searchWorks, searchTags } from '@/lib/api';
 
-// Mock Next.js navigation
-const mockPush = vi.fn();
+// The search page, form and results working together. Only the REST calls in
+// lib/api are replaced, so everything from typing to the rendered cards is real.
+vi.mock('@/lib/api', () => ({ searchWorks: vi.fn(), searchTags: vi.fn() }));
+const mockedSearchWorks = searchWorks as MockedFunction<typeof searchWorks>;
+const mockedSearchTags = searchTags as MockedFunction<typeof searchTags>;
+
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () =>
-  (await import('@/test/router-mock')).routerMock({
-    useNavigate: () => mockPush,
-    useParams: () => ({ id: 'test-id' }),
-    useLocation: () => ({ pathname: '/search', search: '', hash: '', state: null, key: 'test' }),
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
-  }));
+  (await import('@/test/router-mock')).routerMock({ useNavigate: () => mockNavigate }))
 
-// Mock the GraphQL API gateway
-const mockGraphQLResponses = {
-  enhancedSearch: {
-    data: {
-      works: {
-        pagination: { total: 3 },
-        works: [
-          {
-            id: '1',
-            title: 'The Adventures of Agatha and Reader',
-            author: 'test_author',
-            summary: 'A magical adventure with Agatha Harkness and Reader.',
-            word_count: 15000,
-            chapter_count: 5,
-            max_chapters: 10,
-            rating: 'Teen And Up Audiences',
-            status: 'published',
-            language: 'en',
-            published_date: '2023-01-15T10:30:00Z',
-            updated_date: '2023-02-20T14:45:00Z',
-            relationships: [{ name: 'Agatha Harkness/Reader', category: 'relationship' }],
-            characters: [{ name: 'Agatha Harkness', category: 'character' }],
-            freeform_tags: [{ name: 'Magic', category: 'freeform' }, { name: 'Adventure', category: 'freeform' }],
-            fandoms: [{ name: 'Marvel Cinematic Universe', category: 'fandom' }],
-            kudos_count: 25,
-            bookmark_count: 8,
-            hit_count: 150,
-            comment_count: 12,
-            tag_quality_score: 0.75,
-            missing_tag_suggestions: ['Reader'],
-          },
-          {
-            id: '2',
-            title: 'Reader Insert Adventures',
-            author: 'another_author',
-            summary: 'Various reader insert stories.',
-            word_count: 8500,
-            chapter_count: 3,
-            max_chapters: null,
-            rating: 'General Audiences',
-            status: 'published',
-            language: 'en',
-            published_date: '2023-03-10T14:20:00Z',
-            updated_date: '2023-03-15T09:30:00Z',
-            relationships: [{ name: 'Various/Reader', category: 'relationship' }],
-            characters: [{ name: 'Reader', category: 'character' }],
-            freeform_tags: [{ name: 'Fluff', category: 'freeform' }],
-            fandoms: [{ name: 'Multifandom', category: 'fandom' }],
-            kudos_count: 12,
-            bookmark_count: 3,
-            hit_count: 75,
-            comment_count: 5,
-            tag_quality_score: 0.65,
-            missing_tag_suggestions: [],
-          },
-          {
-            id: '3',
-            title: 'Magical Encounters',
-            author: 'magic_writer',
-            summary: 'When magic meets reality.',
-            word_count: 22000,
-            chapter_count: 8,
-            max_chapters: 12,
-            rating: 'Mature',
-            status: 'published',
-            language: 'en',
-            published_date: '2023-02-05T16:45:00Z',
-            updated_date: '2023-04-01T11:15:00Z',
-            relationships: [{ name: 'Agatha Harkness/Wanda Maximoff', category: 'relationship' }],
-            characters: [
-              { name: 'Agatha Harkness', category: 'character' },
-              { name: 'Wanda Maximoff', category: 'character' }
-            ],
-            freeform_tags: [
-              { name: 'Magic', category: 'freeform' },
-              { name: 'Romance', category: 'freeform' },
-              { name: 'Hurt/Comfort', category: 'freeform' }
-            ],
-            fandoms: [{ name: 'Marvel Cinematic Universe', category: 'fandom' }],
-            kudos_count: 45,
-            bookmark_count: 18,
-            hit_count: 320,
-            comment_count: 28,
-            tag_quality_score: 0.92,
-            missing_tag_suggestions: [],
-          },
-        ],
-      },
+// The API shape: people are pseuds {id, name}; tags are plain names.
+const apiResponse = {
+  total: 3,
+  works: [
+    {
+      id: '1',
+      title: 'The Adventures of Agatha and Reader',
+      authors: [{ id: 'pseud-1', name: 'MagicWriter' }],
+      anonymous: false,
+      summary: 'A magical adventure with Agatha Harkness and Reader.',
+      word_count: 15000,
+      chapter_count: 5,
+      max_chapters: 10,
+      rating: 'Teen And Up Audiences',
+      language: 'English',
+      published_at: '2023-01-15T10:30:00Z',
+      updated_at: '2023-02-20T14:45:00Z',
+      relationships: ['Agatha Harkness/Reader'],
+      characters: ['Agatha Harkness'],
+      freeform_tags: ['Magic', 'Adventure'],
+      fandoms: ['Marvel Cinematic Universe'],
+      kudos_count: 25,
+      bookmark_count: 8,
+      hit_count: 150,
+      comment_count: 12,
     },
-    recommendations: [
-      {
-        type: 'missing_character',
-        title: 'Missing Character Tags',
-        description: 'We detected potential missing character tags from your relationship search',
-        suggestions: ['Reader', 'You'],
-        confidence_score: 0.88,
-        category: 'character',
-      },
-      {
-        type: 'canonical_tags',
-        title: 'Canonical Tag Suggestions',
-        description: 'These canonical tags might improve your search results',
-        suggestions: ['Fluff', 'Angst', 'Hurt/Comfort'],
-        confidence_score: 0.72,
-        category: 'freeform',
-      },
-    ],
-  },
+    {
+      id: '2',
+      title: 'Reader Insert Adventures',
+      authors: [{ id: 'pseud-2', name: 'SecretPseud' }],
+      anonymous: true,
+      summary: 'Various reader insert stories.',
+      word_count: 8500,
+      chapter_count: 3,
+      rating: 'General Audiences',
+      language: 'English',
+      relationships: [],
+      characters: ['Reader'],
+      freeform_tags: ['Fluff'],
+      fandoms: ['Multifandom'],
+    },
+    {
+      id: '3',
+      title: 'Magical Encounters',
+      authors: [{ id: 'pseud-3', name: 'Second' }, { id: 'pseud-4', name: 'Third' }],
+      anonymous: false,
+      word_count: 22000,
+      chapter_count: 8,
+      max_chapters: 12,
+      rating: 'Mature',
+      language: 'English',
+      relationships: [],
+      characters: [],
+      freeform_tags: [],
+      fandoms: ['Marvel Cinematic Universe'],
+    },
+  ],
+};
+
+const search = async (user: ReturnType<typeof userEvent.setup>, title: string) => {
+  await user.type(screen.getByPlaceholderText(/search by title/i), title);
+  await user.click(screen.getByRole('button', { name: /search works/i }));
 };
 
 describe('Search Integration Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
-    // Mock the GraphQL fetch calls
-    global.fetch = vi.fn().mockImplementation((url, options) => {
-      if (url.includes('/graphql')) {
-        const body = JSON.parse(options.body);
-        const query = body.query;
-        
-        if (query.includes('SearchWorks') || query.includes('works')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockGraphQLResponses.enhancedSearch),
-          });
-        }
-      }
-      
-      return Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Not found' }),
-      });
-    });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
+    mockedSearchWorks.mockResolvedValue(apiResponse as any);
+    mockedSearchTags.mockResolvedValue([]);
   });
 
   describe('Complete Search Flow', () => {
-    it('performs end-to-end search with smart recommendations', async () => {
-      const user = userEvent.setup();
+    it('shows the search tips before the first search', () => {
       render(<SearchPage />);
 
-      // 1. Verify initial page load
-      expect(screen.getByText('Enhanced Search')).toBeInTheDocument();
-      expect(screen.getByText('Search the archive with powerful filtering and get intelligent recommendations.')).toBeInTheDocument();
-
-      // 2. Enter search query
-      const searchInput = screen.getByPlaceholderText(/search by title/i);
-      await user.type(searchInput, 'Agatha Harkness/Reader');
-
-      // 3. Submit search
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      // 4. Wait for loading to complete and results to appear
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
-
-      // 5. Verify search results are displayed
-      expect(screen.getByText('The Adventures of Agatha and Reader')).toBeInTheDocument();
-      expect(screen.getByText('Reader Insert Adventures')).toBeInTheDocument();
-      expect(screen.getByText('Magical Encounters')).toBeInTheDocument();
-
-      // 6. Verify smart recommendations are shown
-      expect(screen.getByText('🤖 Smart Recommendations')).toBeInTheDocument();
-      expect(screen.getByText('Missing Character Tags')).toBeInTheDocument();
-      expect(screen.getByText('88% confidence')).toBeInTheDocument();
-
-      // 7. Test recommendation interaction
-      const readerSuggestion = screen.getByRole('button', { name: 'Reader' });
-      await user.click(readerSuggestion);
-
-      // The recommendation should be applied (this would typically update the search)
-      expect(readerSuggestion).toBeInTheDocument();
+      // The page and the form each have an "Enhanced Search" heading.
+      expect(screen.getAllByRole('heading', { name: 'Enhanced Search' })).toHaveLength(2);
+      expect(screen.getByText('Search Tips')).toBeInTheDocument();
+      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
     });
 
-    it('handles search with advanced filters', async () => {
+    it('searches and shows the works, then hides the tips', async () => {
       const user = userEvent.setup();
       render(<SearchPage />);
 
-      // 1. Open advanced filters
-      const advancedToggle = screen.getByText(/show advanced search/i);
-      await user.click(advancedToggle);
+      await search(user, 'Agatha');
 
-      // 2. Set rating filter
-      const teenRatingCheckbox = screen.getByLabelText(/teen and up/i);
-      await user.click(teenRatingCheckbox);
-
-      // 3. Set completion status filter
-      const completeCheckbox = screen.getByLabelText(/complete works only/i);
-      await user.click(completeCheckbox);
-
-      // 4. Enter search query
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'magic');
-
-      // 5. Submit search
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      // 6. Verify filters are applied in the API call
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          'http://localhost:8080/graphql',
-          expect.objectContaining({
-            method: 'POST',
-            body: expect.stringContaining('Teen And Up Audiences'),
-          })
-        );
+        expect(screen.getByRole('heading', { name: 'Search Results' })).toBeInTheDocument();
       });
+      expect(mockedSearchWorks).toHaveBeenCalledTimes(1);
+      expect(mockedSearchWorks).toHaveBeenCalledWith('Agatha', expect.objectContaining({ sort: 'relevance' }));
 
-      // 7. Verify search results appear
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
+      expect(screen.getByRole('button', { name: /the adventures of agatha and reader/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /reader insert adventures/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /magical encounters/i })).toBeInTheDocument();
+      expect(screen.getByText('Found 3 works')).toBeInTheDocument();
+      expect(screen.queryByText('Search Tips')).not.toBeInTheDocument();
     });
 
-    it('provides real-time tag autocomplete functionality', async () => {
+    it('shows each work with its stats and tags', async () => {
       const user = userEvent.setup();
-      
-      // Mock tag autocomplete response
-      global.fetch = vi.fn().mockImplementation((url, options) => {
-        if (url.includes('/graphql')) {
-          const body = JSON.parse(options.body);
-          if (body.query.includes('TagAutocomplete')) {
-            return Promise.resolve({
-              ok: true,
-              json: () => Promise.resolve({
-                data: {
-                  tags: {
-                    autocomplete: {
-                      suggestions: [
-                        {
-                          id: '1',
-                          name: 'Agatha Harkness',
-                          type: 'CHARACTER',
-                          canonical: true,
-                          useCount: 150,
-                          description: 'The witch from WandaVision',
-                          relationships: [],
-                        },
-                        {
-                          id: '2',
-                          name: 'Agatha Christie',
-                          type: 'CHARACTER',
-                          canonical: true,
-                          useCount: 25,
-                          description: 'The mystery writer',
-                          relationships: [],
-                        },
-                      ],
-                    },
-                  },
-                },
-              }),
-            });
-          }
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockGraphQLResponses.enhancedSearch),
-        });
-      });
-
       render(<SearchPage />);
 
-      // 1. Open advanced filters to access tag inputs
-      const advancedToggle = screen.getByText(/show advanced search/i);
-      await user.click(advancedToggle);
+      await search(user, 'Agatha');
+      await screen.findByRole('heading', { name: 'Search Results' });
 
-      // 2. Type in character input to trigger autocomplete
-      const characterInput = screen.getByPlaceholderText(/add characters/i);
+      expect(screen.getByText('15,000')).toBeInTheDocument();
+      expect(screen.getByText('Teen And Up Audiences', { selector: 'span.border' })).toBeInTheDocument();
+      expect(screen.getByText('Agatha Harkness/Reader')).toBeInTheDocument();
+      expect(screen.getByText('Magic')).toBeInTheDocument();
+      // Two of the three works are in this fandom.
+      expect(screen.getAllByText('Marvel Cinematic Universe')).toHaveLength(2);
+      expect(screen.getByText('MagicWriter')).toBeInTheDocument();
+      expect(screen.getByText('Second, Third')).toBeInTheDocument();
+    });
+
+    it('names no author on an anonymous work', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await search(user, 'Reader');
+      await screen.findByRole('heading', { name: 'Search Results' });
+
+      expect(screen.getByText('Anonymous')).toBeInTheDocument();
+      expect(screen.queryByText('SecretPseud')).not.toBeInTheDocument();
+    });
+
+    it('does not turn authors or tags into links', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await search(user, 'Agatha');
+      await screen.findByRole('heading', { name: 'Search Results' });
+
+      // Nothing in the results links to a pseud or user page.
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
+    });
+
+    it('opens a work when its title is clicked', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await search(user, 'Agatha');
+      await user.click(await screen.findByRole('button', { name: /magical encounters/i }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/works/3');
+    });
+
+    it('passes advanced filters to the search', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await user.click(screen.getByRole('button', { name: /show advanced search/i }));
+      await user.selectOptions(screen.getByLabelText('Rating'), 'Teen And Up Audiences');
+      await user.click(screen.getByLabelText(/hide incomplete works/i));
+      await search(user, 'magic');
+
+      await waitFor(() => expect(mockedSearchWorks).toHaveBeenCalled());
+      expect(mockedSearchWorks).toHaveBeenCalledWith(
+        'magic',
+        expect.objectContaining({ rating: ['Teen And Up Audiences'], status: 'complete' })
+      );
+    });
+
+    it('adds a tag picked from the autocomplete and searches with it', async () => {
+      const user = userEvent.setup();
+      mockedSearchTags.mockResolvedValue([
+        { id: '1', name: 'Agatha Harkness', type: 'character', use_count: 150 },
+        { id: '2', name: 'Agatha Christie', type: 'character', use_count: 25 },
+      ] as any);
+      render(<SearchPage />);
+
+      const characterInput = screen.getByPlaceholderText(/add character tag/i);
       await user.type(characterInput, 'Agatha');
 
-      // 3. Wait for autocomplete suggestions
-      await waitFor(() => {
-        expect(screen.getByText('Agatha Harkness')).toBeInTheDocument();
-        expect(screen.getByText('Agatha Christie')).toBeInTheDocument();
-      });
+      await user.click(await screen.findByText('Agatha Harkness'));
 
-      // 4. Click on a suggestion
-      const suggestion = screen.getByText('Agatha Harkness');
-      await user.click(suggestion);
-
-      // 5. Verify tag was added
-      expect(screen.getByText('Agatha Harkness')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /remove agatha harkness from characters/i })).toBeInTheDocument();
       expect(characterInput).toHaveValue('');
+
+      await user.click(screen.getByRole('button', { name: /search works/i }));
+      await waitFor(() => expect(mockedSearchWorks).toHaveBeenCalled());
+      expect(mockedSearchWorks).toHaveBeenCalledWith(
+        '',
+        expect.objectContaining({ characters: ['Agatha Harkness'] })
+      );
     });
 
-    it('shows loading states during search operations', async () => {
+    it('asks for a search term instead of searching with nothing', async () => {
       const user = userEvent.setup();
-      
-      // Mock delayed response to test loading state
-      global.fetch = vi.fn().mockImplementation(() => 
-        new Promise(resolve => 
-          setTimeout(() => resolve({
-            ok: true,
-            json: () => Promise.resolve(mockGraphQLResponses.enhancedSearch),
-          }), 100)
-        )
-      );
-
       render(<SearchPage />);
 
-      // 1. Enter search query
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'test');
+      await user.click(screen.getByRole('button', { name: /search works/i }));
 
-      // 2. Submit search
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
+      expect(screen.getByRole('alert')).toHaveTextContent('Please enter at least one search criterion');
+      expect(mockedSearchWorks).not.toHaveBeenCalled();
+    });
 
-      // 3. Verify loading state appears
-      expect(screen.getByText(/searching with enhanced intelligence/i)).toBeInTheDocument();
-      expect(searchButton).toBeDisabled();
+    it('shows loading state while the search runs', async () => {
+      const user = userEvent.setup();
+      let finish!: (value: any) => void;
+      mockedSearchWorks.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+      render(<SearchPage />);
 
-      // 4. Wait for search to complete
-      await waitFor(() => {
-        expect(screen.queryByText(/searching with enhanced intelligence/i)).not.toBeInTheDocument();
-        expect(searchButton).not.toBeDisabled();
-      });
+      await search(user, 'test');
 
-      // 5. Verify results appear
-      expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
+      expect(screen.getByText('Searching the archive...')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /searching/i })).toBeDisabled();
+
+      finish(apiResponse);
+
+      await screen.findByRole('heading', { name: 'Search Results' });
+      expect(screen.queryByText('Searching the archive...')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /search works/i })).toBeEnabled();
     });
 
     it('handles search errors gracefully', async () => {
       const user = userEvent.setup();
-      
-      // Mock error response
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
-
+      mockedSearchWorks.mockRejectedValue(new Error('Network error'));
       render(<SearchPage />);
 
-      // 1. Enter search query
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'test');
+      await search(user, 'test');
 
-      // 2. Submit search
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
+      expect(await screen.findByRole('alert')).toHaveTextContent('Search error: Network error');
+      expect(screen.queryByRole('heading', { name: 'Search Results' })).not.toBeInTheDocument();
+    });
 
-      // 3. Wait for error message
-      await waitFor(() => {
-        expect(screen.getByText(/search failed/i)).toBeInTheDocument();
-      });
+    it('says so when nothing matches', async () => {
+      const user = userEvent.setup();
+      mockedSearchWorks.mockResolvedValue({ total: 0, works: [] } as any);
+      render(<SearchPage />);
 
-      // 4. Verify error state is shown
-      expect(screen.queryByText('Search Results')).not.toBeInTheDocument();
+      await search(user, 'nothing');
+
+      expect(await screen.findByText('No works found')).toBeInTheDocument();
+    });
+
+    it('can search again with new terms', async () => {
+      const user = userEvent.setup();
+      render(<SearchPage />);
+
+      await search(user, 'test1');
+      await screen.findByRole('heading', { name: 'Search Results' });
+
+      const title = screen.getByPlaceholderText(/search by title/i);
+      await user.clear(title);
+      await user.type(title, 'test2');
+      await user.click(screen.getByRole('button', { name: /search works/i }));
+
+      await waitFor(() => expect(mockedSearchWorks).toHaveBeenCalledTimes(2));
+      expect(mockedSearchWorks).toHaveBeenLastCalledWith('test2', expect.anything());
     });
   });
 
-  describe('Work Display and Interaction', () => {
-    it('displays work cards with enhanced features', async () => {
+  describe('Accessibility', () => {
+    it('labels the search form and announces results', async () => {
       const user = userEvent.setup();
       render(<SearchPage />);
 
-      // Perform search
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'Agatha');
-      
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
+      expect(screen.getAllByRole('search').length).toBeGreaterThan(0);
+      expect(screen.getByLabelText('Title')).toBeInTheDocument();
 
-      // Wait for results
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
+      await search(user, 'test');
+      await screen.findByRole('heading', { name: 'Search Results' });
 
-      // Verify work details are displayed
-      expect(screen.getByText('The Adventures of Agatha and Reader')).toBeInTheDocument();
-      expect(screen.getByText('15,000 words')).toBeInTheDocument();
-      expect(screen.getByText('5/10 chapters')).toBeInTheDocument();
-      expect(screen.getByText('Teen')).toBeInTheDocument();
-
-      // Verify tags are displayed
-      expect(screen.getByText('Agatha Harkness/Reader')).toBeInTheDocument();
-      expect(screen.getByText('Magic')).toBeInTheDocument();
-      expect(screen.getByText('Marvel Cinematic Universe')).toBeInTheDocument();
-
-      // Verify enhanced features
-      expect(screen.getByText('75% tag quality')).toBeInTheDocument();
-      expect(screen.getByText('Missing: Reader')).toBeInTheDocument();
-    });
-
-    it('allows filtering by clicking on tags', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      // Perform initial search
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'magic');
-      
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
-
-      // Click on a fandom tag to filter
-      const fandomTag = screen.getByRole('link', { name: 'Marvel Cinematic Universe' });
-      await user.click(fandomTag);
-
-      // This would typically trigger a new search with that fandom filter
-      // For this test, we're just verifying the link exists and is clickable
-      expect(fandomTag).toHaveAttribute('href', '/works?fandom=Marvel%20Cinematic%20Universe');
-    });
-  });
-
-  describe('Smart Recommendations Integration', () => {
-    it('applies recommendations to enhance search', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      // Perform search that triggers recommendations
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'Agatha/Reader');
-      
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('🤖 Smart Recommendations')).toBeInTheDocument();
-      });
-
-      // Verify recommendations are displayed
-      expect(screen.getByText('Missing Character Tags')).toBeInTheDocument();
-      expect(screen.getByText('We detected potential missing character tags')).toBeInTheDocument();
-      expect(screen.getByText('88% confidence')).toBeInTheDocument();
-
-      // Apply a recommendation
-      const readerSuggestion = screen.getByRole('button', { name: 'Reader' });
-      await user.click(readerSuggestion);
-
-      // Verify the recommendation application
-      expect(readerSuggestion).toBeInTheDocument();
-    });
-
-    it('shows different types of recommendations', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      // Perform search
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      await user.type(searchInput, 'magic');
-      
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('🤖 Smart Recommendations')).toBeInTheDocument();
-      });
-
-      // Verify multiple recommendation types
-      expect(screen.getByText('Missing Character Tags')).toBeInTheDocument();
-      expect(screen.getByText('Canonical Tag Suggestions')).toBeInTheDocument();
-
-      // Verify confidence scores are shown
-      expect(screen.getByText('88% confidence')).toBeInTheDocument();
-      expect(screen.getByText('72% confidence')).toBeInTheDocument();
-
-      // Verify different recommendation categories
-      const characterSuggestion = screen.getByRole('button', { name: 'Reader' });
-      const freeformSuggestion = screen.getByRole('button', { name: 'Fluff' });
-      
-      expect(characterSuggestion).toHaveClass('bg-blue-50');
-      expect(freeformSuggestion).toHaveClass('bg-gray-50');
-    });
-  });
-
-  describe('Performance and Responsiveness', () => {
-    it('handles rapid search interactions without issues', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      const searchButton = screen.getByRole('button', { name: /search/i });
-
-      // Perform rapid searches
-      await user.type(searchInput, 'test1');
-      await user.click(searchButton);
-      
-      await user.clear(searchInput);
-      await user.type(searchInput, 'test2');
-      await user.click(searchButton);
-      
-      await user.clear(searchInput);
-      await user.type(searchInput, 'test3');
-      await user.click(searchButton);
-
-      // Verify the final search completed
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
-
-      // Verify multiple API calls were made
-      expect(global.fetch).toHaveBeenCalledTimes(3);
-    });
-
-    it('debounces tag autocomplete calls appropriately', async () => {
-      const user = userEvent.setup();
-      
-      // Track autocomplete calls
-      const autocompleteCallCount = { count: 0 };
-      global.fetch = vi.fn().mockImplementation((url, options) => {
-        const body = JSON.parse(options.body);
-        if (body.query.includes('TagAutocomplete')) {
-          autocompleteCallCount.count++;
-        }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            data: { tags: { autocomplete: { suggestions: [] } } },
-          }),
-        });
-      });
-
-      render(<SearchPage />);
-
-      // Open advanced filters
-      const advancedToggle = screen.getByText(/show advanced search/i);
-      await user.click(advancedToggle);
-
-      // Type rapidly in character input
-      const characterInput = screen.getByPlaceholderText(/add characters/i);
-      await user.type(characterInput, 'Agatha Harkness', { delay: 10 });
-
-      // Wait a bit for debouncing
-      await waitFor(() => {
-        // Should have fewer calls than characters typed due to debouncing
-        expect(autocompleteCallCount.count).toBeLessThan(15);
-      });
-    });
-  });
-
-  describe('Accessibility and User Experience', () => {
-    it('maintains proper focus management throughout search flow', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      // Test tab navigation
-      await user.tab();
-      const searchInput = screen.getByPlaceholderText(/search for works/i);
-      expect(searchInput).toHaveFocus();
-
-      await user.tab();
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      expect(searchButton).toHaveFocus();
-
-      // Perform search
-      await user.type(searchInput, 'test');
-      await user.click(searchButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
-
-      // Focus should remain manageable after search
-      expect(document.body).toHaveFocus();
-    });
-
-    it('provides appropriate ARIA labels and screen reader support', async () => {
-      const user = userEvent.setup();
-      render(<SearchPage />);
-
-      // Verify main search has proper labels
-      const searchInput = screen.getByRole('textbox', { name: /search query/i });
-      expect(searchInput).toBeInTheDocument();
-
-      // Perform search
-      await user.type(searchInput, 'test');
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      await user.click(searchButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Search Results (3)')).toBeInTheDocument();
-      });
-
-      // Verify results have proper headings
-      const resultsHeading = screen.getByRole('heading', { name: /search results/i });
-      expect(resultsHeading).toBeInTheDocument();
-
-      // Verify recommendation buttons have proper labels
-      const recommendationButtons = screen.getAllByRole('button');
-      recommendationButtons.forEach(button => {
-        expect(button).toHaveAttribute('aria-label');
-      });
+      expect(screen.getByText('Search completed. Found 3 results.')).toBeInTheDocument();
     });
   });
 });

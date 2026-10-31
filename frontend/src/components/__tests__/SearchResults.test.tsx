@@ -58,10 +58,13 @@ const defaultProps = {
   pageSize: 20,
 };
 
+// The sr-only announcer is a plain aria-live region (it has no role), so find it by that.
+const getAnnouncer = (container: HTMLElement) => container.querySelector<HTMLElement>('.sr-only[aria-live]')!;
+
 describe('SearchResults - Accessibility Implementation', () => {
   describe('Accessibility Structure', () => {
     it('renders with proper semantic structure and landmarks', () => {
-      render(<SearchResults {...defaultProps} />);
+      const { container } = render(<SearchResults {...defaultProps} />);
 
       // Check for main region
       const resultsRegion = screen.getByRole('region', { name: /search results/i });
@@ -77,7 +80,7 @@ describe('SearchResults - Accessibility Implementation', () => {
       expect(statusRegion).toHaveAttribute('aria-live', 'polite');
 
       // Check for live region
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       expect(liveRegion).toHaveAttribute('aria-live', 'polite');
       expect(liveRegion).toHaveAttribute('aria-atomic', 'true');
     });
@@ -119,7 +122,7 @@ describe('SearchResults - Accessibility Implementation', () => {
       
       render(<SearchResults {...defaultProps} onWorkClick={mockOnWorkClick} />);
 
-      const workTitle = screen.getByRole('heading', { name: /test work title/i });
+      const workTitle = screen.getByRole('button', { name: /test work title/i });
       
       // Test click
       await user.click(workTitle);
@@ -140,10 +143,10 @@ describe('SearchResults - Accessibility Implementation', () => {
       const user = userEvent.setup();
       const longSummaryWork = {
         ...mockWork,
-        summary: 'This is a very long summary that should trigger the show more/less functionality because it exceeds the character limit and needs to be truncated for better readability.',
+        summary: 'This is a very long summary that should trigger the show more/less functionality because it exceeds the character limit. '.repeat(3),
       };
       
-      render(<SearchResults {...defaultProps} results={[longSummaryWork]} />);
+      const { container } = render(<SearchResults {...defaultProps} results={[longSummaryWork]} />);
 
       const expandButton = screen.getByRole('button', { name: /show more/i });
       expect(expandButton).toHaveAttribute('aria-expanded', 'false');
@@ -155,7 +158,7 @@ describe('SearchResults - Accessibility Implementation', () => {
       expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
 
       // Check live region announcement
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       await waitFor(() => {
         expect(liveRegion).toHaveTextContent(/summary expanded/i);
       });
@@ -176,7 +179,7 @@ describe('SearchResults - Accessibility Implementation', () => {
 
     it('manages focus and announcements when expanding recommendations', async () => {
       const user = userEvent.setup();
-      render(<SearchResults {...defaultProps} />);
+      const { container } = render(<SearchResults {...defaultProps} />);
 
       const toggleButton = screen.getByRole('button', { name: /show/i });
       await user.click(toggleButton);
@@ -185,7 +188,7 @@ describe('SearchResults - Accessibility Implementation', () => {
       expect(screen.getByRole('button', { name: /hide/i })).toBeInTheDocument();
 
       // Check announcement
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       await waitFor(() => {
         expect(liveRegion).toHaveTextContent(/suggestions expanded/i);
       });
@@ -203,11 +206,11 @@ describe('SearchResults - Accessibility Implementation', () => {
     });
 
     it('announces when results finish loading', () => {
-      const { rerender } = render(<SearchResults {...defaultProps} loading={true} />);
+      const { rerender, container } = render(<SearchResults {...defaultProps} loading={true} />);
       
       rerender(<SearchResults {...defaultProps} loading={false} />);
 
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       expect(liveRegion).toHaveTextContent(/found 1 works/i);
     });
   });
@@ -328,9 +331,9 @@ describe('SearchResults - Accessibility Implementation', () => {
 
   describe('Screen Reader Announcements', () => {
     it('announces result loading completion', () => {
-      render(<SearchResults {...defaultProps} />);
+      const { container } = render(<SearchResults {...defaultProps} />);
 
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       expect(liveRegion).toHaveTextContent(/found 1 works/i);
     });
 
@@ -338,15 +341,15 @@ describe('SearchResults - Accessibility Implementation', () => {
       const user = userEvent.setup();
       const longSummaryWork = {
         ...mockWork,
-        summary: 'This is a very long summary that should trigger the show more/less functionality.',
+        summary: 'This is a very long summary that should trigger the show more/less functionality. '.repeat(4),
       };
       
-      render(<SearchResults {...defaultProps} results={[longSummaryWork]} />);
+      const { container } = render(<SearchResults {...defaultProps} results={[longSummaryWork]} />);
 
       const expandButton = screen.getByRole('button', { name: /show more/i });
       await user.click(expandButton);
 
-      const liveRegion = screen.getAllByRole('status', { hidden: true })[0];
+      const liveRegion = getAnnouncer(container);
       await waitFor(() => {
         expect(liveRegion).toHaveTextContent(/summary expanded/i);
       });
@@ -366,8 +369,8 @@ describe('SearchResults - Accessibility Implementation', () => {
       const worksList = screen.getByRole('list');
       expect(worksList).toBeInTheDocument();
 
-      const workItems = screen.getAllByRole('listitem');
-      expect(workItems).toHaveLength(3);
+      // Each <li> is given role="article", so it no longer reads as a listitem.
+      expect(worksList.children).toHaveLength(3);
 
       const articles = screen.getAllByRole('article');
       expect(articles).toHaveLength(3);
@@ -375,13 +378,14 @@ describe('SearchResults - Accessibility Implementation', () => {
   });
 
   describe('Focus Management', () => {
-    it('focuses results heading when results load', () => {
+    it('focuses results heading when results load', async () => {
       const { rerender } = render(<SearchResults {...defaultProps} loading={true} />);
       
       rerender(<SearchResults {...defaultProps} loading={false} />);
 
       const resultsHeading = screen.getByRole('heading', { name: /search results/i });
-      expect(resultsHeading).toHaveFocus();
+      // Focus moves after a short delay so the new list has rendered.
+      await waitFor(() => expect(resultsHeading).toHaveFocus());
     });
   });
 });
