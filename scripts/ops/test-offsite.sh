@@ -68,7 +68,7 @@ new_site() { # configured? yes|no
 	mkdir -p "$SITE/secrets"
 	: >"$SITE/.env"
 	if [ "$1" = "yes" ]; then
-		printf 'OFFSITE_REPOSITORY=s3:https://user:repopass@s3.example.com/bucket/nuclear\nOFFSITE_ENV_FILE=secrets/offsite.env\n' >"$SITE/.env"
+		printf 'OFFSITE_REPOSITORY=s3:https://s3.example.com/bucket/nuclear\nOFFSITE_ENV_FILE=secrets/offsite.env\n' >"$SITE/.env"
 		printf 'AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\n' "$SECRET_KEY" "$SECRET_SK" >"$SITE/secrets/offsite.env"
 		printf '%s' "$SECRET_PW" >"$SITE/secrets/offsite-password"
 	fi
@@ -106,7 +106,7 @@ check "--env-file is used" has "$SITE/calls.log" "--env-file $SITE/secrets/offsi
 check "backups mounted read-only" has "$SITE/calls.log" "$SITE/backups:/backups:ro"
 check "secrets mounted read-only" has "$SITE/calls.log" "$SITE/secrets:/secrets:ro"
 check "password is passed as a file path" has "$SITE/calls.log" "RESTIC_PASSWORD_FILE=/secrets/offsite-password"
-check "repository comes from the environment" has "$SITE/calls.log.env" "RESTIC_REPOSITORY=s3:https://user:repopass@s3.example.com/bucket/nuclear"
+check "repository comes from the environment" has "$SITE/calls.log.env" "RESTIC_REPOSITORY=s3:https://s3.example.com/bucket/nuclear"
 for s in "$SECRET_PW" "$SECRET_KEY" "$SECRET_SK" "repopass"; do
 	check "secret '${s:0:8}...' not in argv" lacks "$SITE/calls.log" "$s"
 	check "secret '${s:0:8}...' not in summary" lacks "$SITE/out.md" "$s"
@@ -170,6 +170,13 @@ check "env file outside secrets/ is refused" [ "$RC" -ne 0 ]
 printf 'OFFSITE_REPOSITORY=s3:x\nOFFSITE_ENV_FILE=secrets/../.env\n' >"$SITE/.env"
 run offsite-init.sh
 check "env file with .. is refused" [ "$RC" -ne 0 ]
+printf 'OFFSITE_REPOSITORY=rest:https://user:p@ss/w0rd@backup.example.org/nuclear\nOFFSITE_ENV_FILE=secrets/offsite.env\n' >"$SITE/.env"
+run offsite-init.sh
+check "address with a login in it is refused" [ "$RC" -ne 0 ]
+check "the refusal doesn't print the password" lacks "$SITE/out.md" "w0rd"
+printf 'Fatal: at rest:https://u:p@ss/w0rd@h/x and s3:https://k:s3cr/et@h2/y\n' | (. "$HERE/offsite-lib.sh"; scrub) >"$SITE/scrubbed"
+check "scrub hides passwords containing / and @" lacks "$SITE/scrubbed" "w0rd"
+check "scrub hides every address on a line" lacks "$SITE/scrubbed" "s3cr"
 
 echo "== offsite-list.sh"
 new_site yes

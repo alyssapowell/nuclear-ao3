@@ -63,6 +63,15 @@ offsite_settings() {
 	local pw env
 	OFFSITE_REPO=$(env_get OFFSITE_REPOSITORY)
 	[ -n "$OFFSITE_REPO" ] || return 2
+	# A login inside the address (https://user:password@host) would end up in
+	# logs and summaries, so it isn't allowed: logins go in OFFSITE_ENV_FILE.
+	# (sftp:user@host:/path has no password in it and is fine.)
+	case "$OFFSITE_REPO" in
+	*://*@*)
+		OFFSITE_ERR="OFFSITE_REPOSITORY must not contain a login (user:password@). Put the login in the OFFSITE_ENV_FILE file instead (for a rest: server, RESTIC_REST_USERNAME and RESTIC_REST_PASSWORD)."
+		return 1
+		;;
+	esac
 	pw=$(env_get OFFSITE_PASSWORD_FILE "$OFFSITE_DEFAULT_PASSWORD_FILE")
 	env=$(env_get OFFSITE_ENV_FILE)
 	if ! offsite_under_secrets "$pw"; then
@@ -107,6 +116,7 @@ restic() {
 	)
 }
 
-# scrub: removes "user:password@" from addresses in text on stdin, so the
-# summary can never show a password that was part of the repository address.
-scrub() { sed -E 's#(://)[^/@ ]*@#\1#g'; }
+# scrub: removes anything between "://" and the last "@" of an address in
+# text on stdin (a password may itself contain "/" or "@"), as a second
+# layer: offsite_settings already refuses addresses with a login in them.
+scrub() { sed -E 's#://[^[:space:]]*@#://#g'; }

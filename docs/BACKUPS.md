@@ -49,7 +49,7 @@ You need a shell on the server, in the folder with `docker-compose.yml`.
    OFFSITE_ENV_FILE=secrets/offsite.env
    ```
 
-   Other address forms: `b2:my-bucket:nuclear`, `rest:https://host:8000/nuclear`, `sftp:user@host:/path`. `OFFSITE_PASSWORD_FILE` is optional and defaults to `secrets/offsite-password`. All three paths must be inside `secrets/`.
+   Other address forms: `b2:my-bucket:nuclear`, `rest:https://host:8000/nuclear`, `sftp:user@host:/path`. `OFFSITE_PASSWORD_FILE` is optional and defaults to `secrets/offsite-password`. All three paths must be inside `secrets/`. The address itself must not contain a login (`https://user:password@...`): it would show up in logs and run summaries, so the scripts refuse it. Logins always go in the `OFFSITE_ENV_FILE` file.
 4. Run `make offsite-init`. This makes a random password in `secrets/offsite-password` (readable only by its owner) and creates the encrypted repository. It will not overwrite an existing password file.
 5. Save the password now. Copy the contents of `secrets/offsite-password` into your password manager. It is not stored anywhere else. Without it nobody can read the off-server backups, including you, and the storage company cannot help.
 6. Run `make ops-backup`. The summary should show "Off-server copy" with a snapshot id. Then run `make offsite-list` to see it.
