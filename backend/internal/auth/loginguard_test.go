@@ -40,6 +40,8 @@ func (e *sessionEnv) guess(login string, n int) {
 		if w := e.loginFrom(addr, login, "wrong!"); w.Code != http.StatusUnauthorized {
 			e.t.Fatalf("guess %d: status %d", i, w.Code)
 		}
+		// Failures are recorded in the background; wait so counts are exact.
+		e.as.guard.pending.Wait()
 	}
 }
 
@@ -47,6 +49,7 @@ const otherAddr = "198.51.100.7:1000"
 
 func (e *sessionEnv) attempts(name string) (n int, locked bool) {
 	e.t.Helper()
+	e.as.guard.pending.Wait()
 	err := e.as.db.QueryRow(`SELECT failed_login_attempts, COALESCE(locked_until > now(), false) FROM users WHERE username = $1`, name).Scan(&n, &locked)
 	if err != nil {
 		e.t.Fatal(err)
@@ -228,11 +231,52 @@ func TestLockEmailQueuedOnce(t *testing.T) {
 	if got[0].Subject != "Repeated failed logins on your account" {
 		t.Errorf("subject %q", got[0].Subject)
 	}
-	// A second lock sends a second email.
+	// A second lock the same day sends no second email, so repeated locking
+	// can't flood the owner's inbox.
+	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE username = 'alice'`)
+	e.guess("alice", maxFailedLogins)
+	if _, locked := e.attempts("alice"); !locked {
+		t.Fatal("the second round of guesses should lock the account again")
+	}
+	if got := len(e.queued("alice@example.org")); got != 1 {
+		t.Errorf("%d emails after a second lock the same day, want 1", got)
+	}
+	// A day later, a new lock sends one again.
+	e.mustExec(`UPDATE jobs SET created_at = now() - interval '25 hours' WHERE kind = 'email'`)
 	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE username = 'alice'`)
 	e.guess("alice", maxFailedLogins)
 	if got := len(e.queued("alice@example.org")); got != 2 {
-		t.Errorf("%d emails after a second lock, want 2", got)
+		t.Errorf("%d emails after a lock the next day, want 2", got)
+	}
+}
+
+// A wrong password on a real account and a guess at a name that doesn't
+// exist must take the same time: counting the real account's failure
+// happens after the answer, so it can't be timed.
+func TestFailureCountingIsNotOnTheRequestPath(t *testing.T) {
+	e := newSessionEnv(t)
+	e.addUser("timed", "timed@example.org", "right-password")
+	// Hold the user's row so a synchronous count would block the request.
+	tx, err := e.as.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(`SELECT 1 FROM users WHERE username = 'timed' FOR UPDATE`); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan int, 1)
+	go func() { done <- e.loginFrom(otherAddr, "timed", "wrong").Code }()
+	select {
+	case code := <-done:
+		if code != http.StatusUnauthorized {
+			t.Errorf("status %d", code)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("the login waited on the failure count: its timing depends on the account existing")
+	}
+	tx.Rollback()
+	if n, _ := e.attempts("timed"); n != 1 {
+		t.Errorf("the failure wasn't counted afterwards: %d", n)
 	}
 }
 

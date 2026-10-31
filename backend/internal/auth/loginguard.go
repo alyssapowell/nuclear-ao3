@@ -88,6 +88,9 @@ type loginGuard struct {
 	unknown *windowCounter
 	// byName counts login attempts per login name.
 	byName *windowCounter
+	// pending tracks failures still being recorded in the background, so
+	// tests can wait for them.
+	pending sync.WaitGroup
 }
 
 func (g *loginGuard) init() {
@@ -159,14 +162,25 @@ func (as *AuthService) noteUnknownFailure(login string) {
 // recordFailedLogin counts a wrong password against an account. If it is
 // the one that reaches the limit, the account is locked and the owner is
 // emailed, in the same transaction. The row lock means that when several
-// wrong guesses arrive at once, exactly one of them locks the account, so
-// the owner gets one email per lock. Errors are logged and otherwise
-// ignored: the caller refuses the login either way.
+// wrong guesses arrive at once, exactly one of them locks the account.
+//
+// The counting happens in the background, after the answer has gone out:
+// it writes to the database and a wrong guess at a name that doesn't exist
+// doesn't, so doing it before answering would let response times reveal
+// which names are real accounts. Errors are logged and otherwise ignored:
+// the login is refused either way.
 func (as *AuthService) recordFailedLogin(c *gin.Context, userID uuid.UUID, username, address string) {
 	loginFailures.Inc()
-	if err := as.countFailure(c.Request.Context(), userID, username, address); err != nil {
-		log.Printf("login: count failed attempt: %v", err)
-	}
+	g := &as.guard
+	g.pending.Add(1)
+	go func() {
+		defer g.pending.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := as.countFailure(ctx, userID, username, address); err != nil {
+			log.Printf("login: count failed attempt: %v", err)
+		}
+	}()
 }
 
 func (as *AuthService) countFailure(ctx context.Context, userID uuid.UUID, username, address string) error {
@@ -209,8 +223,18 @@ func (as *AuthService) countFailure(ctx context.Context, userID uuid.UUID, usern
 		if err != nil {
 			return fmt.Errorf("build lock email: %w", err)
 		}
-		if err := jobs.Enqueue(ctx, tx, "email", msg); err != nil {
+		// At most one of these a day per account, so someone locking an
+		// account over and over can't flood its owner's inbox.
+		var sentToday bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
+			WHERE kind = 'email' AND payload->>'to' = $1 AND payload->>'subject' = $2
+			  AND created_at > now() - interval '1 day')`, msg.To, msg.Subject).Scan(&sentToday); err != nil {
 			return err
+		}
+		if !sentToday {
+			if err := jobs.Enqueue(ctx, tx, "email", msg); err != nil {
+				return err
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
