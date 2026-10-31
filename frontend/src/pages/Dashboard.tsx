@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/utils/auth';
-import { getMyWorks, getUserBookmarks, getUserSubscriptions, deleteWork } from '@/lib/api';
+import { getMyWorks, getMyBookmarks, getUserSubscriptions, deleteWork } from '@/lib/api';
 
 interface Work {
   id: string;
@@ -70,7 +70,7 @@ export default function DashboardPage() {
       // Fetch all dashboard data in parallel
       const [worksData, bookmarksData, subscriptionsData] = await Promise.allSettled([
         getMyWorks(token),
-        getUserBookmarks(user?.id || '', {}, token),
+        getMyBookmarks({}, token),
         getUserSubscriptions(token)
       ]);
 

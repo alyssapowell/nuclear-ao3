@@ -147,3 +147,13 @@ func (e *env) auditRows() int {
 func shows(body string, id uuid.UUID) bool { return strings.Contains(body, id.String()) }
 
 var _ = http.StatusOK
+
+// pseudPage is the path of a list on the default pseud of a user's account.
+func (e *env) pseudPage(user uuid.UUID, list string) string {
+	e.t.Helper()
+	var id uuid.UUID
+	if err := e.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, user).Scan(&id); err != nil {
+		e.t.Fatal(err)
+	}
+	return "/api/v1/pseuds/" + id.String() + "/" + list
+}

@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"net/url"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -17,11 +18,24 @@ const (
 	pseudIconURLMaxBytes = 500 // the column is VARCHAR(500)
 )
 
+// ReservedPseudName is the label shown for a creator of a work that hides its
+// creators. No pseud may have it, or its owner could pass as a hidden creator.
+const ReservedPseudName = "Anonymous Creator"
+
+// IsReservedPseudName is true for ReservedPseudName ignoring case and spaces.
+func IsReservedPseudName(name string) bool {
+	squashed := strings.Join(strings.Fields(name), "")
+	return strings.EqualFold(squashed, strings.Join(strings.Fields(ReservedPseudName), ""))
+}
+
 // ValidatePseudName applies AO3's rules to a pseud name: 1 to 40 characters,
 // made of letters, numbers, marks, spaces, underscores and dashes in any
 // script (Ruby's \p{Word}, space and dash), with at least one letter or
 // number. The caller trims surrounding spaces first if it wants to.
 func ValidatePseudName(name string) error {
+	if IsReservedPseudName(name) {
+		return errors.New("Name is reserved.")
+	}
 	n := utf8.RuneCountInString(name)
 	if n < PseudNameMin {
 		return errors.New("Name is too short (minimum is 1 character)")

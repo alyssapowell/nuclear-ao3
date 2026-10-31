@@ -9,7 +9,7 @@ import { SubscriptionButton } from '@/components/SubscriptionButton';
 import RespectfulExportButton from '@/components/RespectfulExportButton';
 import ChapterNavigation from '@/components/ChapterNavigation';
 import ReaderControls from '@/components/ReaderControls';
-import { getWork, getWorkChapters, Gift } from '@/lib/api';
+import { getWork, getWorkChapters, getMyPseuds, Gift } from '@/lib/api';
 import { useAuth } from '@/utils/auth';
 import { useReaderPreferences } from '@/hooks/useReaderPreferences';
 import { useReadingProgress } from '@/hooks/useReadingProgress';
@@ -41,12 +41,10 @@ interface Work {
   author_default_offline_reading?: 'files_and_pwa' | 'pwa_only' | 'none';
 }
 
+// An author is a pseud: its id and name, nothing about the account.
 interface Author {
-  pseud_id: string;
-  pseud_name: string;
-  user_id: string;
-  username: string;
-  is_anonymous: boolean;
+  id: string;
+  name: string;
 }
 
 interface Chapter {
@@ -82,8 +80,19 @@ export default function WorkPage() {
   const { preferences } = useReaderPreferences();
   const { progress, saveProgress } = useReadingProgress(workId, chapters.length);
 
-  // Check if current user is an author of this work
-  const isAuthor = user && authors.some(author => author.user_id === user.id);
+  // The work is the user's when one of its pseuds is one of theirs. The API
+  // names authors by pseud only, so there is no account to compare.
+  const [myPseudIds, setMyPseudIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (!user || !token) {
+      setMyPseudIds([]);
+      return;
+    }
+    getMyPseuds(token)
+      .then(list => setMyPseudIds(list.map(p => p.id)))
+      .catch(() => setMyPseudIds([]));
+  }, [user, token]);
+  const isAuthor = !!user && authors.some(author => myPseudIds.includes(author.id));
 
 
   useEffect(() => {
@@ -197,21 +206,16 @@ export default function WorkPage() {
             <h1 className="text-3xl font-bold text-slate-900 mb-2">{work.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <span>by</span>
-              {authors.map((author, index) => (
-                <span key={author.pseud_id || index}>
-                  {author.is_anonymous ? (
-                    <span className="text-slate-500">Anonymous</span>
-                  ) : (
-                    <Link 
-                      to={`/users/${author.username}`}
-                      className="text-orange-700 hover:text-orange-700 font-medium"
-                    >
-                      {author.pseud_name}
-                    </Link>
-                  )}
-                  {index < authors.length - 1 && ', '}
-                </span>
-              ))}
+              {authors.length === 0 ? (
+                <span className="text-slate-500">Anonymous</span>
+              ) : (
+                authors.map((author, index) => (
+                  <span key={author.id} className="text-orange-700 font-medium">
+                    {author.name}
+                    {index < authors.length - 1 && ', '}
+                  </span>
+                ))
+              )}
             </div>
             
             <GiftList 

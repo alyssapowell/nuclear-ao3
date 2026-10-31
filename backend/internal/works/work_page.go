@@ -20,17 +20,14 @@ import (
 func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	workIDParam := c.Param("work_id")
 	ctx := c.Request.Context()
-	log.Printf("=== GETWORKWITHAUTHORS HANDLER CALLED for work_id: %s ===", workIDParam)
 
 	// Parse work ID (UUID or legacy)
 	workID, isRedirect, redirectURL := ws.parseWorkID(workIDParam)
 	if isRedirect {
-		log.Printf("DEBUG: Redirecting to: %s", redirectURL)
 		c.Redirect(http.StatusMovedPermanently, redirectURL)
 		return
 	}
 	if workID == uuid.Nil {
-		log.Printf("DEBUG: Invalid work ID format: %s", workIDParam)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid work ID format"})
 		return
 	}
@@ -117,7 +114,6 @@ func (ws *WorkService) parseWorkID(workIDParam string) (uuid.UUID, bool, string)
 }
 
 func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*models.Work, error) {
-	log.Printf("DEBUG: fetchWorkFromDB called for work %s", workID.String())
 	var work models.Work
 
 	// Handle nullable fields with sql.NullString or use database default values
@@ -169,10 +165,9 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			log.Printf("DEBUG: Work %s not found in database", workID.String())
 			return nil, err // Return sql.ErrNoRows specifically
 		}
-		log.Printf("DEBUG: fetchWorkFromDB database query error: %v", err)
+		log.Printf("fetch work %s: %v", workID, err)
 		return nil, err
 	}
 
@@ -205,18 +200,14 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*
 	// Set computed field - work is complete if status is not draft
 	work.IsComplete = work.Status != "draft"
 
-	log.Printf("DEBUG: fetchWorkFromDB successfully fetched work %s - Status: %s", work.Title, work.Status)
-
 	return &work, nil
 }
 
 func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) ([]models.WorkAuthor, error) {
-	log.Printf("DEBUG: fetchWorkAuthors called for work %s, user %v", workID.String(), userID)
-
 	// Try the advanced creatorship system first
 	rows, err := ws.db.QueryContext(ctx, "SELECT * FROM get_work_authors($1, $2)", workID, userID)
 	if err != nil {
-		log.Printf("DEBUG: Failed to query get_work_authors: %v", err)
+		log.Printf("fetch authors of work %s: %v", workID, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -226,7 +217,7 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 		var author models.WorkAuthor
 		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
 		if err != nil {
-			log.Printf("DEBUG: Failed to scan author: %v", err)
+			log.Printf("fetch authors of work %s: scan: %v", workID, err)
 			return nil, err
 		}
 		authors = append(authors, author)
@@ -235,7 +226,6 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 	// No creatorship means no author to show. Naming the account that owns
 	// the work instead would give away the creator of an anonymous work, and
 	// would name an account rather than a pseud.
-	log.Printf("DEBUG: fetchWorkAuthors returning %d authors", len(authors))
 	return authors, nil
 }
 

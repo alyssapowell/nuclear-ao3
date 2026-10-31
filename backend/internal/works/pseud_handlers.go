@@ -330,6 +330,11 @@ func (ws *WorkService) DeletePseud(c *gin.Context) {
 		`UPDATE comments SET pseudonym_id = $2, updated_at = now() WHERE pseudonym_id = $1`,
 		`UPDATE comment_kudos SET pseudonym_id = $2 WHERE pseudonym_id = $1`,
 		`UPDATE gifts SET pseud_id = $2, updated_at = now() WHERE pseud_id = $1`,
+		`UPDATE bookmarks SET pseud_id = $2 WHERE pseud_id = $1`,
+		// Subscriptions to the pseud end with it. Moving them to the default
+		// pseud would tell subscribers the two were the same person.
+		`DELETE FROM subscriptions WHERE type = 'author' AND target_id = $1 AND $2::uuid IS NOT NULL`,
+		`DELETE FROM content_subscriptions WHERE target_type = 'author' AND target_id = $1 AND $2::uuid IS NOT NULL`,
 	}
 	for _, q := range steps {
 		if _, err := tx.Exec(q, id, def); err != nil {

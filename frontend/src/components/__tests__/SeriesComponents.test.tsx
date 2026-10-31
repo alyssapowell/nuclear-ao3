@@ -11,7 +11,7 @@ vi.mock('@/lib/api', () => ({
   deleteSeries: vi.fn(),
   searchSeries: vi.fn(),
   getMySeries: vi.fn(),
-  getUserSeries: vi.fn(),
+  getPseudSeries: vi.fn(),
   addWorkToSeries: vi.fn(),
   removeWorkFromSeries: vi.fn(),
   getMyWorks: vi.fn(),
@@ -31,7 +31,7 @@ import {
   deleteSeries,
   searchSeries,
   getMySeries,
-  getUserSeries,
+  getPseudSeries,
   addWorkToSeries,
   removeWorkFromSeries,
   getMyWorks,
@@ -52,7 +52,7 @@ const mockUpdateSeries = updateSeries as MockedFunction<typeof updateSeries>;
 const mockDeleteSeries = deleteSeries as MockedFunction<typeof deleteSeries>;
 const mockSearchSeries = searchSeries as MockedFunction<typeof searchSeries>;
 const mockGetMySeries = getMySeries as MockedFunction<typeof getMySeries>;
-const mockGetUserSeries = getUserSeries as MockedFunction<typeof getUserSeries>;
+const mockGetPseudSeries = getPseudSeries as MockedFunction<typeof getPseudSeries>;
 const mockAddWorkToSeries = addWorkToSeries as MockedFunction<typeof addWorkToSeries>;
 const mockRemoveWorkFromSeries = removeWorkFromSeries as MockedFunction<typeof removeWorkFromSeries>;
 const mockGetMyWorks = getMyWorks as MockedFunction<typeof getMyWorks>;
@@ -63,8 +63,7 @@ const mockSeries = {
   title: 'Test Series',
   summary: 'A test series for unit testing',
   notes: 'These are test notes',
-  user_id: 'test-user-id',
-  username: 'testuser',
+  authors: [{ id: 'test-pseud-id', name: 'testuser' }],
   is_complete: false,
   work_count: 2,
   word_count: 15000,
@@ -381,7 +380,9 @@ describe('Series Data Validation', () => {
     
     expect(result.series).toHaveProperty('id');
     expect(result.series).toHaveProperty('title');
-    expect(result.series).toHaveProperty('user_id');
+    expect(result.series).toHaveProperty('authors');
+    expect(result.series).not.toHaveProperty('user_id');
+    expect(result.series).not.toHaveProperty('username');
     expect(result.series).toHaveProperty('is_complete');
     expect(result.series).toHaveProperty('work_count');
     expect(typeof result.series.work_count).toBe('number');

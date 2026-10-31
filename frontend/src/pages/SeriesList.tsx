@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, User, Calendar, BookOpen, FileText } from 'lucide-react';
-import { getMySeries, getUserSeries, createSeries, CreateSeriesRequest } from '@/lib/api';
+import { getMySeries, createSeries, CreateSeriesRequest, PseudRef } from '@/lib/api';
 
 interface Series {
   id: string;
   title: string;
   summary?: string;
   notes?: string;
-  user_id: string;
-  username?: string;
+  authors: PseudRef[];
   is_complete: boolean;
   work_count: number;
   word_count?: number;
@@ -156,7 +155,7 @@ export default function SeriesPage() {
           </a>
           <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
-            by {series.username}
+            by {series.authors.length > 0 ? series.authors.map(a => a.name).join(', ') : 'Anonymous'}
           </p>
         </div>
         

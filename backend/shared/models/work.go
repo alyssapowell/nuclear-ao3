@@ -71,17 +71,19 @@ type Chapter struct {
 
 // Series represents a collection of related works
 type Series struct {
-	ID         uuid.UUID `json:"id" db:"id"`
-	Title      string    `json:"title" db:"title" validate:"required,min=1,max=200"`
-	Summary    string    `json:"summary" db:"summary"`
-	Notes      string    `json:"notes" db:"notes"`
-	UserID     uuid.UUID `json:"user_id" db:"user_id"`
-	Username   string    `json:"username"` // Loaded from join
-	IsComplete bool      `json:"is_complete" db:"is_complete"`
-	WorkCount  int       `json:"work_count" db:"work_count"`
-	WordCount  int       `json:"word_count"` // Calculated from works
-	UpdatedAt  time.Time `json:"updated_at" db:"updated_at"`
-	CreatedAt  time.Time `json:"created_at" db:"created_at"`
+	ID      uuid.UUID `json:"id" db:"id"`
+	Title   string    `json:"title" db:"title" validate:"required,min=1,max=200"`
+	Summary string    `json:"summary" db:"summary"`
+	Notes   string    `json:"notes" db:"notes"`
+	UserID  uuid.UUID `json:"-" db:"user_id"` // the owner's account; never shown
+	// Authors are the pseuds of the creators of the series' works, as in AO3's
+	// Series#allpseuds. A work that hides its creator adds nobody.
+	Authors    []WorkAuthor `json:"authors"`
+	IsComplete bool         `json:"is_complete" db:"is_complete"`
+	WorkCount  int          `json:"work_count" db:"work_count"`
+	WordCount  int          `json:"word_count"` // Calculated from works
+	UpdatedAt  time.Time    `json:"updated_at" db:"updated_at"`
+	CreatedAt  time.Time    `json:"created_at" db:"created_at"`
 }
 
 // WorkStatistics tracks engagement metrics for a work
@@ -190,7 +192,7 @@ type WorkAuthor struct {
 // Bookmark represents a user's bookmark of a work
 type Bookmark struct {
 	ID        uuid.UUID `json:"id" db:"id"`
-	UserID    uuid.UUID `json:"user_id" db:"user_id"`
+	UserID    uuid.UUID `json:"-" db:"user_id"` // never shown: a bookmark is credited to its pseud
 	WorkID    uuid.UUID `json:"work_id" db:"work_id"`
 	IsPrivate bool      `json:"is_private" db:"is_private"`
 	Notes     string    `json:"notes" db:"notes"`

@@ -3,7 +3,6 @@ package works
 import (
 	"database/sql"
 	"fmt"
-	"log"
 )
 
 // SchemaValidator ensures the database schema matches code expectations
@@ -48,8 +47,6 @@ func NewSchemaValidator(db *sql.DB) *SchemaValidator {
 
 // ValidateWorksTable validates that the works table matches expectations
 func (sv *SchemaValidator) ValidateWorksTable() error {
-	log.Println("🔍 Validating works table schema...")
-
 	// Get actual schema from database
 	query := `
 		SELECT column_name, data_type, is_nullable, column_default
@@ -100,16 +97,6 @@ func (sv *SchemaValidator) ValidateWorksTable() error {
 			errors = append(errors, fmt.Sprintf("❌ Column %s: expected type %s, got %s",
 				expected.Name, expected.DataType, actual.DataType))
 		}
-
-		log.Printf("✅ Column %s: %s", expected.Name, actual.DataType)
-	}
-
-	// Check for deprecated columns that code might still reference
-	deprecatedColumns := []string{"status", "restricted_to_users", "warnings"}
-	for _, deprecated := range deprecatedColumns {
-		if _, exists := actualColumns[deprecated]; exists {
-			log.Printf("⚠️  Found deprecated column: %s (consider removing from schema)", deprecated)
-		}
 	}
 
 	if len(errors) > 0 {
@@ -120,7 +107,6 @@ func (sv *SchemaValidator) ValidateWorksTable() error {
 		return fmt.Errorf(errorMsg)
 	}
 
-	log.Println("✅ Works table schema validation passed")
 	return nil
 }
 
@@ -151,8 +137,6 @@ func isCompatibleType(expected, actual string) bool {
 
 // ValidateAllSchemas validates all critical table schemas
 func (sv *SchemaValidator) ValidateAllSchemas() error {
-	log.Println("🔧 Starting comprehensive schema validation...")
-
 	// Validate works table (most critical)
 	if err := sv.ValidateWorksTable(); err != nil {
 		return fmt.Errorf("works table validation failed: %w", err)
@@ -178,7 +162,6 @@ func (sv *SchemaValidator) ValidateAllSchemas() error {
 		return fmt.Errorf("chapters table validation failed: %w", err)
 	}
 
-	log.Println("🎉 All schema validations passed!")
 	return nil
 }
 
@@ -199,7 +182,5 @@ func (sv *SchemaValidator) ValidateTableExists(tableName string) error {
 	if !exists {
 		return fmt.Errorf("❌ Critical table '%s' does not exist", tableName)
 	}
-
-	log.Printf("✅ Table %s exists", tableName)
 	return nil
 }

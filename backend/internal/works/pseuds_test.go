@@ -355,12 +355,12 @@ func TestCreatorsStayHiddenInListsAndTotals(t *testing.T) {
 			t.Errorf("%s: profile totals = %d works, %d words; want 1 and 100", set, w, words)
 		}
 		// The creator's page.
-		page := e.expect(200, "GET", "/api/v1/users/"+writer.String()+"/works", readerTok, nil)
+		page := e.expect(200, "GET", e.pseudPage(writer, "works"), readerTok, nil)
 		if strings.Contains(page, secret.String()) || !strings.Contains(page, open.String()) {
 			t.Errorf("%s: creator page for a stranger: %s", set, page)
 		}
 		// The creator still sees both.
-		own := e.expect(200, "GET", "/api/v1/users/"+writer.String()+"/works", writerTok, nil)
+		own := e.expect(200, "GET", e.pseudPage(writer, "works"), writerTok, nil)
 		if !strings.Contains(own, secret.String()) {
 			t.Errorf("%s: the creator can't see their own work on their page", set)
 		}
@@ -372,7 +372,7 @@ func TestCreatorsStayHiddenInListsAndTotals(t *testing.T) {
 	e.exec(`INSERT INTO series (id, user_id, title) VALUES ($1, $3, 'Only Secret'), ($2, $3, 'Mixed')`, onlySecret, mixed, writer)
 	e.exec(`INSERT INTO series_works (series_id, work_id, position) VALUES ($1, $2, 1), ($3, $2, 1), ($3, $4, 2)`, onlySecret, secret, mixed, open)
 
-	list := e.expect(200, "GET", "/api/v1/users/"+writer.String()+"/series", readerTok, nil)
+	list := e.expect(200, "GET", e.pseudPage(writer, "series"), readerTok, nil)
 	if strings.Contains(list, onlySecret.String()) || !strings.Contains(list, mixed.String()) {
 		t.Errorf("series list for a stranger: %s", list)
 	}
@@ -402,4 +402,14 @@ func TestCreatorsStayHiddenInListsAndTotals(t *testing.T) {
 	if strings.Contains(search, onlySecret.String()) {
 		t.Errorf("series search for a stranger: %s", search)
 	}
+}
+
+// pseudPage is the path of a list on the default pseud of a user's account.
+func (e *fixEnv) pseudPage(user uuid.UUID, list string) string {
+	e.t.Helper()
+	var id uuid.UUID
+	if err := e.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, user).Scan(&id); err != nil {
+		e.t.Fatal(err)
+	}
+	return "/api/v1/pseuds/" + id.String() + "/" + list
 }

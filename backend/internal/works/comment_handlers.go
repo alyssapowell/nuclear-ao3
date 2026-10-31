@@ -71,7 +71,8 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 				ELSE 'unknown'
 			END as author_type,
 			w.title as work_title,
-			w.user_id as work_author_id
+			w.user_id as work_author_id,
+			` + creatorHiddenSQL + ` as creator_hidden
 		FROM comments c
 		LEFT JOIN users u ON c.user_id = u.id
 		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
@@ -97,6 +98,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 		var pseudonymID, userID, parentCommentID sql.NullString
 		var chapterID sql.NullString
 		var editedAt sql.NullTime
+		var creatorHidden bool
 
 		err := rows.Scan(
 			&comment.ID, &comment.WorkID, &chapterID, &userID, &pseudonymID, &parentCommentID,
@@ -105,6 +107,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 			&comment.ReplyCount, &comment.CreatedAt, &comment.UpdatedAt, &editedAt,
 			&comment.AuthorName, &comment.AuthorUserID, &comment.AuthorPseudonymID,
 			&comment.AuthorType, &comment.WorkTitle, &comment.WorkAuthorID,
+			&creatorHidden,
 		)
 		if err != nil {
 			// Log error and continue
@@ -132,7 +135,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 			comment.EditedAt = &editedAt.Time
 		}
 
-		shapeCommentPseud(&comment)
+		shapeCommentPseud(&comment, creatorHidden)
 		comments = append(comments, comment)
 	}
 
@@ -460,6 +463,7 @@ func (ws *WorkService) triggerCommentNotification(comment *models.CommentWithDet
 		ActionURL:   fmt.Sprintf("/works/%s/comments/%s", comment.WorkID, comment.ID),
 		ActorID:     comment.AuthorUserID,
 		ActorName:   comment.AuthorName,
+		ActorHidden: comment.AnonymousCreator,
 		ExtraData: map[string]interface{}{
 			"comment_id":        comment.ID,
 			"work_id":           comment.WorkID,
@@ -635,7 +639,8 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 				ELSE 'unknown'
 			END as author_type,
 			w.title as work_title,
-			w.user_id as work_author_id
+			w.user_id as work_author_id,
+			` + creatorHiddenSQL + ` as creator_hidden
 		FROM comments c
 		LEFT JOIN users u ON c.user_id = u.id
 		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
@@ -647,6 +652,7 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 	var pseudonymID, userID, parentCommentID sql.NullString
 	var chapterID sql.NullString
 	var editedAt sql.NullTime
+	var creatorHidden bool
 
 	err := ws.db.QueryRow(query, commentID).Scan(
 		&comment.ID, &comment.WorkID, &chapterID, &userID, &pseudonymID, &parentCommentID,
@@ -655,6 +661,7 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 		&comment.ReplyCount, &comment.CreatedAt, &comment.UpdatedAt, &editedAt,
 		&comment.AuthorName, &comment.AuthorUserID, &comment.AuthorPseudonymID,
 		&comment.AuthorType, &comment.WorkTitle, &comment.WorkAuthorID,
+		&creatorHidden,
 	)
 
 	if err != nil {
@@ -681,7 +688,7 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 	if editedAt.Valid {
 		comment.EditedAt = &editedAt.Time
 	}
-	shapeCommentPseud(&comment)
+	shapeCommentPseud(&comment, creatorHidden)
 
 	return &comment, nil
 }
@@ -700,9 +707,13 @@ const creatorHiddenSQL = `(up.id IS NOT NULL AND (w.is_anonymous OR w.in_anon_co
 // shapeCommentPseud makes the pseud in a comment's answer what the query
 // allowed (nothing, for an anonymous creator) and fills in the {id, name}
 // form the API shows in place of any account detail.
-func shapeCommentPseud(c *models.CommentWithDetails) {
+//
+// creatorHidden comes from the query (creatorHiddenSQL), never from the
+// display name: a pseud may not be named "Anonymous Creator", and even if one
+// got that name it must not pass as a hidden creator.
+func shapeCommentPseud(c *models.CommentWithDetails, creatorHidden bool) {
 	c.PseudonymID = c.AuthorPseudonymID
-	c.AnonymousCreator = c.AuthorName == anonymousCreatorLabel
+	c.AnonymousCreator = creatorHidden
 	if c.AuthorPseudonymID != nil {
 		c.Pseud = &models.PseudSummary{ID: c.AuthorPseudonymID.String(), Name: c.AuthorName}
 	}

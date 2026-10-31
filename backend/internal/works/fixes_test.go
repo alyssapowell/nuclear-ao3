@@ -140,7 +140,7 @@ func TestUserWorksListForStranger(t *testing.T) {
 	hidden := e.work(creator, "Hidden", "hidden")
 
 	for _, tok := range []string{strangerTok, ""} {
-		out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", tok, nil)
+		out := e.expect(200, "GET", e.pseudPage(creator, "works"), tok, nil)
 		if !strings.Contains(out, pub.String()) {
 			t.Errorf("token %q: published work missing: %s", tok, out)
 		}
@@ -149,7 +149,7 @@ func TestUserWorksListForStranger(t *testing.T) {
 		}
 	}
 	// The creator sees their own draft too.
-	out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", creatorTok, nil)
+	out := e.expect(200, "GET", e.pseudPage(creator, "works"), creatorTok, nil)
 	if !strings.Contains(out, draft.String()) {
 		t.Errorf("creator should see their draft: %s", out)
 	}
@@ -382,7 +382,7 @@ func TestUserWorksListNeverRevealsAnonymousWorks(t *testing.T) {
 	e.exec(`UPDATE works SET in_unrevealed_collection = true WHERE id = $1`, unrevealed)
 
 	for _, tok := range []string{strangerTok, ""} {
-		out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", tok, nil)
+		out := e.expect(200, "GET", e.pseudPage(creator, "works"), tok, nil)
 		if !strings.Contains(out, pub.String()) {
 			t.Errorf("token %q: the signed work is missing", tok)
 		}
@@ -396,7 +396,7 @@ func TestUserWorksListNeverRevealsAnonymousWorks(t *testing.T) {
 		}
 	}
 	// The creator still sees all of their own works.
-	out := e.expect(200, "GET", "/api/v1/users/"+creator.String()+"/works", creatorTok, nil)
+	out := e.expect(200, "GET", e.pseudPage(creator, "works"), creatorTok, nil)
 	for _, id := range []uuid.UUID{anon, anonColl, unrevealed} {
 		if !strings.Contains(out, id.String()) {
 			t.Errorf("the creator should see their own work %s", id)

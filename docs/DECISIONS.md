@@ -8,6 +8,28 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: The public API names people by pseud only, and drops the account pages
+
+**Decision:**
+- **No account-keyed pages.** `GET /users/:user_id/works`, `/series` and `/bookmarks` are gone. Their place is `GET /pseuds/:pseud_id/works`, `/series` and `/bookmarks`, as in AO3's `/users/:login/pseuds/:pseud/...` pages. I did not keep AO3's `/users/:login/...` pages keyed by username.
+- **Series** show their creators as pseuds (`authors: [{id, name}]`), taken from the creatorships of the works in them, as AO3's `Series#allpseuds` does. A work that hides its creator adds nobody, except to its own creator. A series with no works yet is credited to its owner's default pseud.
+- **Kudos** are listed as the giver's default pseud (AO3 lists the giver's login, which is also the name of the default pseud at sign-up). Guests are only counted (`guest_count`).
+- **Author subscriptions** follow one pseud. `target_id` is a pseud id and `target_name` is the pseud's current name. AO3 subscribes to a user.
+- **Bookmarks** belong to a pseud, as in AO3 (`bookmarks.pseud_id`, migration 040). The account id stays in the table for privacy checks and is never shown.
+- **"Anonymous Creator" is reserved** as a pseud name (ignoring case and spaces; a username that would give that default pseud is refused at sign-up). The label marks a creator of a work that hides its creators, and the marker is now decided by the database query, never by comparing the name.
+
+**Why:** The requirement is that the API reveals an author's pseud and nothing about the account behind it. AO3 itself publishes the username in page addresses and next to each pseud ("Pen Name (login)"), so a username-keyed page is the AO3 answer. It does not meet this requirement: one list of everything a person wrote under all their pseuds, reachable from a name, ties their pseuds together. The only front-end callers of the account pages were the signed-in user's own dashboard and series list, which already have `/my/...`. A page for a single pseud is also what the AO3 pseud pages are.
+- Subscriptions are per pseud for the same reason. A subscription to an account would tell its subscriber that a second pseud belongs to the same person, as would a "subscribed?" check that was true for both. Deleting a pseud ends subscriptions to it instead of moving them to the default pseud, for the same reason.
+- Existing rows are moved by migration 040: bookmarks to their owner's default pseud, author subscriptions to the author's default pseud.
+
+**What it costs:**
+- There is no "everything by this person" page. If the project later decides usernames are public, as on AO3, `/users/:username/...` can be added back and return pseuds, never ids.
+- A subscriber follows what is posted under that pseud only. Someone who writes as two pseuds needs two subscriptions.
+- A pseud page for a person with several pseuds shows only that pseud's works. The "your works" page (`/my/works`) is still all of yours.
+- Not done here: collections still show their maintainer's `user_id` and `username` (`/collections`), muted-user lists and block/mute routes still take account ids, and `@name` mentions in comments still resolve usernames. They are listed in FEATURES.md.
+
+---
+
 ## 2026-10-30: Moderation state follows AO3; admin actions are append-only audited
 
 **Decision:** Hidden, spam, unreviewed, frozen, banned and suspended state use AO3's meanings and are decided in one place in the database (`can_user_view_work` and its siblings for chapters, series, bookmarks and comments, migration 033), which every listing, search and page calls. Every admin action, from the site or from `nuclear`, writes a row to `admin_actions` (migration 034) in the same transaction as the change. The table refuses UPDATE, DELETE and TRUNCATE.

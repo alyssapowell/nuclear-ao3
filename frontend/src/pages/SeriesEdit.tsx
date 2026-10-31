@@ -7,8 +7,7 @@ interface Series {
   title: string;
   summary?: string;
   notes?: string;
-  user_id: string;
-  username?: string;
+  authors?: { id: string; name: string }[];
   is_complete: boolean;
   work_count: number;
   word_count?: number;

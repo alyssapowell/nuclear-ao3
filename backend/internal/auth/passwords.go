@@ -19,6 +19,7 @@ import (
 
 	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/shared/email"
+	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -215,7 +216,9 @@ func (as *AuthService) Register(c *gin.Context) {
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
-	if !usernamePattern.MatchString(req.Username) {
+	// A pseud may not be called "Anonymous Creator", and every account gets a
+	// pseud named after its username.
+	if !usernamePattern.MatchString(req.Username) || models.IsReservedPseudName(req.Username) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_username", "message": usernameMessage})
 		return
 	}

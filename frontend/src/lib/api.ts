@@ -671,7 +671,6 @@ export interface WorkComment {
   id: string;
   work_id: string;
   chapter_id?: string;
-  user_id?: string;
   pseudonym_id?: string;
   parent_comment_id?: string;
   content: string;
@@ -682,7 +681,6 @@ export interface WorkComment {
   anonymous_creator?: boolean;
   author_name?: string;
   author_type?: 'user' | 'guest' | 'unknown';
-  author_user_id?: string;
   is_deleted?: boolean;
   is_moderated?: boolean;
   is_spam?: boolean;
@@ -904,8 +902,16 @@ export async function giveKudos(workId: string, authToken?: string) {
   }
 }
 
+export interface WorkKudosInfo {
+  /** Registered givers, shown by their default pseud. Guests are only counted. */
+  kudos: Array<{ id: string; pseud: PseudRef; created_at: string }>;
+  guest_count: number;
+  total_count: number;
+  has_given_kudos: boolean;
+}
+
 // Get work kudos info
-export async function getWorkKudos(workId: string, authToken?: string) {
+export async function getWorkKudos(workId: string, authToken?: string): Promise<WorkKudosInfo> {
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -1014,6 +1020,7 @@ export async function getWorkGifts(workId: string, authToken?: string) {
 export interface Subscription {
   id: string;
   type: 'work' | 'author' | 'series' | 'tag' | 'collection';
+  /** For an author, the id of the pseud subscribed to (never an account id). */
   target_id: string;
   target_name: string;
   events: string[];
@@ -1188,13 +1195,19 @@ export async function checkSubscriptionStatus(type: string, targetId: string, au
 }
 
 // Series management interfaces and functions
+/** How an author appears everywhere in the API: a pseud, and nothing about the account behind it. */
+export interface PseudRef {
+  id: string;
+  name: string;
+}
+
 export interface Series {
   id: string;
   title: string;
   summary?: string;
   notes?: string;
-  user_id: string;
-  username?: string;
+  /** The pseuds of the creators of its works. Never an account. */
+  authors: PseudRef[];
   is_complete: boolean;
   work_count: number;
   word_count?: number;
@@ -1363,8 +1376,8 @@ export async function deleteSeries(seriesId: string, authToken?: string) {
 
 
 
-// Get user's series
-export async function getUserSeries(userId: string, params?: { page?: number; limit?: number }, authToken?: string) {
+// Get the series a pseud has works in
+export async function getPseudSeries(pseudId: string, params?: { page?: number; limit?: number }, authToken?: string) {
   try {
     const queryParams = new URLSearchParams();
     
@@ -1379,7 +1392,7 @@ export async function getUserSeries(userId: string, params?: { page?: number; li
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/users/${userId}/series?${queryParams.toString()}`, {
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/pseuds/${pseudId}/series?${queryParams.toString()}`, {
       method: 'GET',
       headers,
     });
@@ -1391,7 +1404,7 @@ export async function getUserSeries(userId: string, params?: { page?: number; li
     
     return await response.json();
   } catch (error) {
-    console.error('Get user series error:', error instanceof Error ? error.message : String(error));
+    console.error('Get pseud series error:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -1853,8 +1866,8 @@ export async function getMyBookmarks(searchParams?: BookmarkSearchParams, authTo
   }
 }
 
-// Get user's public bookmarks
-export async function getUserBookmarks(userId: string, searchParams?: BookmarkSearchParams, authToken?: string) {
+// Get the bookmarks made under a pseud that the viewer may see
+export async function getPseudBookmarks(pseudId: string, searchParams?: BookmarkSearchParams, authToken?: string) {
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -1874,7 +1887,7 @@ export async function getUserBookmarks(userId: string, searchParams?: BookmarkSe
     }
 
     const queryString = params.toString();
-    const url = `${API_GATEWAY_URL}/api/v1/users/${userId}/bookmarks${queryString ? '?' + queryString : ''}`;
+    const url = `${API_GATEWAY_URL}/api/v1/pseuds/${pseudId}/bookmarks${queryString ? '?' + queryString : ''}`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -1888,7 +1901,7 @@ export async function getUserBookmarks(userId: string, searchParams?: BookmarkSe
     
     return await response.json();
   } catch (error) {
-    console.error('Get user bookmarks error:', error instanceof Error ? error.message : String(error));
+    console.error('Get pseud bookmarks error:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -2363,6 +2376,22 @@ export async function getPseudonyms(authToken?: string) {
     console.error('Get pseudonyms error:', error instanceof Error ? error.message : String(error));
     throw error;
   }
+}
+
+// The signed-in user's own pseuds (GET /my/pseuds), as {id, name}. Used to tell
+// whether a work or series is theirs, since the API names authors by pseud only.
+export async function getMyPseuds(authToken?: string): Promise<PseudRef[]> {
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  const response = await fetch(`${API_GATEWAY_URL}/api/v1/my/pseuds`, { method: 'GET', headers });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return (data.pseuds || []).map((p: PseudRef) => ({ id: p.id, name: p.name }));
 }
 
 // Create pseudonym

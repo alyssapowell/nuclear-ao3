@@ -118,8 +118,8 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		fmt.Printf("Database error in GetWork: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work", "details": err.Error()})
+		log.Printf("get work %s: %v", workID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch work"})
 		return
 	}
 
@@ -157,7 +157,7 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 	// Get work authors using the new co-authorship system
 	authorsRows, err := ws.db.Query("SELECT * FROM get_work_authors($1, $2)", workID, userID)
 	if err != nil {
-		fmt.Printf("Failed to get work authors: %v\n", err)
+		log.Printf("get work %s: authors: %v", workID, err)
 	} else {
 		defer authorsRows.Close()
 		authors := []models.WorkAuthor{}
@@ -165,7 +165,7 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 			var author models.WorkAuthor
 			err := authorsRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
 			if err != nil {
-				fmt.Printf("Failed to scan author: %v\n", err)
+				log.Printf("get work %s: scan author: %v", workID, err)
 				continue
 			}
 			authors = append(authors, author)
@@ -293,7 +293,7 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 			var currentChapterCount int
 			err := ws.db.QueryRow("SELECT chapter_count FROM works WHERE id = $1", workID).Scan(&currentChapterCount)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch current chapter count", "details": err.Error()})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch current chapter count"})
 				return
 			}
 
@@ -384,7 +384,7 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 	}
 	defer tx.Rollback()
 	if _, err = tx.Exec(query, args...); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
 		return
 	}
 	// Posting a draft work posts its draft chapters with it, as on AO3.
@@ -476,7 +476,7 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 
 		_, err = tx.Exec(query, workID)
 		if err != nil {
-			log.Printf("delete work %s: %s: %v", workID, query, err)
+			log.Printf("delete work %s: clearing %s: %v", workID, table, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete work data"})
 			return
 		}
@@ -494,7 +494,6 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 
 // loadWorkTags loads tags for a work from the work_tags relationship table
 func (ws *WorkService) loadWorkTags(workID string) (fandoms, characters, relationships, freeformTags []string) {
-	log.Printf("=== LOADING TAGS FOR WORK %s ===", workID)
 	query := `
 		SELECT t.name, t.type 
 		FROM tags t 
@@ -509,16 +508,13 @@ func (ws *WorkService) loadWorkTags(workID string) (fandoms, characters, relatio
 	}
 	defer rows.Close()
 
-	tagCount := 0
 	for rows.Next() {
-		tagCount++
 		var name, tagType string
 		if err := rows.Scan(&name, &tagType); err != nil {
 			log.Printf("Error scanning tag: %v", err)
 			continue
 		}
 
-		log.Printf("DEBUG: Found tag %s (type: %s) for work %s", name, tagType, workID)
 		switch tagType {
 		case "fandom":
 			fandoms = append(fandoms, name)
@@ -533,8 +529,6 @@ func (ws *WorkService) loadWorkTags(workID string) (fandoms, characters, relatio
 		}
 	}
 
-	log.Printf("DEBUG: Loaded %d tags for work %s. Fandoms: %v, Characters: %v, Relationships: %v, Freeform: %v",
-		tagCount, workID, fandoms, characters, relationships, freeformTags)
 	return fandoms, characters, relationships, freeformTags
 }
 
@@ -550,8 +544,6 @@ func (ws *WorkService) SearchTags(c *gin.Context) {
 	if limit > 100 {
 		limit = 100
 	}
-
-	log.Printf("=== SEARCHING TAGS: q='%s', type='%s', limit=%d, offset=%d ===", query, tagType, limit, offset)
 
 	// Build SQL query with case-insensitive partial matching and optional type filtering
 	var sqlQuery string
@@ -580,7 +572,7 @@ func (ws *WorkService) SearchTags(c *gin.Context) {
 
 	rows, err := ws.db.Query(sqlQuery, queryArgs...)
 	if err != nil {
-		log.Printf("ERROR: Tag search query failed: %v", err)
+		log.Printf("search tags: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
 		return
 	}
@@ -641,8 +633,6 @@ func (ws *WorkService) SearchTags(c *gin.Context) {
 		total = len(tags) // Fallback
 	}
 
-	log.Printf("=== TAG SEARCH RESULTS: found %d tags (total %d) ===", len(tags), total)
-
 	response := gin.H{
 		"limit":  limit,
 		"offset": offset,
@@ -659,7 +649,6 @@ func (ws *WorkService) SearchTags(c *gin.Context) {
 }
 
 func (ws *WorkService) SearchWorks(c *gin.Context) {
-	log.Printf("=== SEARCHWORKS HANDLER CALLED! ===")
 	// Parse query parameters
 	query := c.DefaultQuery("q", "")
 	fandoms := c.QueryArray("fandom")
@@ -827,29 +816,16 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	baseQuery := selectClause + fromWhere + fmt.Sprintf(" ORDER BY %s %s LIMIT $%d OFFSET $%d", sortBy, sortOrder, argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
-	fmt.Printf("FINAL QUERY: %s\n", baseQuery)
-	fmt.Printf("ARGS: %v\n", args)
-
-	// Test simple query first
-	var testCount int
-	testErr := ws.db.QueryRow("SELECT COUNT(*) FROM works").Scan(&testCount)
-	fmt.Printf("TEST QUERY: SELECT COUNT(*) FROM works = %d, err=%v\n", testCount, testErr)
-
-	fmt.Printf("About to execute main query...\n")
 	rows, err := ws.db.Query(baseQuery, args...)
-	fmt.Printf("Query result: rows=%v, err=%v\n", rows != nil, err)
 	if err != nil {
-		fmt.Printf("Query failed: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search works", "details": err.Error()})
+		log.Printf("search works: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search works"})
 		return
 	}
 	defer rows.Close()
-	fmt.Printf("Query executed successfully\n")
 
 	works := []models.Work{}
-	fmt.Printf("Starting to scan rows\n")
 	for rows.Next() {
-		fmt.Printf("Processing row\n")
 		var work models.Work
 		var categoryStr sql.NullString
 		var warningsStr sql.NullString
@@ -863,7 +839,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 			&work.Hits, &work.Kudos, &work.Comments, &work.Bookmarks)
 
 		if err != nil {
-			fmt.Printf("Error scanning row: %v\n", err)
+			log.Printf("search works: scan row: %v", err)
 			continue
 		}
 
@@ -879,19 +855,9 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 		}
 
 		// Load tags from work_tags relationship table
-		log.Printf("DEBUG: Work ID is: %s, type: %T", work.ID, work.ID)
-		log.Printf("=== ABOUT TO LOAD TAGS FOR WORK %s ===", work.ID.String())
 		work.Fandoms, work.Characters, work.Relationships, work.FreeformTags = ws.loadWorkTags(work.ID.String())
-		log.Printf("=== FINISHED LOADING TAGS FOR WORK %s ===", work.ID.String())
-		if err != nil {
-			fmt.Printf("SCAN ERROR: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan work data", "details": err.Error()})
-			return
-		}
 		works = append(works, work)
-		fmt.Printf("Successfully scanned work: %s\n", work.Title)
 	}
-	fmt.Printf("Finished scanning. Found %d works\n", len(works))
 
 	// Get total count: same visibility and filters, no ORDER BY, LIMIT or OFFSET.
 	var total int
@@ -972,7 +938,6 @@ func countWords(text string) int {
 // These would need full implementations in a real application
 
 func (ws *WorkService) GetChapters(c *gin.Context) {
-	log.Printf("GetChapters called for work_id: %s", c.Param("work_id"))
 
 	workID, err := uuid.Parse(c.Param("work_id"))
 	if err != nil {
@@ -992,7 +957,6 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 		return
 	}
 
-	log.Printf("About to query chapters for work %s", workID)
 	rows, err := ws.db.Query(`
 		SELECT id, work_id, chapter_number, 
 			COALESCE(title, '') as title, 
@@ -1009,7 +973,7 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 		ORDER BY chapter_number`, workID, userUUID)
 	if err != nil {
 		log.Printf("Failed to fetch chapters for work %s: %v", workID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chapters", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chapters"})
 		return
 	}
 	defer rows.Close()
@@ -1024,7 +988,7 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 			&chapter.Status, &publishedAt, &chapter.CreatedAt, &chapter.UpdatedAt)
 		if err != nil {
 			log.Printf("Failed to scan chapter for work %s: %v", workID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan chapter", "details": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan chapter"})
 			return
 		}
 		if publishedAt.Valid {
@@ -1195,7 +1159,7 @@ func (ws *WorkService) CreateChapter(c *gin.Context) {
 		chapter.Status == "draft", chapter.PublishedAt, chapter.CreatedAt, chapter.UpdatedAt)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chapter", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chapter"})
 		return
 	}
 
@@ -1703,45 +1667,53 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 		}
 	}
 
-	// Get recent kudos for display (limit to 20 most recent)
-	query := `
-		SELECT k.id, k.created_at, COALESCE(u.username, 'Guest') as username
-		FROM kudos k
-		LEFT JOIN users u ON k.user_id = u.id
-		WHERE k.work_id = $1
-		ORDER BY k.created_at DESC
-		LIMIT 20
-	`
+	// Guests are only counted. Everyone else is shown as the default pseud of
+	// the account that gave kudos, as AO3 shows the giver's name. A creator's
+	// own kudos on a work that hides its creator would tie them to it, so it
+	// isn't listed (AO3 doesn't let creators give kudos to their own work).
+	var guestCount int
+	if err := ws.db.QueryRow(`SELECT COUNT(*) FROM kudos WHERE work_id = $1 AND user_id IS NULL`, workID).Scan(&guestCount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos count"})
+		return
+	}
 
-	rows, err := ws.db.Query(query, workID)
+	// Get recent kudos for display (limit to 20 most recent)
+	rows, err := ws.db.Query(`
+		SELECT k.id, k.created_at, p.id, p.name
+		FROM kudos k
+		JOIN pseuds p ON p.user_id = k.user_id AND p.is_default
+		WHERE k.work_id = $1
+		  AND (NOT work_hides_creator(k.work_id) OR NOT is_work_creator(k.work_id, k.user_id))
+		ORDER BY k.created_at DESC
+		LIMIT 20`, workID)
 	if err != nil {
+		log.Printf("kudos list for work %s: %v", workID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch kudos list"})
 		return
 	}
 	defer rows.Close()
 
-	var kudosList []map[string]interface{}
+	kudosList := []map[string]interface{}{}
 	for rows.Next() {
-		var kudosID uuid.UUID
+		var kudosID, pseudID uuid.UUID
 		var createdAt time.Time
-		var username string
+		var pseudName string
 
-		err := rows.Scan(&kudosID, &createdAt, &username)
-		if err != nil {
+		if err := rows.Scan(&kudosID, &createdAt, &pseudID, &pseudName); err != nil {
+			log.Printf("kudos list for work %s: scan: %v", workID, err)
 			continue
 		}
 
-		kudosItem := map[string]interface{}{
+		kudosList = append(kudosList, map[string]interface{}{
 			"id":         kudosID,
-			"username":   username,
+			"pseud":      models.PseudSummary{ID: pseudID.String(), Name: pseudName},
 			"created_at": createdAt,
-		}
-
-		kudosList = append(kudosList, kudosItem)
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"kudos":           kudosList,
+		"guest_count":     guestCount,
 		"has_given_kudos": hasGivenKudos,
 		"total_count":     totalCount,
 	})
@@ -2089,9 +2061,8 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
 			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)
 			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $4::uuid))),
-			s.created_at, s.updated_at, u.username
+			s.created_at, s.updated_at
 		FROM series s
-		JOIN users u ON s.user_id = u.id
 		WHERE (s.title ILIKE $1 OR s.description ILIKE $1)
 		AND can_user_view_series(s.id, $4::uuid)
 		AND series_shows_creator(s.id, $4::uuid)
@@ -2110,7 +2081,7 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 		var s models.Series
 		err := rows.Scan(
 			&s.ID, &s.Title, &s.Summary, &s.Notes, &s.UserID, &s.IsComplete,
-			&s.WorkCount, &s.CreatedAt, &s.UpdatedAt, &s.Username)
+			&s.WorkCount, &s.CreatedAt, &s.UpdatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan series"})
 			return
@@ -2126,6 +2097,12 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 
 		series = append(series, s)
 	}
+	rows.Close()
+	attach := make([]*models.Series, len(series))
+	for i := range series {
+		attach[i] = &series[i]
+	}
+	ws.attachSeriesAuthors(c.Request.Context(), attach, viewer)
 
 	// Get total count for pagination
 	var total int
@@ -2165,13 +2142,11 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
 			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid)
 			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $2::uuid))),
-			s.created_at, s.updated_at, u.username
+			s.created_at, s.updated_at
 		FROM series s
-		JOIN users u ON s.user_id = u.id
 		WHERE s.id = $1 AND can_user_view_series(s.id, $2::uuid) AND series_shows_creator(s.id, $2::uuid)`, seriesID, viewer).Scan(
 		&series.ID, &series.Title, &series.Summary, &series.Notes, &series.UserID,
-		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt,
-		&series.Username)
+		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Series not found"})
@@ -2194,6 +2169,7 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 		series.WordCount = 0 // Fallback
 	}
 
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, viewer)
 	c.JSON(http.StatusOK, gin.H{"series": series})
 }
 
@@ -2392,7 +2368,7 @@ func (ws *WorkService) CreateSeries(c *gin.Context) {
 	}
 
 	_, err = tx.Exec(`
-		INSERT INTO series (id, title, summary, notes, user_id, is_complete, work_count, created_at, updated_at)
+		INSERT INTO series (id, title, description, notes, user_id, is_complete, work_count, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		series.ID, series.Title, series.Summary, series.Notes, series.UserID,
 		series.IsComplete, series.WorkCount, series.CreatedAt, series.UpdatedAt)
@@ -2415,12 +2391,6 @@ func (ws *WorkService) CreateSeries(c *gin.Context) {
 			return
 		}
 
-		// Update work to reference series
-		_, err = tx.Exec("UPDATE works SET series_id = $1, updated_at = $2 WHERE id = $3", seriesID, now, workID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work series reference"})
-			return
-		}
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -2428,6 +2398,7 @@ func (ws *WorkService) CreateSeries(c *gin.Context) {
 		return
 	}
 
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{series}, &userUUID)
 	c.JSON(http.StatusCreated, gin.H{"series": series})
 }
 
@@ -2468,7 +2439,7 @@ func (ws *WorkService) UpdateSeries(c *gin.Context) {
 		return
 	}
 
-	if ownerID != userID {
+	if ownerID.String() != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only update your own series"})
 		return
 	}
@@ -2488,22 +2459,20 @@ func (ws *WorkService) UpdateSeries(c *gin.Context) {
 
 	// Fetch updated series
 	var series models.Series
-	var username string
 	err = ws.db.QueryRow(`
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
-			s.work_count, s.created_at, s.updated_at, u.username
+			s.work_count, s.created_at, s.updated_at
 		FROM series s
-		JOIN users u ON s.user_id = u.id
 		WHERE s.id = $1`, seriesID).Scan(
 		&series.ID, &series.Title, &series.Summary, &series.Notes, &series.UserID,
-		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt, &username)
+		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated series"})
 		return
 	}
 
-	series.Username = username
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, ws.getUserIDFromContext(c))
 	c.JSON(http.StatusOK, gin.H{"series": series})
 }
 
@@ -2532,7 +2501,7 @@ func (ws *WorkService) DeleteSeries(c *gin.Context) {
 		return
 	}
 
-	if ownerID != userID {
+	if ownerID.String() != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You can only delete your own series"})
 		return
 	}
@@ -2543,13 +2512,6 @@ func (ws *WorkService) DeleteSeries(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
-
-	// Remove series reference from works
-	_, err = tx.Exec("UPDATE works SET series_id = NULL WHERE series_id = $1", seriesID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update works"})
-		return
-	}
 
 	// Delete series (series_works will be deleted by CASCADE)
 	result, err := tx.Exec("DELETE FROM series WHERE id = $1", seriesID)
@@ -2672,13 +2634,6 @@ func (ws *WorkService) AddWorkToSeries(c *gin.Context) {
 		return
 	}
 
-	// Update work's series reference
-	_, err = tx.Exec("UPDATE works SET series_id = $1, updated_at = $2 WHERE id = $3", seriesID, now, workID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work series reference"})
-		return
-	}
-
 	// Update series work count
 	_, err = tx.Exec("UPDATE series SET work_count = (SELECT COUNT(*) FROM series_works WHERE series_id = $1), updated_at = $2 WHERE id = $1", seriesID, now)
 	if err != nil {
@@ -2752,11 +2707,6 @@ func (ws *WorkService) RemoveWorkFromSeries(c *gin.Context) {
 
 	// Update work's series reference
 	now := time.Now()
-	_, err = tx.Exec("UPDATE works SET series_id = NULL, updated_at = $1 WHERE id = $2", now, workID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work series reference"})
-		return
-	}
 
 	// Reorder remaining works to close the gap
 	_, err = tx.Exec("UPDATE series_works SET position = position - 1 WHERE series_id = $1 AND position > $2", seriesID, position)
@@ -3274,7 +3224,7 @@ func (ws *WorkService) UpdateCollection(c *gin.Context) {
 
 	_, err = ws.db.Exec(query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update collection", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update collection"})
 		return
 	}
 
@@ -3606,384 +3556,6 @@ func (ws *WorkService) RemoveWorkFromCollection(c *gin.Context) {
 // the creator.
 const hidesNoCreator = " AND NOT (w.is_anonymous OR w.in_anon_collection OR w.in_unrevealed_collection)"
 
-func (ws *WorkService) GetUserWorks(c *gin.Context) {
-	userIDParam := c.Param("user_id")
-	targetUserID, err := uuid.Parse(userIDParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Get authenticated user (may be nil for guest viewing)
-	var viewerID *uuid.UUID
-	if userID, exists := c.Get("user_id"); exists {
-		if userIDStr, ok := userID.(string); ok {
-			if uid, parseErr := uuid.Parse(userIDStr); parseErr == nil {
-				viewerID = &uid
-			}
-		}
-	}
-
-	// Check if viewer can see target user's works
-	isOwnProfile := viewerID != nil && *viewerID == targetUserID
-
-	// Build pagination
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	limit := 20
-	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
-
-	offset := (page - 1) * limit
-
-	// Get works created by the user
-	baseQuery := `
-		SELECT w.id, w.title, w.summary, w.language, w.rating,
-			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
-			w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status,
-			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) as kudos,
-			COALESCE(w.comment_count, 0) as comments, COALESCE(w.bookmark_count, 0) as bookmarks
-		FROM works w
-		JOIN creatorships cr ON w.id = cr.creation_id AND cr.creation_type = 'Work'
-		JOIN pseuds p ON cr.pseud_id = p.id
-		WHERE p.user_id = $1 AND cr.approved = true`
-
-	// If not viewing own profile, only show published, non-restricted works
-	// the viewer may see (not hidden or spam, not blocked).
-	// As in AO3, anonymous works and works in collections that hide or haven't
-	// yet revealed their creators never appear on the creator's page for
-	// anyone else: listing them there would reveal who wrote them.
-	if !isOwnProfile {
-		baseQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $4::uuid)" + hidesNoCreator
-	}
-
-	baseQuery += " ORDER BY w.updated_at DESC LIMIT $2 OFFSET $3"
-
-	// $4 (the viewer) is only in the query when someone else's list is shown;
-	// Postgres rejects a parameter that is passed but never used.
-	listArgs := []interface{}{targetUserID, limit, offset}
-	if !isOwnProfile {
-		listArgs = append(listArgs, viewerID)
-	}
-	rows, err := ws.db.Query(baseQuery, listArgs...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user works"})
-		return
-	}
-	defer rows.Close()
-
-	works := []models.Work{}
-	for rows.Next() {
-		var work models.Work
-		var categoryStr, warningsStr sql.NullString
-		var fandoms, characters, relationships, freeformTags pq.StringArray
-		var summary sql.NullString
-		var publishedAt sql.NullTime
-		var status sql.NullString
-		var maxChapters sql.NullInt64
-
-		err := rows.Scan(
-			&work.ID, &work.Title, &summary,
-			&work.Language, &work.Rating, &categoryStr, &warningsStr,
-			&fandoms, &characters, &relationships, &freeformTags,
-			&work.WordCount, &work.ChapterCount, &maxChapters,
-			&work.IsComplete, &status, &publishedAt, &work.UpdatedAt, &work.CreatedAt,
-			&work.Hits, &work.Kudos, &work.Comments, &work.Bookmarks)
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan work"})
-			return
-		}
-
-		// Handle nullable fields
-		if summary.Valid {
-			work.Summary = summary.String
-		}
-		if publishedAt.Valid {
-			work.PublishedAt = &publishedAt.Time
-		}
-		if maxChapters.Valid {
-			maxChapInt := int(maxChapters.Int64)
-			work.MaxChapters = &maxChapInt
-		}
-		if status.Valid {
-			work.Status = status.String
-		}
-
-		// Convert string fields to arrays
-		if categoryStr.Valid && categoryStr.String != "" {
-			work.Category = []string{categoryStr.String}
-		}
-		if warningsStr.Valid && warningsStr.String != "" {
-			work.Warnings = []string{warningsStr.String}
-		}
-		work.Fandoms = []string(fandoms)
-		work.Characters = []string(characters)
-		work.Relationships = []string(relationships)
-		work.FreeformTags = []string(freeformTags)
-
-		works = append(works, work)
-	}
-
-	// Get total count for pagination
-	countQuery := `
-		SELECT COUNT(*) 
-		FROM works w
-		JOIN creatorships cr ON w.id = cr.creation_id AND cr.creation_type = 'Work'
-		JOIN pseuds p ON cr.pseud_id = p.id
-		WHERE p.user_id = $1 AND cr.approved = true`
-
-	args := []interface{}{targetUserID}
-	if !isOwnProfile {
-		countQuery += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid)" + hidesNoCreator
-		args = append(args, viewerID)
-	}
-
-	var total int
-	err = ws.db.QueryRow(countQuery, args...).Scan(&total)
-	if err != nil {
-		total = len(works) // Fallback
-	}
-
-	// Get user info
-	var username string
-	err = ws.db.QueryRow("SELECT username FROM users WHERE id = $1", targetUserID).Scan(&username)
-	if err != nil {
-		username = "Unknown User"
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"works":    works,
-		"username": username,
-		"user_id":  targetUserID,
-		"pagination": gin.H{
-			"page":        page,
-			"limit":       limit,
-			"total":       total,
-			"total_pages": (total + limit - 1) / limit,
-		},
-	})
-}
-
-func (ws *WorkService) GetUserSeries(c *gin.Context) {
-	userIDParam := c.Param("user_id")
-	targetUserID, err := uuid.Parse(userIDParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Build query with pagination
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	limit := 20
-	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
-
-	offset := (page - 1) * limit
-
-	viewer := ws.getUserIDFromContext(c)
-	query := `
-		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
-			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)
-			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $4::uuid))),
-			s.created_at, s.updated_at, u.username
-		FROM series s
-		JOIN users u ON s.user_id = u.id
-		WHERE s.user_id = $1
-		AND can_user_view_series(s.id, $4::uuid)
-		AND series_shows_creator(s.id, $4::uuid)
-		ORDER BY s.updated_at DESC
-		LIMIT $2 OFFSET $3`
-
-	rows, err := ws.db.Query(query, targetUserID, limit, offset, viewer)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user series"})
-		return
-	}
-	defer rows.Close()
-
-	var series []models.Series
-	for rows.Next() {
-		var s models.Series
-		err := rows.Scan(
-			&s.ID, &s.Title, &s.Summary, &s.Notes, &s.UserID, &s.IsComplete,
-			&s.WorkCount, &s.CreatedAt, &s.UpdatedAt, &s.Username)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan series"})
-			return
-		}
-
-		// Calculate word count for each series
-		ws.db.QueryRow(`
-			SELECT COALESCE(SUM(w.word_count), 0) 
-			FROM works w 
-			JOIN series_works sw ON w.id = sw.work_id
-			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
-			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, s.ID, viewer).Scan(&s.WordCount)
-
-		series = append(series, s)
-	}
-
-	// Get total count for pagination
-	var total int
-	err = ws.db.QueryRow("SELECT COUNT(*) FROM series WHERE user_id = $1 AND can_user_view_series(id, $2::uuid) AND series_shows_creator(id, $2::uuid)", targetUserID, viewer).Scan(&total)
-	if err != nil {
-		total = len(series) // Fallback
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"series": series,
-		"pagination": gin.H{
-			"page":        page,
-			"limit":       limit,
-			"total":       total,
-			"total_pages": (total + limit - 1) / limit,
-		},
-	})
-}
-
-func (ws *WorkService) GetUserBookmarks(c *gin.Context) {
-	userIDParam := c.Param("user_id")
-	targetUserID, err := uuid.Parse(userIDParam)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-		return
-	}
-
-	// Get authenticated user (may be nil for guest viewing)
-	var viewerID *uuid.UUID
-	if userID, exists := c.Get("user_id"); exists {
-		if userIDStr, ok := userID.(string); ok {
-			if uid, parseErr := uuid.Parse(userIDStr); parseErr == nil {
-				viewerID = &uid
-			}
-		}
-	}
-
-	// Build query to get user's bookmarks
-	query := `
-		SELECT b.id, b.work_id, b.notes, b.tags, b.is_private, b.created_at, b.updated_at,
-			   w.title, w.summary, w.rating, w.fandoms, w.characters, w.relationships, 
-			   w.freeform_tags, w.word_count, w.chapter_count, w.is_complete, w.status,
-			   w.published_at, w.updated_at as work_updated_at,
-			   COALESCE(ws.hits, 0) as hits, COALESCE(ws.kudos, 0) as kudos,
-			   COALESCE(ws.comments, 0) as comments, COALESCE(ws.bookmarks, 0) as bookmarks
-		FROM bookmarks b
-		JOIN works w ON b.work_id = w.id
-		LEFT JOIN work_statistics ws ON w.id = ws.work_id
-		WHERE b.user_id = $1`
-
-	args := []interface{}{targetUserID}
-
-	// If viewer is not the bookmark owner, only show public bookmarks
-	if viewerID == nil || *viewerID != targetUserID {
-		query += " AND b.is_private = false"
-	}
-
-	// Only show bookmarks the viewer can see: not private, not hidden by an
-	// admin, and of a work the viewer may read.
-	query += " AND can_user_view_bookmark(b.id, $2::uuid)"
-	args = append(args, viewerID)
-
-	query += " ORDER BY b.created_at DESC"
-
-	rows, err := ws.db.Query(query, args...)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bookmarks"})
-		return
-	}
-	defer rows.Close()
-
-	var bookmarks []gin.H
-	for rows.Next() {
-		var b models.Bookmark
-		var w models.Work
-		var hits, kudos, comments, bookmarkCount int
-
-		err := rows.Scan(
-			&b.ID, &b.WorkID, &b.Notes, pq.Array(&b.Tags), &b.IsPrivate, &b.CreatedAt, &b.UpdatedAt,
-			&w.Title, &w.Summary, &w.Rating, pq.Array(&w.Fandoms), pq.Array(&w.Characters),
-			pq.Array(&w.Relationships), pq.Array(&w.FreeformTags), &w.WordCount, &w.ChapterCount,
-			&w.IsComplete, &w.Status, &w.PublishedAt, &w.UpdatedAt,
-			&hits, &kudos, &comments, &bookmarkCount)
-
-		if err != nil {
-			continue
-		}
-
-		w.ID = b.WorkID
-		w.Hits = hits
-		w.Kudos = kudos
-		w.Comments = comments
-		w.Bookmarks = bookmarkCount
-
-		// Get work authors using database function
-		var authors []models.WorkAuthor
-		authorRows, err := ws.db.Query("SELECT * FROM get_work_authors($1, $2)", w.ID, viewerID)
-		if err == nil {
-			defer authorRows.Close()
-			for authorRows.Next() {
-				var author models.WorkAuthor
-				if err := authorRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous); err == nil {
-					authors = append(authors, author)
-				}
-			}
-		}
-
-		bookmarks = append(bookmarks, gin.H{
-			"id":         b.ID,
-			"work_id":    b.WorkID,
-			"notes":      b.Notes,
-			"tags":       b.Tags,
-			"is_private": b.IsPrivate,
-			"created_at": b.CreatedAt,
-			"updated_at": b.UpdatedAt,
-			"work": gin.H{
-				"id":            w.ID,
-				"title":         w.Title,
-				"summary":       w.Summary,
-				"rating":        w.Rating,
-				"fandoms":       w.Fandoms,
-				"characters":    w.Characters,
-				"relationships": w.Relationships,
-				"freeform_tags": w.FreeformTags,
-				"word_count":    w.WordCount,
-				"chapter_count": w.ChapterCount,
-				"is_complete":   w.IsComplete,
-				"status":        w.Status,
-				"published_at":  w.PublishedAt,
-				"updated_at":    w.UpdatedAt,
-				"hits":          w.Hits,
-				"kudos":         w.Kudos,
-				"comments":      w.Comments,
-				"bookmarks":     w.Bookmarks,
-				"authors":       authors,
-			},
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"bookmarks": bookmarks})
-}
-
 func (ws *WorkService) CreateBookmark(c *gin.Context) {
 	workID, err := uuid.Parse(c.Param("work_id"))
 	if err != nil {
@@ -4001,6 +3573,7 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 		Notes     string   `json:"notes"`
 		Tags      []string `json:"tags"`
 		IsPrivate bool     `json:"is_private"`
+		PseudID   *string  `json:"pseud_id"` // the pseud to bookmark under; the default if left out
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -4012,6 +3585,21 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 	userUUID, parseErr := uuid.Parse(userIDStr)
 	if parseErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var requestedPseud *uuid.UUID
+	if req.PseudID != nil && *req.PseudID != "" {
+		pid, perr := uuid.Parse(*req.PseudID)
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pseud ID"})
+			return
+		}
+		requestedPseud = &pid
+	}
+	pseudID, perr := ws.commentPseud(userUUID, requestedPseud)
+	if perr != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "That pseud is not yours"})
 		return
 	}
 
@@ -4047,9 +3635,9 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 	}
 
 	_, err = ws.db.Exec(`
-		INSERT INTO bookmarks (id, work_id, user_id, notes, tags, is_private, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		bookmark.ID, bookmark.WorkID, bookmark.UserID, bookmark.Notes,
+		INSERT INTO bookmarks (id, work_id, user_id, pseud_id, notes, tags, is_private, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		bookmark.ID, bookmark.WorkID, bookmark.UserID, pseudID, bookmark.Notes,
 		pq.Array(bookmark.Tags), bookmark.IsPrivate, bookmark.CreatedAt, bookmark.UpdatedAt)
 
 	if err != nil {
@@ -4530,9 +4118,8 @@ func (ws *WorkService) GetMySeries(c *gin.Context) {
 
 	query := `
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
-			s.work_count, s.created_at, s.updated_at, u.username
+			s.work_count, s.created_at, s.updated_at
 		FROM series s
-		JOIN users u ON s.user_id = u.id
 		WHERE s.user_id = $1
 		ORDER BY s.updated_at DESC
 		LIMIT $2 OFFSET $3`
@@ -4549,7 +4136,7 @@ func (ws *WorkService) GetMySeries(c *gin.Context) {
 		var s models.Series
 		err := rows.Scan(
 			&s.ID, &s.Title, &s.Summary, &s.Notes, &s.UserID, &s.IsComplete,
-			&s.WorkCount, &s.CreatedAt, &s.UpdatedAt, &s.Username)
+			&s.WorkCount, &s.CreatedAt, &s.UpdatedAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan series"})
 			return
@@ -4563,6 +4150,14 @@ func (ws *WorkService) GetMySeries(c *gin.Context) {
 			WHERE sw.series_id = $1`, s.ID).Scan(&s.WordCount)
 
 		series = append(series, s)
+	}
+	rows.Close()
+	attach := make([]*models.Series, len(series))
+	for i := range series {
+		attach[i] = &series[i]
+	}
+	if me, perr := uuid.Parse(userID.(string)); perr == nil {
+		ws.attachSeriesAuthors(c.Request.Context(), attach, &me)
 	}
 
 	// Get total count for pagination
@@ -6099,7 +5694,7 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 
 	rows, err := ws.db.Query(baseQuery, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
 		return
 	}
 	defer rows.Close()
@@ -6713,7 +6308,7 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 
 	rows, err := ws.db.Query(baseQuery, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reports", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reports"})
 		return
 	}
 	defer rows.Close()
@@ -7125,13 +6720,29 @@ func (ws *WorkService) CreateSubscription(c *gin.Context) {
 		}
 	}
 
+	// An author is subscribed to by pseud: target_id is a pseud id and the
+	// name shown is the pseud's name. An account id or username is never
+	// taken or returned.
+	if req.Type == "author" {
+		var pseudName string
+		err := ws.db.QueryRow("SELECT name FROM pseuds WHERE id = $1", targetUUID).Scan(&pseudName)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Pseud not found"})
+			return
+		}
+		if err != nil {
+			log.Printf("Error looking up pseud %s for subscription: %v", targetUUID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+			return
+		}
+		req.TargetName = pseudName
+	}
+
 	// Get target name if not provided
 	if req.TargetName == "" {
 		switch req.Type {
 		case "work":
 			ws.db.QueryRow("SELECT title FROM works WHERE id = $1", targetUUID).Scan(&req.TargetName)
-		case "author":
-			ws.db.QueryRow("SELECT username FROM users WHERE id = $1", targetUUID).Scan(&req.TargetName)
 		case "series":
 			ws.db.QueryRow("SELECT title FROM series WHERE id = $1", targetUUID).Scan(&req.TargetName)
 		}
@@ -7179,11 +6790,13 @@ func (ws *WorkService) GetUserSubscriptions(c *gin.Context) {
 	}
 
 	rows, err := ws.db.Query(`
-		SELECT id, type, target_id, target_name, events, frequency, 
-			   filter_tags, filter_rating, is_active, created_at, updated_at
-		FROM subscriptions 
-		WHERE user_id = $1 AND is_active = true
-		ORDER BY created_at DESC`, userID)
+		SELECT s.id, s.type, s.target_id,
+			   CASE WHEN s.type = 'author' THEN COALESCE(p.name, '') ELSE COALESCE(s.target_name, '') END,
+			   s.events, s.frequency, s.filter_tags, s.filter_rating, s.is_active, s.created_at, s.updated_at
+		FROM subscriptions s
+		LEFT JOIN pseuds p ON s.type = 'author' AND p.id = s.target_id
+		WHERE s.user_id = $1 AND s.is_active = true
+		ORDER BY s.created_at DESC`, userID)
 
 	if err != nil {
 		log.Printf("Error fetching subscriptions: %v", err)
@@ -7192,7 +6805,7 @@ func (ws *WorkService) GetUserSubscriptions(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var subscriptions []map[string]interface{}
+	subscriptions := []map[string]interface{}{}
 	for rows.Next() {
 		var sub struct {
 			ID           uuid.UUID      `db:"id"`
@@ -7423,6 +7036,10 @@ func (ws *WorkService) triggerWorkNotification(ctx context.Context, workID uuid.
 		return
 	}
 
+	// Nothing here names the work's authors, and AuthorIDs is left empty on
+	// purpose, so no author subscription fires from this path. If author
+	// subscriptions are ever matched here, a work for which work_hides_creator
+	// is true must not be matched or announced through its creators' pseuds.
 	event := &notifications.EventData{
 		Type:        eventType,
 		SourceID:    workID,
@@ -7437,7 +7054,5 @@ func (ws *WorkService) triggerWorkNotification(ctx context.Context, workID uuid.
 
 	if err := ws.notificationService.ProcessEvent(ctx, event); err != nil {
 		log.Printf("Failed to process notification event for work %s: %v", workID, err)
-	} else {
-		log.Printf("Successfully triggered notification for work %s", workID)
 	}
 }

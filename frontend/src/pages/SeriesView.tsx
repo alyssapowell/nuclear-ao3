@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getSeries, getSeriesWorks, Series } from '@/lib/api';
+import { getSeries, getSeriesWorks, getMyPseuds, Series } from '@/lib/api';
+import { useAuth } from '@/utils/auth';
 import WorkCard from '@/components/WorkCard';
 
 interface Work {
@@ -33,6 +34,8 @@ export default function SeriesPage() {
   const params = useParams();
   const seriesId = params.id as string;
   
+  const { user, token } = useAuth();
+  const [myPseudIds, setMyPseudIds] = useState<string[]>([]);
   const [series, setSeries] = useState<Series | null>(null);
   const [works, setWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,17 @@ export default function SeriesPage() {
       fetchSeries();
     }
   }, [seriesId]);
+
+  // The series is the user's when one of its pseuds is one of theirs.
+  useEffect(() => {
+    if (!user || !token) {
+      setMyPseudIds([]);
+      return;
+    }
+    getMyPseuds(token)
+      .then(list => setMyPseudIds(list.map(p => p.id)))
+      .catch(() => setMyPseudIds([]));
+  }, [user, token]);
 
   const fetchSeries = async () => {
     try {
@@ -107,16 +121,13 @@ export default function SeriesPage() {
             <h1 className="text-3xl font-bold text-slate-900 mb-2">{series.title}</h1>
             <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
               <span>by</span>
-              <Link 
-                to={`/users/${series.user_id}`}
-                className="text-orange-700 hover:text-orange-700 font-medium"
-              >
-                {series.username || 'Unknown Author'}
-              </Link>
+              <span className="text-orange-700 font-medium">
+                {series.authors.length > 0 ? series.authors.map(a => a.name).join(', ') : 'Anonymous'}
+              </span>
             </div>
           </div>
-          {/* Only show edit button if user owns the series */}
-          {typeof window !== 'undefined' && localStorage.getItem('user_id') === series.user_id && (
+          {/* Only show edit button if one of the series' pseuds is the user's */}
+          {series.authors.some(a => myPseudIds.includes(a.id)) && (
             <Link
               to={`/series/${series.id}/edit`}
               className="px-4 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors"

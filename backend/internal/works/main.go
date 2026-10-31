@@ -66,13 +66,16 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 
 		// Tag search endpoints (enhanced partial matching)
 
-		// User-specific endpoints
-		users := api.Group("/users")
-		users.Use(d.OptionalUser)
+		// Pseud pages (AO3: /users/:user_id/pseuds/:id/works, /series and
+		// /bookmarks). Lists are keyed by pseud, never by account. AO3's
+		// account-keyed pages (/users/:login/works) are not offered: they join
+		// all of a person's pseuds in one list and take an account name.
+		pseuds := api.Group("/pseuds")
+		pseuds.Use(d.OptionalUser)
 		{
-			users.GET("/:user_id/works", workService.GetUserWorks)         // GET /api/v1/users/123/works
-			users.GET("/:user_id/series", workService.GetUserSeries)       // GET /api/v1/users/123/series
-			users.GET("/:user_id/bookmarks", workService.GetUserBookmarks) // GET /api/v1/users/123/bookmarks
+			pseuds.GET("/:pseud_id/works", workService.GetPseudWorks)         // GET /api/v1/pseuds/{uuid}/works
+			pseuds.GET("/:pseud_id/series", workService.GetPseudSeries)       // GET /api/v1/pseuds/{uuid}/series
+			pseuds.GET("/:pseud_id/bookmarks", workService.GetPseudBookmarks) // GET /api/v1/pseuds/{uuid}/bookmarks
 		}
 
 		// Authenticated endpoints

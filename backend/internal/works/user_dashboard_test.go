@@ -44,7 +44,7 @@ func (suite *UserDashboardTestSuite) SetupSuite() {
 	// Register routes
 	api := suite.router.Group("/api/v1")
 	{
-		api.GET("/users/:user_id/works", suite.ws.GetUserWorks)
+		api.GET("/users/:user_id/works", suite.ws.GetPseudWorks)
 		api.GET("/my/comments", suite.ws.GetMyComments)
 	}
 }
@@ -127,7 +127,7 @@ func (suite *UserDashboardTestSuite) makeRequestWithAuth(method, url string, use
 
 	api := router.Group("/api/v1")
 	{
-		api.GET("/users/:user_id/works", suite.ws.GetUserWorks)
+		api.GET("/users/:user_id/works", suite.ws.GetPseudWorks)
 		api.GET("/my/comments", suite.ws.GetMyComments)
 	}
 

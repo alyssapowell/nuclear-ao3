@@ -22,7 +22,7 @@ func (e *env) everywhereAWorkAppears(token string, work, series, collection, boo
 		"tag page":    "/api/v1/tags/" + e.tagID() + "/works",
 		"series":      "/api/v1/series/" + series.String() + "/works",
 		"collection":  "/api/v1/collections/" + collection.String() + "/works",
-		"bookmarks":   "/api/v1/users/" + bookmarker.String() + "/bookmarks",
+		"bookmarks":   e.pseudPage(bookmarker, "bookmarks"),
 		"work page":   "/api/v1/work/" + work.String(),
 		"chapters":    "/api/v1/work/" + work.String() + "/chapters",
 		"comments":    "/api/v1/work/" + work.String() + "/comments",
@@ -84,7 +84,7 @@ func TestHiddenWorkIsInvisibleEverywhereExceptToCreatorAndAdmins(t *testing.T) {
 		// The rest of the series, collection and bookmarks are still there.
 		for _, p := range []string{"/api/v1/series/" + series.String() + "/works",
 			"/api/v1/collections/" + collection.String() + "/works",
-			"/api/v1/users/" + bookmarker.String() + "/bookmarks", "/api/v1/works"} {
+			e.pseudPage(bookmarker, "bookmarks"), "/api/v1/works"} {
 			if _, body := e.do("GET", p, tok, nil); !shows(body, other) {
 				t.Errorf("%q reader lost the unhidden work on %s: %s", tok, p, body)
 			}
@@ -161,7 +161,7 @@ func TestHiddenSeriesChapterAndBookmark(t *testing.T) {
 	if _, body := e.do("GET", "/api/v1/series", strangerTok, nil); strings.Contains(body, series.String()) {
 		t.Errorf("series search shows a hidden series: %s", body)
 	}
-	if _, body := e.do("GET", "/api/v1/users/"+creator.String()+"/series", strangerTok, nil); strings.Contains(body, series.String()) {
+	if _, body := e.do("GET", e.pseudPage(creator, "series"), strangerTok, nil); strings.Contains(body, series.String()) {
 		t.Errorf("user series list shows a hidden series: %s", body)
 	}
 
@@ -178,19 +178,19 @@ func TestHiddenSeriesChapterAndBookmark(t *testing.T) {
 	e.expect(200, "GET", "/api/v1/work/"+work.String()+"/chapters/2", creatorTok, nil)
 
 	e.expect(200, "POST", "/api/v1/admin/bookmarks/"+bookmark.String()+"/hide", modTok, map[string]string{"reason": "r"})
-	_, body = e.do("GET", "/api/v1/users/"+bookmarker.String()+"/bookmarks", strangerTok, nil)
+	_, body = e.do("GET", e.pseudPage(bookmarker, "bookmarks"), strangerTok, nil)
 	if strings.Contains(body, bookmark.String()) {
 		t.Errorf("a stranger sees a hidden bookmark: %s", body)
 	}
-	_, body = e.do("GET", "/api/v1/users/"+bookmarker.String()+"/bookmarks", "", nil)
+	_, body = e.do("GET", e.pseudPage(bookmarker, "bookmarks"), "", nil)
 	if strings.Contains(body, bookmark.String()) {
 		t.Errorf("a logged-out reader sees a hidden bookmark: %s", body)
 	}
-	_, body = e.do("GET", "/api/v1/users/"+bookmarker.String()+"/bookmarks", bookmarkerTok, nil)
+	_, body = e.do("GET", e.pseudPage(bookmarker, "bookmarks"), bookmarkerTok, nil)
 	if !strings.Contains(body, bookmark.String()) {
 		t.Errorf("the bookmark's owner should still see it: %s", body)
 	}
-	_, body = e.do("GET", "/api/v1/users/"+bookmarker.String()+"/bookmarks", modTok, nil)
+	_, body = e.do("GET", e.pseudPage(bookmarker, "bookmarks"), modTok, nil)
 	if !strings.Contains(body, bookmark.String()) {
 		t.Errorf("a moderator should see a hidden bookmark: %s", body)
 	}

@@ -299,6 +299,12 @@ func (ns *NotificationService) createNotificationForSubscription(ctx context.Con
 		CreatedAt:   time.Now(),
 	}
 
+	// The actor's account id is only for deciding who to tell. When the actor
+	// is a hidden creator it is not kept in what the recipient can read.
+	if event.ActorHidden {
+		notification.ActorID = nil
+	}
+
 	// Apply smart filtering
 	if ns.smartFilter != nil {
 		shouldNotify, modifiedNotification := ns.smartFilter.ShouldNotify(ctx, prefs, notification)
@@ -467,6 +473,12 @@ type EventData struct {
 	ActorID     *uuid.UUID               `json:"actor_id,omitempty"`
 	ActorName   string                   `json:"actor_name"`
 	ExtraData   map[string]interface{}   `json:"extra_data,omitempty"`
+
+	// ActorHidden is set when the actor is a creator of a work that hides its
+	// creators. ActorID still stops them being told about their own action,
+	// but the notification stored for everyone else carries no actor id.
+	// ActorName must then be the "Anonymous Creator" label. Not read from JSON.
+	ActorHidden bool `json:"-"`
 
 	// Recipients are told about the event whether or not they subscribed,
 	// e.g. a work's authors when someone comments on it. The actor is never
