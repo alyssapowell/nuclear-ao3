@@ -24,6 +24,10 @@
     handle /health {
         reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
+    # The app sets Cache-Control and Vary on every API answer itself (see
+    # "Caching at the CDN" in docs/HOSTING.md). Caddy passes them through
+    # untouched; the "no-cache" rule further down is only for the website's
+    # files and does not apply here.
     handle /api/* {
         reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }

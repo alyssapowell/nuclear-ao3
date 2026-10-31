@@ -68,6 +68,12 @@ Do every step, even ones that seem unrelated. You don't yet know how they got in
 - Readers whose data may have been exposed: tell them what was exposed, when, and what they should do, once you know.
 - Depending on where you and your users are, the law may set a deadline for telling a data-protection authority (in the EU and UK it's 72 hours from when you became aware). Ask your organisation's legal contact on day one, not day three.
 
+## Something harmful was posted
+
+1. Hide it at once: `docker-compose exec app nuclear hide work <id> --reason "..."` (or `chapter`, `comment`, `series`, `bookmark`). It's gone for everyone the app answers, immediately.
+2. **If a CDN is in front, purge it there too.** A CDN may keep serving its copy to logged-out visitors for up to a minute, plus up to five more while it refreshes. For anything that must disappear now (illegal material, private information, content involving minors), use the CDN's "purge by URL" (in Cloudflare: Caching, Configuration, Purge Cache, Custom Purge). For a work with id W, purge `https://YOUR-DOMAIN/api/v1/work/W` and `/api/v1/works/W`, and their `/chapters` and `/comments` addresses. If a search or tag page showed its title or summary, purge that address too (the query string is part of the address). For a hidden comment, purge its work's `/comments` address. Logged-in readers never get the CDN's copy, so they see the hide at once.
+3. If you couldn't purge, write that in the incident log: the content may have stayed visible to logged-out visitors for up to six minutes.
+
 ## Accounts are being taken over
 
 1. For each affected account: run **ops-logout-user**, then ask the owner to use "Forgot password". The reset ends every session and disconnects OAuth apps.

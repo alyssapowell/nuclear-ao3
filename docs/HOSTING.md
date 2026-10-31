@@ -83,7 +83,19 @@ Two settings matter once a CDN is in front:
   Copy the full, current list from the CDN's own page of published address ranges (they change now and then), and don't add anything else. The app already trusts only Caddy (`TRUSTED_PROXIES`), so the real address is carried all the way through.
 - **Only let the CDN reach the server.** In the server's firewall, accept ports 80 and 443 only from the CDN's ranges. Otherwise someone who finds the server's own address can go around the CDN.
 
-What still needs code: API answers to logged-out visitors don't yet tell the CDN they may be cached, so only the website's files are cached today. Marking public answers cacheable for a minute or two, and never anything personal, is planned.
+The app marks logged-out API answers as cacheable, so a CDN can use them. See "Caching at the CDN" below.
+
+#### Caching at the CDN
+
+**What is cached.** Only successful (200) answers to GET requests with no `Authorization` header, on a fixed list of public read routes: the works list, a work and its chapters and comments, search and suggestions, tag pages and tag lists, series, collections, and a user's public bookmarks. These carry `Cache-Control: public, max-age=60, stale-while-revalidate=300`: the CDN may reuse an answer for a minute, and for up to five more minutes serve it while fetching a fresh one. The list is `publicRoutes` in `backend/internal/platform/cache.go`.
+
+**What is never cached.** Everything else, including every answer to a logged-in request, every error and redirect, anything under login, account, admin, notifications, subscriptions and exports, and kudos (which says whether your address already gave kudos). These carry `Cache-Control: private, no-store`. Every answer carries `Vary: Authorization`. Login uses a token in the `Authorization` header and the app sets no login cookies, so the CDN needs no cookie rules. Don't add a CDN rule that caches `/api` regardless of origin headers ("cache everything"); the app's headers are what keep personal answers out of the cache.
+
+**Hidden works stay visible for a short time.** When a work is hidden or newly restricted, logged-out visitors can still be served the old copy by the CDN for up to a minute, plus the five-minute stale window. For something harmful, purge it (below) rather than wait.
+
+**Purging a URL in an emergency.** Every CDN has a way to remove one address from its cache. In Cloudflare it is Caching, Configuration, "Purge Cache", "Custom Purge", then enter the full URLs. The website's own pages are plain files and hold no work text; only the API addresses need purging. For a work with id `W`, purge `https://YOUR-DOMAIN/api/v1/work/W`, `https://YOUR-DOMAIN/api/v1/works/W`, `.../chapters`, `.../chapters/<chapter id>`, `.../comments`, and the same `/work/W/...` addresses. Search results, tag pages and lists that showed the work clear on their own within the cache time; purge those too if they show a title or summary that must go. Query strings count as part of the address.
+
+**Not cached: reading a chapter.** Reading a chapter counts one view (a hit), and a copy answered by the CDN would never reach the app to be counted, so that one address is always passed through. Caching chapter text too, while still counting views, needs the reading page to report the view in a separate small request that is never cached. That isn't built yet.
 
 ### 2. A warm standby in another region
 

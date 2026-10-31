@@ -172,7 +172,7 @@ func main() {
 	}
 	platform.RegisterDBMetrics(db)
 	r.Use(platform.Metrics(), gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
-		authSvc.RateLimitMiddleware())
+		platform.PublicCache(), authSvc.RateLimitMiddleware())
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
 		works:  worksSvc,
