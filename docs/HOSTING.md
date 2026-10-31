@@ -97,9 +97,22 @@ This needs:
 
 Off-server backups (docs/BACKUPS.md) are the fallback when even the standby is lost: slower to restore, but in a third place.
 
-### 3. Copies in several regions, for speed
+### 3. Read-only copies in several regions
 
-Read-only copies of the database near readers in other parts of the world. Only worth doing once measurements show distant readers are slow even with the CDN, and it needs code support that isn't written yet (see "When to grow").
+Read-only copies of the database near readers in other parts of the world, kept current from the primary's write-ahead log (WAL). Worth doing once measurements show distant readers are slow even with the CDN. What makes it work, and what goes wrong without each piece:
+
+- **Replication slots, with a limit.** A slot makes the primary keep WAL until a replica has it, so a lagging replica can always catch up. But a replica that is down then makes the primary keep WAL until its disk is full, which takes the primary down too. Set `max_slot_wal_keep_size`, and alert on slot lag.
+- **WAL archived to object storage as well** (with a tool made for it, such as WAL-G or pgBackRest). Replicas can catch up from the archive after a long gap without the primary holding WAL for them. It also allows point-in-time recovery: restoring to any second, where the daily dumps in docs/BACKUPS.md can lose up to a day. This is worth having even with no replicas.
+- **Asynchronous across regions.** Waiting for a distant replica to confirm every write would add its round trip to every save.
+- **Chained replicas.** Far-away replicas copy from a nearer replica, so the primary sends its WAL across regions once rather than once per replica.
+- **`hot_standby_feedback` off**, for this app's short read queries: on, it protects long replica queries at the cost of the primary keeping old row versions longer (table bloat).
+- **Reading your own writes.** Someone who just posted a chapter must not be sent to a replica that is a second behind and doesn't have it yet.
+
+What still needs code:
+- A second database setting for the replicas.
+- Sending logged-out reads (work pages, search, tag pages) to the nearest replica while its lag is under a few seconds, and to the primary otherwise.
+- Sending a user's reads to the primary for a short time after they change anything.
+- A replica-lag metric and alert on the dashboard.
 
 ### What isn't recommended
 
