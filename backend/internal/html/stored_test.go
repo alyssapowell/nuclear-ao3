@@ -39,8 +39,11 @@ func TestCleanStoredCleansOldRowsWithoutTouchingUpdatedAt(t *testing.T) {
 		VALUES ($1, $2, 'T', $3, $3, 'en', 'general', 'published', false, now())`, workID, userID, dirty)
 	exec(`INSERT INTO chapters (id, work_id, chapter_number, title, summary, notes, end_notes, content, is_draft)
 		VALUES ($1, $2, 1, 'C', $3, $3, $3, $3, false)`, chapterID, workID, dirty)
-	pseudID := uuid.New()
-	exec(`INSERT INTO user_pseudonyms (id, user_id, name, is_default) VALUES ($1, $2, 'author', true)`, pseudID, userID)
+	// The account came with a default pseud named after it.
+	var pseudID uuid.UUID
+	if err := db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, userID).Scan(&pseudID); err != nil {
+		t.Fatal(err)
+	}
 	exec(`INSERT INTO comments (id, work_id, user_id, pseudonym_id, content) VALUES ($1, $2, $3, $4, $5)`, commentID, workID, userID, pseudID, dirty)
 
 	// Put every updated_at far in the past, so any later bump is visible.

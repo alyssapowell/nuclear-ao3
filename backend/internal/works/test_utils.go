@@ -42,20 +42,9 @@ func (config *TestDBConfig) CreateTestUser(username, email string) (uuid.UUID, u
 	}
 
 	// Create default pseudonym in pseuds table (what creatorships references)
+	// (the database made it when the user was inserted)
 	var pseudID uuid.UUID
-	err = config.DB.QueryRow(`
-		INSERT INTO pseuds (user_id, name, is_default, created_at, updated_at)
-		VALUES ($1, $2, true, NOW(), NOW()) RETURNING id`,
-		userID, username).Scan(&pseudID)
-	if err != nil {
-		return uuid.Nil, uuid.Nil, err
-	}
-
-	// Also create user_pseudonym for comments (different table, same concept)
-	_, err = config.DB.Exec(`
-		INSERT INTO user_pseudonyms (user_id, name, is_default, created_at)
-		VALUES ($1, $2, true, NOW())`,
-		userID, username)
+	err = config.DB.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, userID).Scan(&pseudID)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}
@@ -189,7 +178,6 @@ func (config *TestDBConfig) CleanupTestData() {
 	config.DB.Exec("DELETE FROM works WHERE title LIKE 'Test%'")
 	config.DB.Exec("DELETE FROM collections WHERE name LIKE 'Test%'")
 	config.DB.Exec("DELETE FROM pseuds WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'test%')")
-	config.DB.Exec("DELETE FROM user_pseudonyms WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'test%')")
 	config.DB.Exec("DELETE FROM users WHERE username LIKE 'test%'")
 }
 

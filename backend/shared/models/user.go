@@ -130,10 +130,10 @@ type UserProfile struct {
 	FriendsCount       int        `json:"friends_count" db:"friends_count"`
 }
 
-// UserPseudonym represents a pen name/pseudonym that users can write under
+// UserPseudonym is a row of pseuds, as the profile code reads it.
 type UserPseudonym struct {
 	ID          uuid.UUID `json:"id" db:"id"`
-	UserID      uuid.UUID `json:"user_id" db:"user_id"`
+	UserID      uuid.UUID `json:"-" db:"user_id"`
 	Name        string    `json:"name" db:"name"`
 	IsDefault   bool      `json:"is_default" db:"is_default"`
 	Description *string   `json:"description" db:"description"`

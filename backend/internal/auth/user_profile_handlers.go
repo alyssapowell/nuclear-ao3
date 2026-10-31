@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -110,7 +111,7 @@ func (s *AuthService) GetUserProfile(c *gin.Context) {
 	}
 
 	// Get user's pseudonyms
-	pseudQuery := `SELECT name FROM user_pseudonyms WHERE user_id = $1 ORDER BY is_default DESC, created_at ASC`
+	pseudQuery := `SELECT name FROM pseuds WHERE user_id = $1 ORDER BY is_default DESC, lower(name)`
 	rows, err := s.db.Query(pseudQuery, profile.ID)
 	if err == nil {
 		defer rows.Close()
@@ -264,9 +265,15 @@ func (s *AuthService) CreateUserPseudonym(c *gin.Context) {
 		return
 	}
 
-	// Check if pseudonym name is already taken
+	// Check the user doesn't already have a pseud with that name (names are
+	// unique per user, ignoring case, as in AO3)
+	req.Name = strings.TrimSpace(req.Name)
+	if err := models.ValidatePseudName(req.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	var exists bool
-	err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM user_pseudonyms WHERE name = $1)", req.Name).Scan(&exists)
+	err = s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM pseuds WHERE user_id = $1 AND lower(name) = lower($2))", userID, req.Name).Scan(&exists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check pseudonym availability"})
 		return
@@ -278,19 +285,19 @@ func (s *AuthService) CreateUserPseudonym(c *gin.Context) {
 
 	// If this is the user's first pseudonym or they want it as default, make it default
 	var pseudCount int
-	s.db.QueryRow("SELECT COUNT(*) FROM user_pseudonyms WHERE user_id = $1", userID).Scan(&pseudCount)
+	s.db.QueryRow("SELECT COUNT(*) FROM pseuds WHERE user_id = $1", userID).Scan(&pseudCount)
 
 	isDefault := req.IsDefault || pseudCount == 0
 
 	// If making this default, unset other defaults
 	if isDefault {
-		s.db.Exec("UPDATE user_pseudonyms SET is_default = false WHERE user_id = $1", userID)
+		s.db.Exec("UPDATE pseuds SET is_default = false WHERE user_id = $1", userID)
 	}
 
 	// Create the pseudonym
 	pseudonymID := uuid.New()
 	query := `
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, description, icon_url, created_at)
+		INSERT INTO pseuds (id, user_id, name, is_default, description, icon_url, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 	`
 
@@ -304,7 +311,7 @@ func (s *AuthService) CreateUserPseudonym(c *gin.Context) {
 	var pseudonym models.UserPseudonym
 	err = s.db.QueryRow(`
 		SELECT id, user_id, name, is_default, description, icon_url, created_at
-		FROM user_pseudonyms WHERE id = $1
+		FROM pseuds WHERE id = $1
 	`, pseudonymID).Scan(
 		&pseudonym.ID, &pseudonym.UserID, &pseudonym.Name, &pseudonym.IsDefault,
 		&pseudonym.Description, &pseudonym.IconURL, &pseudonym.CreatedAt,
@@ -333,7 +340,7 @@ func (s *AuthService) GetUserPseudonyms(c *gin.Context) {
 
 	query := `
 		SELECT id, user_id, name, is_default, description, icon_url, created_at
-		FROM user_pseudonyms 
+		FROM pseuds 
 		WHERE user_id = $1 
 		ORDER BY is_default DESC, created_at ASC
 	`

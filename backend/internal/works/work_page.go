@@ -221,7 +221,7 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 	}
 	defer rows.Close()
 
-	var authors []models.WorkAuthor
+	authors := []models.WorkAuthor{}
 	for rows.Next() {
 		var author models.WorkAuthor
 		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
@@ -232,36 +232,9 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 		authors = append(authors, author)
 	}
 
-	// If no authors found via creatorship system, fall back to work.user_id
-	if len(authors) == 0 {
-		log.Printf("DEBUG: No authors found in creatorship table, falling back to work.user_id")
-		var workUserID uuid.UUID
-		var username string
-		var isAnonymous bool
-
-		err := ws.db.QueryRowContext(ctx, `
-			SELECT w.user_id, u.username, COALESCE(w.is_anonymous, false)
-			FROM works w 
-			JOIN users u ON w.user_id = u.id 
-			WHERE w.id = $1`, workID).Scan(&workUserID, &username, &isAnonymous)
-
-		if err != nil {
-			log.Printf("DEBUG: Failed to get work user: %v", err)
-			return authors, nil // Return empty array rather than error
-		}
-
-		// Create a simple author entry
-		fallbackAuthor := models.WorkAuthor{
-			PseudID:     nil, // No pseud system fallback
-			PseudName:   username,
-			UserID:      &workUserID,
-			Username:    username,
-			IsAnonymous: isAnonymous,
-		}
-		authors = append(authors, fallbackAuthor)
-		log.Printf("DEBUG: Added fallback author: %s", username)
-	}
-
+	// No creatorship means no author to show. Naming the account that owns
+	// the work instead would give away the creator of an anonymous work, and
+	// would name an account rather than a pseud.
 	log.Printf("DEBUG: fetchWorkAuthors returning %d authors", len(authors))
 	return authors, nil
 }

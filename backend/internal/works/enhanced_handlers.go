@@ -153,7 +153,7 @@ func defaultPseud(tx *sql.Tx, userID uuid.UUID) (uuid.UUID, error) {
 	}
 	err = tx.QueryRow(`
 		INSERT INTO pseuds (user_id, name, is_default)
-		SELECT id, username, true FROM users WHERE id = $1
+		SELECT id, left(username::text, 40), true FROM users WHERE id = $1
 		RETURNING id`, userID).Scan(&id)
 	return id, err
 }

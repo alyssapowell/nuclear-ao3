@@ -78,7 +78,7 @@ func (suite *CommentHandlersTestSuite) SetupTest() {
 	// Create test pseudonym
 	suite.testPseudID = uuid.New()
 	_, err = suite.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at)
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at)
 		VALUES ($1, $2, $3, true, NOW())
 		ON CONFLICT (id) DO NOTHING
 	`, suite.testPseudID, suite.testUserID, "TestPseud")
@@ -99,7 +99,7 @@ func (suite *CommentHandlersTestSuite) TearDownTest() {
 	suite.db.Exec("DELETE FROM comment_kudos WHERE comment_id IN (SELECT id FROM comments WHERE work_id = $1)", suite.testWorkID)
 	suite.db.Exec("DELETE FROM comments WHERE work_id = $1", suite.testWorkID)
 	suite.db.Exec("DELETE FROM works WHERE id = $1", suite.testWorkID)
-	suite.db.Exec("DELETE FROM user_pseudonyms WHERE user_id = $1", suite.testUserID)
+	suite.db.Exec("DELETE FROM pseuds WHERE user_id = $1", suite.testUserID)
 	suite.db.Exec("DELETE FROM users WHERE id = $1", suite.testUserID)
 }
 
@@ -280,7 +280,7 @@ func (suite *CommentHandlersTestSuite) TestUpdateComment_Unauthorized() {
 	// Create pseudonym for other user
 	otherPseudID := uuid.New()
 	_, err = suite.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at)
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at)
 		VALUES ($1, $2, $3, true, NOW())
 		ON CONFLICT (id) DO NOTHING
 	`, otherPseudID, otherUserID, fmt.Sprintf("OtherPseud_%s", otherUserID.String()[:8]))
@@ -303,7 +303,7 @@ func (suite *CommentHandlersTestSuite) TestUpdateComment_Unauthorized() {
 
 	// Cleanup
 	suite.db.Exec("DELETE FROM comments WHERE user_id = $1", otherUserID)
-	suite.db.Exec("DELETE FROM user_pseudonyms WHERE user_id = $1", otherUserID)
+	suite.db.Exec("DELETE FROM pseuds WHERE user_id = $1", otherUserID)
 	suite.db.Exec("DELETE FROM users WHERE id = $1", otherUserID)
 }
 

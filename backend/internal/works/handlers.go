@@ -1600,11 +1600,15 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 		SELECT c.id, COALESCE(c.work_id, ch.work_id), c.chapter_id, c.user_id, c.parent_comment_id,
 			CASE WHEN c.hidden_by_admin AND NOT $3 THEN '' ELSE c.content END,
 			c.status, c.is_anonymous, c.created_at, c.updated_at,
-			COALESCE(u.username, 'Anonymous') as username,
+			CASE WHEN c.is_anonymous OR ` + creatorHiddenSQL + ` THEN NULL ELSE up.id END,
+			CASE WHEN c.is_anonymous OR ` + creatorHiddenSQL + ` THEN NULL ELSE up.name END,
+			` + creatorHiddenSQL + `,
+			coalesce(c.guest_name, ''),
 			c.unreviewed, c.iced, c.hidden_by_admin, c.is_spam
 		FROM comments c
 		LEFT JOIN chapters ch ON ch.id = c.chapter_id
-		LEFT JOIN users u ON c.user_id = u.id AND c.is_anonymous = false
+		LEFT JOIN works w ON w.id = COALESCE(c.work_id, ch.work_id)
+		LEFT JOIN pseuds up ON up.id = c.pseudonym_id
 		WHERE COALESCE(c.work_id, ch.work_id) = $1
 		  AND can_user_view_comment(c.id, $2)
 		  AND (NOT c.unreviewed OR $4 OR $3)`
@@ -1627,13 +1631,18 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 	comments := []models.WorkComment{}
 	for rows.Next() {
 		var comment models.WorkComment
+		var pseudID, pseudName sql.NullString
 		err := rows.Scan(
 			&comment.ID, &comment.WorkID, &comment.ChapterID, &comment.UserID, &comment.ParentID,
 			&comment.Content, &comment.Status, &comment.IsAnonymous, &comment.CreatedAt, &comment.UpdatedAt,
-			&comment.Username, &comment.Unreviewed, &comment.Iced, &comment.HiddenByAdmin, &comment.Spam)
+			&pseudID, &pseudName, &comment.AnonymousCreator, &comment.GuestName,
+			&comment.Unreviewed, &comment.Iced, &comment.HiddenByAdmin, &comment.Spam)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan comment"})
 			return
+		}
+		if pseudID.Valid && pseudName.Valid {
+			comment.Pseud = &models.PseudSummary{ID: pseudID.String, Name: pseudName.String}
 		}
 		comments = append(comments, comment)
 	}
@@ -2078,12 +2087,14 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 	searchQuery := `
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $4::uuid))),
 			s.created_at, s.updated_at, u.username
 		FROM series s
 		JOIN users u ON s.user_id = u.id
 		WHERE (s.title ILIKE $1 OR s.description ILIKE $1)
 		AND can_user_view_series(s.id, $4::uuid)
+		AND series_shows_creator(s.id, $4::uuid)
 		ORDER BY s.updated_at DESC
 		LIMIT $2 OFFSET $3`
 
@@ -2110,7 +2121,8 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 			SELECT COALESCE(SUM(w.word_count), 0) 
 			FROM works w 
 			JOIN series_works sw ON w.id = sw.work_id
-			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)`, s.ID, viewer).Scan(&s.WordCount)
+			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, s.ID, viewer).Scan(&s.WordCount)
 
 		series = append(series, s)
 	}
@@ -2121,7 +2133,8 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 		SELECT COUNT(*) 
 		FROM series s
 		WHERE (s.title ILIKE $1 OR s.description ILIKE $1)
-		AND can_user_view_series(s.id, $2::uuid)`
+		AND can_user_view_series(s.id, $2::uuid)
+		AND series_shows_creator(s.id, $2::uuid)`
 	err = ws.db.QueryRow(countQuery, query, viewer).Scan(&total)
 	if err != nil {
 		total = len(series) // Fallback
@@ -2150,11 +2163,12 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 	err = ws.db.QueryRow(`
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid)),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $2::uuid))),
 			s.created_at, s.updated_at, u.username
 		FROM series s
 		JOIN users u ON s.user_id = u.id
-		WHERE s.id = $1 AND can_user_view_series(s.id, $2::uuid)`, seriesID, viewer).Scan(
+		WHERE s.id = $1 AND can_user_view_series(s.id, $2::uuid) AND series_shows_creator(s.id, $2::uuid)`, seriesID, viewer).Scan(
 		&series.ID, &series.Title, &series.Summary, &series.Notes, &series.UserID,
 		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt,
 		&series.Username)
@@ -2173,7 +2187,8 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 		SELECT COALESCE(SUM(w.word_count), 0)
 		FROM works w
 		JOIN series_works sw ON w.id = sw.work_id
-		WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)`, seriesID, viewer).Scan(&series.WordCount)
+		WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, seriesID, viewer).Scan(&series.WordCount)
 
 	if err != nil {
 		series.WordCount = 0 // Fallback
@@ -2211,7 +2226,9 @@ func (ws *WorkService) GetSeriesWorks(c *gin.Context) {
 		JOIN series_works sw ON w.id = sw.work_id
 		WHERE sw.series_id = $1
 		AND can_user_view_series(sw.series_id, $2::uuid)
-		AND can_user_view_work(w.id, $2::uuid)`
+		AND series_shows_creator(sw.series_id, $2::uuid)
+		AND can_user_view_work(w.id, $2::uuid)
+		AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`
 
 	// If no user, only show non-draft, non-restricted works
 	if !hasUser {
@@ -3786,12 +3803,14 @@ func (ws *WorkService) GetUserSeries(c *gin.Context) {
 	query := `
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $4::uuid))),
 			s.created_at, s.updated_at, u.username
 		FROM series s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.user_id = $1
 		AND can_user_view_series(s.id, $4::uuid)
+		AND series_shows_creator(s.id, $4::uuid)
 		ORDER BY s.updated_at DESC
 		LIMIT $2 OFFSET $3`
 
@@ -3818,14 +3837,15 @@ func (ws *WorkService) GetUserSeries(c *gin.Context) {
 			SELECT COALESCE(SUM(w.word_count), 0) 
 			FROM works w 
 			JOIN series_works sw ON w.id = sw.work_id
-			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)`, s.ID, viewer).Scan(&s.WordCount)
+			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, s.ID, viewer).Scan(&s.WordCount)
 
 		series = append(series, s)
 	}
 
 	// Get total count for pagination
 	var total int
-	err = ws.db.QueryRow("SELECT COUNT(*) FROM series WHERE user_id = $1 AND can_user_view_series(id, $2::uuid)", targetUserID, viewer).Scan(&total)
+	err = ws.db.QueryRow("SELECT COUNT(*) FROM series WHERE user_id = $1 AND can_user_view_series(id, $2::uuid) AND series_shows_creator(id, $2::uuid)", targetUserID, viewer).Scan(&total)
 	if err != nil {
 		total = len(series) // Fallback
 	}
@@ -5436,79 +5456,6 @@ func (ws *WorkService) GetMuteStatus(c *gin.Context) {
 
 // AO3 Core Features Handlers
 
-// Pseud management
-func (ws *WorkService) CreatePseud(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	var req struct {
-		Name        string `json:"name" validate:"required,min=1,max=40"`
-		Description string `json:"description"`
-		IsDefault   bool   `json:"is_default"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
-		return
-	}
-
-	// Create pseud using database function
-	var pseudID uuid.UUID
-	err := ws.db.QueryRow("SELECT create_pseud($1, $2, $3)", userID, req.Name, req.IsDefault).Scan(&pseudID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create pseud", "details": err.Error()})
-		return
-	}
-
-	// Get the created pseud
-	var pseud models.Pseud
-	err = ws.db.QueryRow(`
-		SELECT id, user_id, name, description, is_default, created_at, updated_at
-		FROM pseuds WHERE id = $1`, pseudID).Scan(
-		&pseud.ID, &pseud.UserID, &pseud.Name, &pseud.Description,
-		&pseud.IsDefault, &pseud.CreatedAt, &pseud.UpdatedAt)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch created pseud"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"pseud": pseud})
-}
-
-func (ws *WorkService) GetUserPseuds(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	rows, err := ws.db.Query(`
-		SELECT id, user_id, name, description, is_default, created_at, updated_at
-		FROM pseuds WHERE user_id = $1 ORDER BY is_default DESC, name`, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pseuds"})
-		return
-	}
-	defer rows.Close()
-
-	var pseuds []models.Pseud
-	for rows.Next() {
-		var pseud models.Pseud
-		err := rows.Scan(&pseud.ID, &pseud.UserID, &pseud.Name, &pseud.Description,
-			&pseud.IsDefault, &pseud.CreatedAt, &pseud.UpdatedAt)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan pseud"})
-			return
-		}
-		pseuds = append(pseuds, pseud)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"pseuds": pseuds})
-}
-
 // Work gifting
 func (ws *WorkService) GiftWork(c *gin.Context) {
 	workID, err := uuid.Parse(c.Param("work_id"))
@@ -5585,10 +5532,9 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 
 	rows, err := ws.db.Query(`
 		SELECT g.id, g.work_id, g.pseud_id, g.recipient_name, g.rejected, 
-			g.created_at, g.updated_at, p.name as pseud_name, u.username
+			g.created_at, g.updated_at, p.name as pseud_name
 		FROM gifts g
 		LEFT JOIN pseuds p ON g.pseud_id = p.id
-		LEFT JOIN users u ON p.user_id = u.id
 		WHERE g.work_id = $1 AND g.rejected = false
 		ORDER BY g.created_at`, workID)
 	if err != nil {
@@ -5600,9 +5546,9 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 	var gifts []interface{}
 	for rows.Next() {
 		var gift models.Gift
-		var pseudName, username sql.NullString
+		var pseudName sql.NullString
 		err := rows.Scan(&gift.ID, &gift.WorkID, &gift.PseudID, &gift.RecipientName,
-			&gift.Rejected, &gift.CreatedAt, &gift.UpdatedAt, &pseudName, &username)
+			&gift.Rejected, &gift.CreatedAt, &gift.UpdatedAt, &pseudName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan gift"})
 			return
@@ -5616,10 +5562,10 @@ func (ws *WorkService) GetWorkGifts(c *gin.Context) {
 		}
 
 		if gift.PseudID != nil {
+			// A recipient is named by pseud, as {id, name}.
 			giftData["recipient"] = gin.H{
-				"pseud_id":   gift.PseudID,
-				"pseud_name": pseudName.String,
-				"username":   username.String,
+				"id":   gift.PseudID,
+				"name": pseudName.String,
 			}
 		} else {
 			giftData["recipient_name"] = gift.RecipientName

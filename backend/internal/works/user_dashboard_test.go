@@ -94,7 +94,7 @@ func (suite *UserDashboardTestSuite) createTestWork(userID uuid.UUID, title, sta
 func (suite *UserDashboardTestSuite) createTestComment(userID, workID uuid.UUID, content, status string, isReply bool) uuid.UUID {
 	// Get the user's pseudonym
 	var pseudID uuid.UUID
-	err := suite.db.QueryRow("SELECT id FROM user_pseudonyms WHERE user_id = $1 AND is_default = true", userID).Scan(&pseudID)
+	err := suite.db.QueryRow("SELECT id FROM pseuds WHERE user_id = $1 AND is_default = true", userID).Scan(&pseudID)
 	suite.Require().NoError(err)
 
 	// Use test utilities to create comment

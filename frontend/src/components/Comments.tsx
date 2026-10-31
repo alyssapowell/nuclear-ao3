@@ -262,7 +262,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900">
-                {comment.username || 'Anonymous'}
+                {comment.pseud?.name || comment.guest_name || (comment.anonymous_creator ? 'Anonymous Creator' : 'Anonymous')}
               </span>
               {comment.status === 'pending' && (
                 <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">

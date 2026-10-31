@@ -61,9 +61,10 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 			c.id, c.work_id, c.chapter_id, c.user_id, c.pseudonym_id, c.parent_comment_id,
 			c.content, c.guest_name, c.guest_email, c.is_deleted, c.is_moderated, c.is_spam,
 			c.thread_level, c.kudos_count, c.reply_count, c.created_at, c.updated_at, c.edited_at,
-			COALESCE(up.name, u.username, c.guest_name) as author_name,
+			CASE WHEN ` + creatorHiddenSQL + ` THEN '` + anonymousCreatorLabel + `'
+			     ELSE COALESCE(up.name, c.guest_name) END as author_name,
 			u.id as author_user_id,
-			up.id as author_pseudonym_id,
+			CASE WHEN ` + creatorHiddenSQL + ` THEN NULL ELSE up.id END as author_pseudonym_id,
 			CASE 
 				WHEN c.guest_name IS NOT NULL THEN 'guest'
 				WHEN u.id IS NOT NULL THEN 'user'
@@ -73,7 +74,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 			w.user_id as work_author_id
 		FROM comments c
 		LEFT JOIN users u ON c.user_id = u.id
-		LEFT JOIN user_pseudonyms up ON c.pseudonym_id = up.id
+		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
 		LEFT JOIN works w ON c.work_id = w.id
 		WHERE c.work_id = $1 AND c.is_deleted = false
 		ORDER BY ` + sortBy + ` ` + sortOrder + `
@@ -131,6 +132,7 @@ func (ws *WorkService) GetWorkComments(c *gin.Context) {
 			comment.EditedAt = &editedAt.Time
 		}
 
+		shapeCommentPseud(&comment)
 		comments = append(comments, comment)
 	}
 
@@ -623,9 +625,10 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 			c.id, c.work_id, c.chapter_id, c.user_id, c.pseudonym_id, c.parent_comment_id,
 			c.content, c.guest_name, c.guest_email, c.is_deleted, c.is_moderated, c.is_spam,
 			c.thread_level, c.kudos_count, c.reply_count, c.created_at, c.updated_at, c.edited_at,
-			COALESCE(up.name, u.username, c.guest_name) as author_name,
+			CASE WHEN ` + creatorHiddenSQL + ` THEN '` + anonymousCreatorLabel + `'
+			     ELSE COALESCE(up.name, c.guest_name) END as author_name,
 			u.id as author_user_id,
-			up.id as author_pseudonym_id,
+			CASE WHEN ` + creatorHiddenSQL + ` THEN NULL ELSE up.id END as author_pseudonym_id,
 			CASE 
 				WHEN c.guest_name IS NOT NULL THEN 'guest'
 				WHEN u.id IS NOT NULL THEN 'user'
@@ -635,7 +638,7 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 			w.user_id as work_author_id
 		FROM comments c
 		LEFT JOIN users u ON c.user_id = u.id
-		LEFT JOIN user_pseudonyms up ON c.pseudonym_id = up.id
+		LEFT JOIN pseuds up ON c.pseudonym_id = up.id
 		LEFT JOIN works w ON c.work_id = w.id
 		WHERE c.id = $1
 	`
@@ -678,8 +681,31 @@ func (ws *WorkService) getCommentByID(commentID uuid.UUID) (*models.CommentWithD
 	if editedAt.Valid {
 		comment.EditedAt = &editedAt.Time
 	}
+	shapeCommentPseud(&comment)
 
 	return &comment, nil
+}
+
+// creatorHiddenSQL is true for a comment written under a pseud of one of the
+// creators of a work that hides its creators (anonymous, in an anonymous
+// collection, or in a collection that hasn't revealed them yet). AO3 shows
+// those as "Anonymous Creator"; showing the pseud would unmask the creator.
+// It needs the comment's pseud as up and the work as w.
+const anonymousCreatorLabel = "Anonymous Creator"
+
+const creatorHiddenSQL = `(up.id IS NOT NULL AND (w.is_anonymous OR w.in_anon_collection OR w.in_unrevealed_collection)
+				AND EXISTS (SELECT 1 FROM creatorships cr JOIN pseuds cp ON cp.id = cr.pseud_id
+					WHERE cr.creation_id = w.id AND cr.creation_type = 'Work' AND cp.user_id = up.user_id))`
+
+// shapeCommentPseud makes the pseud in a comment's answer what the query
+// allowed (nothing, for an anonymous creator) and fills in the {id, name}
+// form the API shows in place of any account detail.
+func shapeCommentPseud(c *models.CommentWithDetails) {
+	c.PseudonymID = c.AuthorPseudonymID
+	c.AnonymousCreator = c.AuthorName == anonymousCreatorLabel
+	if c.AuthorPseudonymID != nil {
+		c.Pseud = &models.PseudSummary{ID: c.AuthorPseudonymID.String(), Name: c.AuthorName}
+	}
 }
 
 var errNotYourPseud = errors.New("pseud belongs to someone else")
@@ -690,22 +716,22 @@ var errNotYourPseud = errors.New("pseud belongs to someone else")
 func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
 	if requested != nil {
 		var owner uuid.UUID
-		err := ws.db.QueryRow("SELECT user_id FROM user_pseudonyms WHERE id = $1", *requested).Scan(&owner)
+		err := ws.db.QueryRow("SELECT user_id FROM pseuds WHERE id = $1", *requested).Scan(&owner)
 		if err == sql.ErrNoRows || (err == nil && owner != userID) {
 			return uuid.Nil, errNotYourPseud
 		}
 		return *requested, err
 	}
 	var id uuid.UUID
-	err := ws.db.QueryRow(`SELECT id FROM user_pseudonyms WHERE user_id = $1
+	err := ws.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1
 		ORDER BY is_default DESC, created_at LIMIT 1`, userID).Scan(&id)
 	if err != sql.ErrNoRows {
 		return id, err
 	}
 	err = ws.db.QueryRow(`
-		INSERT INTO user_pseudonyms (user_id, name, is_default)
-		SELECT id, username, true FROM users WHERE id = $1
-		ON CONFLICT (user_id, name) DO UPDATE SET is_default = user_pseudonyms.is_default
+		INSERT INTO pseuds (user_id, name, is_default)
+		SELECT id, left(username::text, 40), true FROM users WHERE id = $1
+		ON CONFLICT (user_id, lower(name)) DO UPDATE SET is_default = pseuds.is_default
 		RETURNING id`, userID).Scan(&id)
 	return id, err
 }

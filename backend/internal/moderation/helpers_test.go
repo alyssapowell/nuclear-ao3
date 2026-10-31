@@ -67,7 +67,7 @@ func (e *env) user(name string, roles ...string) (uuid.UUID, string) {
 	id := uuid.New()
 	e.exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
 		VALUES ($1, $2, $3, 'x', true, true)`, id, name, name+"@example.org")
-	e.exec(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`, id, name)
+	// the account already has its default pseud, named after it
 	for _, r := range roles {
 		e.exec(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, id, r)
 	}

@@ -59,8 +59,7 @@ func (e *fixEnv) user(name string, roles ...string) (uuid.UUID, string) {
 	id := uuid.New()
 	e.exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
 		VALUES ($1, $2, $3, 'x', true, true)`, id, name, name+"@example.org")
-	e.exec(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`, id, name)
-	e.exec(`INSERT INTO user_pseudonyms (user_id, name, is_default) VALUES ($1, $2, true)`, id, name)
+	// the account already has its default pseud, named after it
 	for _, r := range roles {
 		e.exec(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, id, r)
 	}
@@ -95,7 +94,7 @@ func (e *fixEnv) comment(workID, author uuid.UUID, content string) uuid.UUID {
 	e.t.Helper()
 	id := uuid.New()
 	e.exec(`INSERT INTO comments (id, work_id, user_id, pseudonym_id, content)
-		SELECT $1, $2, $3, id, $4 FROM user_pseudonyms WHERE user_id = $3`, id, workID, author, content)
+		SELECT $1, $2, $3, id, $4 FROM pseuds WHERE user_id = $3 AND is_default`, id, workID, author, content)
 	return id
 }
 
@@ -199,7 +198,7 @@ func TestEditComment(t *testing.T) {
 	// Has a reply: refused (AO3 "Comments with replies cannot be edited").
 	reply := uuid.New()
 	e.exec(`INSERT INTO comments (id, work_id, user_id, pseudonym_id, parent_comment_id, content)
-		SELECT $1, $2, $3, id, $4, 'reply' FROM user_pseudonyms WHERE user_id = $3`, reply, w, creator, id)
+		SELECT $1, $2, $3, id, $4, 'reply' FROM pseuds WHERE user_id = $3 AND is_default`, reply, w, creator, id)
 	e.expect(403, "PUT", path, authorTok, map[string]string{"content": "late edit"})
 	if stored() != before {
 		t.Errorf("refused edits changed the comment: %q", stored())

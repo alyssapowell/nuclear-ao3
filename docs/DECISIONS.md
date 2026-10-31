@@ -89,6 +89,21 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **Also checked at startup (2026-10-30):** unless `ENVIRONMENT=development`, the server refuses to start with an example or short database password, a `SITE_URL` that isn't public `https://`, or mail going to the development mail catcher. An unset `ENVIRONMENT` counts as production. Every message names the setting and how to fix it. Separately, the server won't start without the admin's signing key, and Compose won't start Grafana without a password.
 
+## 2026-10-30: One pseud table, the way AO3 has it
+
+**Decision:** `pseuds` is the only pseud table. Comments, authorship, gifts and descriptions all use it, and `user_pseudonyms` is gone (migration `037_one_pseud_table.sql`). Names follow AO3's `Pseud` model: 1 to 40 characters, letters, numbers, spaces, underscores and dashes in any script, unique per user ignoring case. Every user has exactly one default pseud, enforced by a partial unique index, and the database creates it (named after the username) in the same transaction as the account.
+
+**Why:** Authorship and comments pointed at different tables, so a pseud existed twice and the two copies could disagree, and the old name rule rejected real AO3 names. The AO3 importer needs one place to put `pseuds`, with the ids its comments, gifts and works refer to.
+
+**How:**
+- **Merging:** rows of `user_pseudonyms` that match a pseud (same user, same name ignoring case) become that pseud; the others become new pseuds and keep their ids. Comments and comment kudos follow. If a user's two tables disagreed about the default, the pseud authorship used wins.
+- **Name characters in the app, not the database:** Postgres's idea of a letter depends on how the database was created, so the database checks length and blanks, and `ValidatePseudName` checks the characters. The importer must call it, or accept names AO3 would have refused.
+- **The database makes the default pseud:** a trigger on `users` does it, so every way of creating an account gets one and a failed registration leaves nothing behind. Imports that bring their own pseuds must disable `create_default_pseud_trigger`.
+- **Deleting a pseud** moves its works, comments and gifts to the default pseud, and the default (and the pseud named after the username) can't be deleted, as in AO3.
+- **Creators stay hidden:** the API names a creator or commenter as `{id, name}` only. A work that is anonymous, in an anonymous collection, or in an unrevealed collection names no one, is left out of the creator's page, series lists and profile totals, and the creator's comments on it read "Anonymous Creator". (Migration `038`.)
+
+**Cost:** Two views that nothing used (`comments_with_details`, `user_profiles`) were dropped. The comment column is still called `pseudonym_id` (AO3: `pseud_id`). Icon files can't be uploaded yet; only their address is stored. Responses that used `username`, `user_id` and `pseud_name` for authors changed to `{id, name}`, and the frontend comment and gift components follow.
+
 ## 2026-10-29: Monitoring ships ready to use
 
 **Decision:** Keep Prometheus, Grafana and Loki, but store their data sources, dashboards and alerts as files in the repo so they load automatically. There will be one "Is the archive OK?" dashboard, and every alert links to a runbook section that says what to do. Images are pinned, the admin password is generated, and the monitoring ports are bound to localhost.

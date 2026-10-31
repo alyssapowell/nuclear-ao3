@@ -11,13 +11,13 @@ type Comment struct {
 	ID              uuid.UUID  `json:"id" db:"id"`
 	WorkID          *uuid.UUID `json:"work_id" db:"work_id"`
 	ChapterID       *uuid.UUID `json:"chapter_id" db:"chapter_id"`
-	UserID          *uuid.UUID `json:"user_id" db:"user_id"`
+	UserID          *uuid.UUID `json:"-" db:"user_id"` // never shown: authors are named by pseud
 	PseudonymID     *uuid.UUID `json:"pseudonym_id" db:"pseudonym_id"`
 	ParentCommentID *uuid.UUID `json:"parent_comment_id" db:"parent_comment_id"`
 	Content         string     `json:"content" db:"content"`
 	GuestName       *string    `json:"guest_name" db:"guest_name"`
-	GuestEmail      *string    `json:"guest_email" db:"guest_email"`
-	IPAddress       *string    `json:"ip_address" db:"ip_address"`
+	GuestEmail      *string    `json:"-" db:"guest_email"`
+	IPAddress       *string    `json:"-" db:"ip_address"`
 	IsDeleted       bool       `json:"is_deleted" db:"is_deleted"`
 	IsModerated     bool       `json:"is_moderated" db:"is_moderated"`
 	IsSpam          bool       `json:"is_spam" db:"is_spam"`
@@ -33,11 +33,13 @@ type Comment struct {
 type CommentWithDetails struct {
 	Comment
 	AuthorName        string               `json:"author_name" db:"author_name"`
-	AuthorUserID      *uuid.UUID           `json:"author_user_id" db:"author_user_id"`
-	AuthorPseudonymID *uuid.UUID           `json:"author_pseudonym_id" db:"author_pseudonym_id"`
+	AuthorUserID      *uuid.UUID           `json:"-" db:"author_user_id"` // never shown
+	AuthorPseudonymID *uuid.UUID           `json:"-" db:"author_pseudonym_id"`
+	AnonymousCreator  bool                 `json:"anonymous_creator,omitempty"`  // written by a creator of a work that hides its creators
+	Pseud             *PseudSummary        `json:"pseud"`                        // {id, name}; null for guests and anonymous creators
 	AuthorType        string               `json:"author_type" db:"author_type"` // 'user', 'guest', 'unknown'
 	WorkTitle         *string              `json:"work_title" db:"work_title"`
-	WorkAuthorID      *uuid.UUID           `json:"work_author_id" db:"work_author_id"`
+	WorkAuthorID      *uuid.UUID           `json:"-" db:"work_author_id"`
 	ParentContent     *string              `json:"parent_content" db:"parent_content"`
 	ParentAuthorName  *string              `json:"parent_author_name" db:"parent_author_name"`
 	Replies           []CommentWithDetails `json:"replies,omitempty"` // For nested display

@@ -25,7 +25,6 @@ var storedHTML = []struct {
 	{"bookmarks", []string{"notes"}},
 	{"users", []string{"bio"}},
 	{"pseuds", []string{"description"}},
-	{"user_pseudonyms", []string{"description"}},
 	{"tags", []string{"description"}},
 }
 

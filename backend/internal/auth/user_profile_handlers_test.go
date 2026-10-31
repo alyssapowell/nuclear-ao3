@@ -84,7 +84,7 @@ func (suite *UserProfileHandlersTestSuite) TearDownTest() {
 	// Clean up test data
 	suite.db.Exec("DELETE FROM user_relationships WHERE requester_id = $1 OR addressee_id = $1", suite.testUserID)
 	suite.db.Exec("DELETE FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1", suite.testUserID)
-	suite.db.Exec("DELETE FROM user_pseudonyms WHERE user_id = $1", suite.testUserID)
+	suite.db.Exec("DELETE FROM pseuds WHERE user_id = $1", suite.testUserID)
 	suite.db.Exec("DELETE FROM users WHERE id = $1", suite.testUserID)
 }
 
@@ -169,7 +169,7 @@ func (suite *UserProfileHandlersTestSuite) TestCreateUserPseudonym_Success() {
 
 	// Verify pseudonym was created in database
 	var count int
-	suite.db.QueryRow("SELECT COUNT(*) FROM user_pseudonyms WHERE user_id = $1 AND name = $2", suite.testUserID, "TestPseudonym").Scan(&count)
+	suite.db.QueryRow("SELECT COUNT(*) FROM pseuds WHERE user_id = $1 AND name = $2", suite.testUserID, "TestPseudonym").Scan(&count)
 	assert.Equal(suite.T(), 1, count)
 }
 
@@ -332,7 +332,7 @@ func (suite *UserProfileHandlersTestSuite) TestGetUserDashboard_Success() {
 
 func (suite *UserProfileHandlersTestSuite) createTestPseudonym(name string, isDefault bool) {
 	_, err := suite.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at)
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at)
 		VALUES (uuid_generate_v4(), $1, $2, $3, NOW())
 	`, suite.testUserID, name, isDefault)
 	suite.Require().NoError(err)

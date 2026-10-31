@@ -82,7 +82,7 @@ func (suite *JWTAuthTestSuite) simulateJWTAuthMiddleware() gin.HandlerFunc {
 func (suite *JWTAuthTestSuite) TestValidJWTToken() {
 	// Ensure user has default pseudonym
 	_, err := suite.service.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at) 
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at) 
 		VALUES ($1, $2, $3, true, $4)
 		ON CONFLICT (user_id, name) DO NOTHING`,
 		uuid.New(), suite.testUserID, "admin", "2023-01-01")

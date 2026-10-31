@@ -84,12 +84,12 @@ func (suite *RegressionTestSuite) TestWorkCreationDatabaseSchema() {
 	}
 }
 
-// TestPseudonymTableIntegration tests that user_pseudonyms table is used correctly
-// Regression test for: pseuds -> user_pseudonyms table name fix
+// TestPseudonymTableIntegration tests that pseuds table is used correctly
+// Regression test for: pseuds -> pseuds table name fix
 func (suite *RegressionTestSuite) TestPseudonymTableIntegration() {
 	// Ensure user has a default pseudonym or one gets created
 	_, err := suite.service.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at) 
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at) 
 		VALUES ($1, $2, $3, true, $4)
 		ON CONFLICT (user_id, name) DO NOTHING`,
 		uuid.New(), suite.testUserID, "admin", time.Now())
@@ -97,7 +97,7 @@ func (suite *RegressionTestSuite) TestPseudonymTableIntegration() {
 
 	requestBody := models.CreateWorkRequest{
 		Title:          "Test Pseudonym Integration",
-		Summary:        "Testing user_pseudonyms table integration",
+		Summary:        "Testing pseuds table integration",
 		Language:       "en",
 		Rating:         "General Audiences",
 		Warnings:       []string{"No Archive Warnings Apply"},
@@ -121,7 +121,7 @@ func (suite *RegressionTestSuite) TestPseudonymTableIntegration() {
 	if w.Code == 500 {
 		responseBody := w.Body.String()
 		suite.Assert().NotContains(responseBody, "pseuds", "Should not reference old 'pseuds' table name")
-		suite.Assert().NotContains(responseBody, "relation \"pseuds\" does not exist", "Should use user_pseudonyms table")
+		suite.Assert().NotContains(responseBody, "relation \"pseuds\" does not exist", "Should use pseuds table")
 	}
 }
 
@@ -130,7 +130,7 @@ func (suite *RegressionTestSuite) TestPseudonymTableIntegration() {
 func (suite *RegressionTestSuite) TestChapterCountingConstraints() {
 	// Ensure user has default pseudonym
 	_, err := suite.service.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at) 
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at) 
 		VALUES ($1, $2, $3, true, $4)
 		ON CONFLICT (user_id, name) DO NOTHING`,
 		uuid.New(), suite.testUserID, "admin", time.Now())
@@ -172,7 +172,7 @@ func (suite *RegressionTestSuite) TestChapterCountingConstraints() {
 func (suite *RegressionTestSuite) TestWorkCreationWithoutCreatorships() {
 	// Ensure user has default pseudonym
 	_, err := suite.service.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at) 
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at) 
 		VALUES ($1, $2, $3, true, $4)
 		ON CONFLICT (user_id, name) DO NOTHING`,
 		uuid.New(), suite.testUserID, "admin", time.Now())
@@ -213,7 +213,7 @@ func (suite *RegressionTestSuite) TestWorkCreationWithoutCreatorships() {
 func (suite *RegressionTestSuite) TestDatabaseConstraintCompliance() {
 	// Ensure user has default pseudonym
 	_, err := suite.service.db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at) 
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at) 
 		VALUES ($1, $2, $3, true, $4)
 		ON CONFLICT (user_id, name) DO NOTHING`,
 		uuid.New(), suite.testUserID, "admin", time.Now())

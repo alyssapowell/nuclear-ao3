@@ -38,7 +38,8 @@ func newArchive(t *testing.T) *archive {
 	for name, id := range map[string]uuid.UUID{"writer": a.author, "reader": a.reader} {
 		exec(`INSERT INTO users (id, username, email, password_hash) VALUES ($1, $2, $3, '!')`, id, name, name+"@example.org")
 	}
-	exec(`INSERT INTO pseuds (id, user_id, name, is_default) VALUES ($1, $2, 'Quill', true)`, a.authorPseud, a.author)
+	// The account came with a default pseud; give it the pen name and the id the tests use.
+	exec(`UPDATE pseuds SET id = $1, name = 'Quill' WHERE user_id = $2 AND is_default`, a.authorPseud, a.author)
 
 	work := func(title, summary, rating string, fandoms, tags []string, set string) uuid.UUID {
 		t.Helper()

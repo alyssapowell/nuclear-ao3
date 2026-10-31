@@ -60,9 +60,9 @@ export function GiftList({ workId, gifts: initialGifts, authToken }: GiftListPro
       <span>
         Gifted to: {gifts.map((gift, index) => (
           <span key={gift.id}>
-            {gift.recipient?.username ? (
+            {gift.recipient?.name ? (
               <span className="font-medium text-purple-700">
-                {gift.recipient.username}
+                {gift.recipient.name}
               </span>
             ) : (
               <span className="font-medium text-purple-700">

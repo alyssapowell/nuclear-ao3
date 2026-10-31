@@ -677,7 +677,9 @@ export interface WorkComment {
   content: string;
   status: 'published' | 'pending' | 'rejected';
   is_anonymous: boolean;
-  username?: string;
+  pseud?: { id: string; name: string } | null;
+  guest_name?: string;
+  anonymous_creator?: boolean;
   author_name?: string;
   author_type?: 'user' | 'guest' | 'unknown';
   author_user_id?: string;
@@ -940,9 +942,8 @@ export interface Gift {
   created_at: string;
   updated_at: string;
   recipient?: {
-    pseud_id: string;
-    pseud_name: string;
-    username: string;
+    id: string;
+    name: string;
   };
 }
 

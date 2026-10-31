@@ -48,12 +48,15 @@ Status key:
 - **Bookmarks, series, collections**
   - Status: Unverified.
 - **Pseuds, gifting, orphaning, co-authors**: the core AO3 authorship features.
-  - Status: Unverified.
-  - Known problem: there are **two pseud tables**. `pseuds` is used for authorship (works, visibility); `user_pseudonyms` is used for comments and profiles. A user's default pseud is created in each on first use. They need merging into one.
+  - Status: pseuds verified 2026-10-30 (tests and smoke test); gifting, orphaning and co-authors: Unverified.
+  - Fixed 2026-10-30: there was a second pseud table (`user_pseudonyms`, used for comments). It is merged into `pseuds` (migration 037). Pseuds follow AO3: names of 1 to 40 characters with letters, numbers, spaces, underscores and dashes in any script, unique per user ignoring case; description up to 500 characters; icon address, alt text (250) and comment text (50); exactly one default pseud per user. Every account gets its default pseud, named after the username, when it is created.
+  - `POST /pseuds`, `GET /my/pseuds`, `PUT /pseuds/:id` and `DELETE /pseuds/:id` manage a user's own pseuds. Deleting a pseud moves its works, comments and gifts to the default pseud; the default pseud and the one named after the username can't be deleted (AO3 `pseuds_controller.rb`).
+  - Not built yet: uploading an icon (the address is stored, the file is not), pseud pages, and a screen for managing pseuds that works with these endpoints.
 - **Authors are shown by pseud**: the public API identifies an author by pseud, not by account ID or username. Readers contact an author through the API (comments, or a relayed message), never by being given an email address.
-  - Status: **Broken** (found by reading the code). Work responses include `user_id` and the account username.
+  - Status: partly fixed (see below).
+  - Fixed 2026-10-30 for works, work pages, comments, gifts and the authors list: an author or commenter is `{id, name}` and nothing else, with no `user_id`, `username`, guest email or IP address. A work that is anonymous, in an anonymous collection, or in a collection that hasn't revealed its creators names no author to anyone, and the creator's own comments on it appear as "Anonymous Creator". Those works are also left out of the creator's page, series lists, series counts, and the profile totals (works, words, last posted, kudos received), except for the creator. Still to do: series, bookmarks and the user pages are keyed by account (`/users/:user_id/...`, and series responses carry `user_id` and `username`); author subscriptions are keyed by account id. Kudos lists still show usernames instead of pseuds.
 - **Anonymous works** (as in AO3's anonymous collections and challenges): the author is hidden until revealed.
-  - Status: **Broken** (found by reading the code). The work API still returns the author's user ID and username when `is_anonymous` is true, and the search index stores the author IDs.
+  - Status: partly fixed 2026-10-30. The work, comment, series and creator-page answers no longer name the creator (see Authors are shown by pseud), with tests for the three ways a work can hide its creator. Search already left these works out of creator searches and showed no authors for them.
 - **Reader preferences**: font, size, theme, reading progress, and swipe navigation on mobile.
   - Intent: comfortable long-form reading on any device.
   - Status: frontend only; Unverified.

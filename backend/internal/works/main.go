@@ -135,6 +135,8 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			// Core AO3 Features: Pseuds, Gifting, Orphaning, Co-authors
 			protected.POST("/pseuds", d.ActiveAccount, workService.CreatePseud)                    // POST /api/v1/pseuds
 			protected.GET("/my/pseuds", workService.GetUserPseuds)                                 // GET /api/v1/my/pseuds
+			protected.PUT("/pseuds/:pseud_id", d.ActiveAccount, workService.UpdatePseud)           // PUT /api/v1/pseuds/123
+			protected.DELETE("/pseuds/:pseud_id", d.ActiveAccount, workService.DeletePseud)        // DELETE /api/v1/pseuds/123
 			protected.POST("/works/:work_id/gift", d.ActiveAccount, workService.GiftWork)          // POST /api/v1/works/123/gift
 			protected.GET("/works/:work_id/gifts", workService.GetWorkGifts)                       // GET /api/v1/works/123/gifts
 			protected.POST("/works/:work_id/orphan", d.NotSuspended, workService.OrphanWork)       // POST /api/v1/works/123/orphan

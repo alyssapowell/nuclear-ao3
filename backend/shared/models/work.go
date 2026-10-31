@@ -13,8 +13,8 @@ type Work struct {
 	Title                  string     `json:"title" db:"title" validate:"required,min=1,max=200"`
 	Summary                string     `json:"summary" db:"summary"`
 	Notes                  string     `json:"notes" db:"notes"`
-	UserID                 uuid.UUID  `json:"user_id" db:"user_id"`
-	Username               string     `json:"username"` // Loaded from join
+	UserID                 uuid.UUID  `json:"-" db:"user_id"` // never shown: creators are named by pseud, in "authors"
+	Username               string     `json:"-"`              // Loaded from join; never shown
 	SeriesID               *uuid.UUID `json:"series_id" db:"series_id"`
 	Language               string     `json:"language" db:"language" validate:"required,len=2"`
 	Rating                 string     `json:"rating" db:"rating" validate:"required,oneof=general teen mature explicit"`
@@ -106,22 +106,24 @@ type WorkKudos struct {
 
 // WorkComment represents a comment on a work or chapter
 type WorkComment struct {
-	ID               uuid.UUID  `json:"id" db:"id"`
-	WorkID           uuid.UUID  `json:"work_id" db:"work_id"`
-	ChapterID        *uuid.UUID `json:"chapter_id" db:"chapter_id"`       // Nil for work-level comments
-	UserID           *uuid.UUID `json:"user_id" db:"user_id"`             // Nil for anonymous comments
-	Username         string     `json:"username"`                         // Display name for comment
-	ParentID         *uuid.UUID `json:"parent_id" db:"parent_comment_id"` // For threaded comments
-	Content          string     `json:"content" db:"content" validate:"required,max=10000"`
-	Status           string     `json:"status" db:"status" validate:"oneof=published pending deleted spam hidden"`
-	ModerationReason string     `json:"moderation_reason" db:"moderation_reason"`
-	ModeratedBy      *uuid.UUID `json:"moderated_by" db:"moderated_by"`
-	ModeratedAt      *time.Time `json:"moderated_at" db:"moderated_at"`
-	IsAnonymous      bool       `json:"is_anonymous" db:"is_anonymous"`
-	IPAddress        string     `json:"ip_address" db:"ip_address"`
-	IsDeleted        bool       `json:"is_deleted" db:"is_deleted"`
-	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at" db:"updated_at"`
+	ID               uuid.UUID     `json:"id" db:"id"`
+	WorkID           uuid.UUID     `json:"work_id" db:"work_id"`
+	ChapterID        *uuid.UUID    `json:"chapter_id" db:"chapter_id"`       // Nil for work-level comments
+	UserID           *uuid.UUID    `json:"-" db:"user_id"`                   // never shown: authors are named by pseud
+	Pseud            *PseudSummary `json:"pseud"`                            // {id, name}; null for guests and anonymous creators
+	AnonymousCreator bool          `json:"anonymous_creator,omitempty"`      // written by a creator of a work that hides its creators
+	GuestName        string        `json:"guest_name,omitempty"`             // the name a guest gave
+	ParentID         *uuid.UUID    `json:"parent_id" db:"parent_comment_id"` // For threaded comments
+	Content          string        `json:"content" db:"content" validate:"required,max=10000"`
+	Status           string        `json:"status" db:"status" validate:"oneof=published pending deleted spam hidden"`
+	ModerationReason string        `json:"moderation_reason" db:"moderation_reason"`
+	ModeratedBy      *uuid.UUID    `json:"moderated_by" db:"moderated_by"`
+	ModeratedAt      *time.Time    `json:"moderated_at" db:"moderated_at"`
+	IsAnonymous      bool          `json:"is_anonymous" db:"is_anonymous"`
+	IPAddress        string        `json:"-" db:"ip_address"`
+	IsDeleted        bool          `json:"is_deleted" db:"is_deleted"`
+	CreatedAt        time.Time     `json:"created_at" db:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at" db:"updated_at"`
 	// Moderation state, as AO3 has it. Only shown to people who can act on it.
 	Unreviewed    bool `json:"unreviewed,omitempty"`      // waiting for the work's creator to approve it
 	Iced          bool `json:"frozen,omitempty"`          // nobody can reply
@@ -141,13 +143,16 @@ type UserMute struct {
 
 // Pseud represents a user pseudonym (matching AO3's implementation)
 type Pseud struct {
-	ID          uuid.UUID `json:"id" db:"id"`
-	UserID      uuid.UUID `json:"user_id" db:"user_id"`
-	Name        string    `json:"name" db:"name" validate:"required,min=1,max=40"`
-	Description string    `json:"description" db:"description"`
-	IsDefault   bool      `json:"is_default" db:"is_default"`
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	ID              uuid.UUID `json:"id" db:"id"`
+	UserID          uuid.UUID `json:"-" db:"user_id"`
+	Name            string    `json:"name" db:"name" validate:"required,min=1,max=40"`
+	Description     string    `json:"description" db:"description"`
+	IsDefault       bool      `json:"is_default" db:"is_default"`
+	IconURL         string    `json:"icon_url" db:"icon_url"`
+	IconAltText     string    `json:"icon_alt_text" db:"icon_alt_text"`
+	IconCommentText string    `json:"icon_comment_text" db:"icon_comment_text"`
+	CreatedAt       time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // Creatorship represents the relationship between works and their creators
@@ -173,12 +178,13 @@ type Gift struct {
 }
 
 // WorkAuthor represents an author of a work (for API responses)
+// It is shown as {id, name}: the account behind a pseud is never named.
 type WorkAuthor struct {
-	PseudID     *uuid.UUID `json:"pseud_id"`
-	PseudName   string     `json:"pseud_name"`
-	UserID      *uuid.UUID `json:"user_id"`
-	Username    string     `json:"username"`
-	IsAnonymous bool       `json:"is_anonymous"`
+	PseudID     *uuid.UUID `json:"id"`
+	PseudName   string     `json:"name"`
+	UserID      *uuid.UUID `json:"-"`
+	Username    string     `json:"-"`
+	IsAnonymous bool       `json:"-"`
 }
 
 // Bookmark represents a user's bookmark of a work

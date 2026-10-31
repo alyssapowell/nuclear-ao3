@@ -98,9 +98,9 @@ func (suite *AdminHandlersTestSuite) createTestContent() {
 	suite.Require().NoError(err)
 	suite.testWorkID = workID
 
-	// Get the pseudonym for the regular user from user_pseudonyms table (for comments)
+	// Get the pseudonym for the regular user from pseuds table (for comments)
 	var pseudID uuid.UUID
-	err = suite.db.QueryRow("SELECT id FROM user_pseudonyms WHERE user_id = $1 AND is_default = true", suite.regularUserID).Scan(&pseudID)
+	err = suite.db.QueryRow("SELECT id FROM pseuds WHERE user_id = $1 AND is_default = true", suite.regularUserID).Scan(&pseudID)
 	suite.Require().NoError(err)
 
 	// Create a comment for testing

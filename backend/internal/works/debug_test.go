@@ -38,7 +38,7 @@ func TestDatabaseConnection(t *testing.T) {
 	// Test pseudonym creation
 	testPseudID := uuid.New()
 	_, err = db.Exec(`
-		INSERT INTO user_pseudonyms (id, user_id, name, is_default, created_at)
+		INSERT INTO pseuds (id, user_id, name, is_default, created_at)
 		VALUES ($1, $2, $3, true, NOW())
 	`, testPseudID, testUserID, "TestPseud")
 	assert.NoError(t, err)
@@ -70,6 +70,6 @@ func TestDatabaseConnection(t *testing.T) {
 	// Clean up
 	db.Exec("DELETE FROM comments WHERE id = $1", commentID)
 	db.Exec("DELETE FROM works WHERE id = $1", testWorkID)
-	db.Exec("DELETE FROM user_pseudonyms WHERE id = $1", testPseudID)
+	db.Exec("DELETE FROM pseuds WHERE id = $1", testPseudID)
 	db.Exec("DELETE FROM users WHERE id = $1", testUserID)
 }
