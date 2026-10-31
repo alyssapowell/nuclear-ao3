@@ -4,7 +4,7 @@
 export interface OfflineWork {
   workId: string;
   title: string;
-  authors: Array<{ pseud_name: string; username: string }>;
+  authors: Array<{ id: string; name: string }>; // pseuds, as the API sends them
   consentLevel: 'files_and_pwa' | 'pwa_only' | 'none';
   cachedAt: number;
   expiresAt: number;

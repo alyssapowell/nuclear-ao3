@@ -13,7 +13,7 @@ import { CloudArrowDownIcon as CloudArrowDownSolidIcon } from '@heroicons/react/
 interface OfflineWork {
   workId: string;
   title: string;
-  authors: Array<{ pseud_name: string; username: string }>;
+  authors: Array<{ id: string; name: string }>; // pseuds, as the API sends them
   consentLevel: 'files_and_pwa' | 'pwa_only' | 'none';
   cachedAt: number;
   expiresAt: number;
@@ -89,7 +89,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
             return {
               ...work,
               title: `Work ${work.workId}`,
-              authors: [{ pseud_name: 'Unknown', username: 'unknown' }]
+              authors: []
             };
           }
         })
@@ -331,7 +331,7 @@ export default function OfflineReadingManager({ isOpen, onClose }: OfflineReadin
                           {work.title}
                         </h3>
                         <p className="text-sm text-gray-700 mt-1">
-                          by {work.authors.map(a => a.pseud_name).join(', ')}
+                          by {work.authors.length ? work.authors.map(a => a.name).join(', ') : 'Anonymous'}
                         </p>
                         
                         <div className="flex items-center space-x-4 mt-2 text-xs text-gray-700">

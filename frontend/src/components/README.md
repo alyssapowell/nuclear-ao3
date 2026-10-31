@@ -108,8 +108,6 @@ Toggle switch component for boolean settings.
 ### UserProfileSettings.tsx
 Comprehensive user profile management interface.
 
-### FriendsAndSocial.tsx
-Social features and friend management interface.
 
 ### BookmarkButton.tsx
 Work bookmarking functionality component.
