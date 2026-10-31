@@ -43,8 +43,7 @@ func (suite *CommentHandlersTestSuite) SetupSuite() {
 
 	// Create a minimal WorkService for testing
 	suite.workService = &WorkService{
-		db:    db,
-		redis: nil, // Redis not needed for basic tests
+		db: db,
 	}
 
 	// Setup router with comment routes

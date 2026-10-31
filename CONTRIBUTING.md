@@ -28,7 +28,7 @@ cd nuclear-ao3
 make setup
 
 # This will:
-# - Start all services (PostgreSQL, Redis)
+# - Start all services (PostgreSQL)
 # - Run database migrations
 # - Seed with test data
 # - Start all microservices
@@ -66,7 +66,7 @@ GraphQL Gateway (Node.js)
 │   (Go)      │    (Go)     │    (Go)     │    (Go)     │
 └─────────────┴─────────────┴─────────────┴─────────────┘
     ↓
-PostgreSQL + Redis
+PostgreSQL
     ↓
 Kubernetes Auto-scaling
 ```
@@ -76,7 +76,6 @@ Kubernetes Auto-scaling
 - **Backend:** Go 1.21+ with Gin framework
 - **Frontend:** Vite, React and React Router, with TypeScript and Tailwind CSS. Built to static files; no Node server in production
 - **Database:** PostgreSQL 15 with optimized schema
-- **Cache:** Redis 7 for sessions and caching
 - **Search:** Postgres full-text search, in the same database as everything else
 - **Auth:** JWT tokens with RS256 signing
 - **Deployment:** Docker + Kubernetes

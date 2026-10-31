@@ -1,9 +1,7 @@
 package tags
 
 import (
-	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -95,9 +93,6 @@ func (ts *TagService) CreateTag(c *gin.Context) {
 		UpdatedAt:     now,
 	}
 
-	// Update cache
-	ts.cacheTag(&tag)
-
 	c.JSON(http.StatusCreated, gin.H{"tag": tag})
 }
 
@@ -107,12 +102,6 @@ func (ts *TagService) GetTag(c *gin.Context) {
 	tagID, err := uuid.Parse(tagIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tag ID"})
-		return
-	}
-
-	// Try cache first
-	if tag := ts.getCachedTag(tagID); tag != nil {
-		c.JSON(http.StatusOK, gin.H{"tag": tag})
 		return
 	}
 
@@ -133,9 +122,6 @@ func (ts *TagService) GetTag(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
-
-	// Cache the result
-	ts.cacheTag(&tag)
 
 	c.JSON(http.StatusOK, gin.H{"tag": tag})
 }
@@ -248,13 +234,6 @@ func (ts *TagService) AutocompleteTags(c *gin.Context) {
 		limit = 50
 	}
 
-	// Check cache first for popular queries
-	cacheKey := fmt.Sprintf("autocomplete:%s:%s:%d", query, tagType, limit)
-	if cached := ts.getCachedAutocomplete(cacheKey); cached != nil {
-		c.JSON(http.StatusOK, gin.H{"suggestions": cached})
-		return
-	}
-
 	// Build optimized autocomplete query
 	var querySQL string
 	var args []interface{}
@@ -301,9 +280,6 @@ func (ts *TagService) AutocompleteTags(c *gin.Context) {
 		}
 		suggestions = append(suggestions, suggestion)
 	}
-
-	// Cache the results for fast subsequent requests
-	ts.cacheAutocomplete(cacheKey, suggestions)
 
 	c.JSON(http.StatusOK, gin.H{"suggestions": suggestions})
 }
@@ -505,95 +481,6 @@ func (ts *TagService) GetPopularTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
-}
-
-// =============================================================================
-// CACHE MANAGEMENT METHODS
-// =============================================================================
-
-// cacheTag stores a tag in Redis cache
-func (ts *TagService) cacheTag(tag *models.Tag) {
-	if tag == nil {
-		return
-	}
-
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("tag:%s", tag.ID)
-
-	if data, err := json.Marshal(tag); err == nil {
-		ts.redis.Set(ctx, cacheKey, data, time.Hour)
-	}
-}
-
-// getCachedTag retrieves a tag from Redis cache
-func (ts *TagService) getCachedTag(tagID uuid.UUID) *models.Tag {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("tag:%s", tagID)
-
-	data, err := ts.redis.Get(ctx, cacheKey).Result()
-	if err != nil {
-		return nil
-	}
-
-	var tag models.Tag
-	if err := json.Unmarshal([]byte(data), &tag); err != nil {
-		return nil
-	}
-
-	return &tag
-}
-
-// cacheAutocomplete stores autocomplete results in Redis cache
-func (ts *TagService) cacheAutocomplete(cacheKey string, suggestions []models.TagSuggestion) {
-	ctx := context.Background()
-
-	if data, err := json.Marshal(suggestions); err == nil {
-		ts.redis.Set(ctx, cacheKey, data, 15*time.Minute)
-	}
-}
-
-// getCachedAutocomplete retrieves autocomplete results from Redis cache
-func (ts *TagService) getCachedAutocomplete(cacheKey string) []models.TagSuggestion {
-	ctx := context.Background()
-
-	data, err := ts.redis.Get(ctx, cacheKey).Result()
-	if err != nil {
-		return nil
-	}
-
-	var suggestions []models.TagSuggestion
-	if err := json.Unmarshal([]byte(data), &suggestions); err != nil {
-		return nil
-	}
-
-	return suggestions
-}
-
-// clearWorkTagsCache clears cache entries related to work tags
-func (ts *TagService) clearWorkTagsCache(workID uuid.UUID) {
-	ctx := context.Background()
-	pattern := fmt.Sprintf("work_tags:%s*", workID)
-
-	if keys, err := ts.redis.Keys(ctx, pattern).Result(); err == nil {
-		if len(keys) > 0 {
-			ts.redis.Del(ctx, keys...)
-		}
-	}
-}
-
-// clearTagCache clears cache entries related to a specific tag
-func (ts *TagService) clearTagCache(tagID string) {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("tag:%s", tagID)
-	ts.redis.Del(ctx, cacheKey)
-
-	// Also clear autocomplete caches that might contain this tag
-	pattern := "autocomplete:*"
-	if keys, err := ts.redis.Keys(ctx, pattern).Result(); err == nil {
-		if len(keys) > 0 {
-			ts.redis.Del(ctx, keys...)
-		}
-	}
 }
 
 // =============================================================================
@@ -1530,7 +1417,6 @@ func (ts *TagService) UpdateTag(c *gin.Context) {
 	}
 
 	// Clear cache
-	ts.clearTagCache(tagID.String())
 
 	c.JSON(http.StatusOK, gin.H{"message": "Tag updated successfully"})
 }
@@ -1592,7 +1478,6 @@ func (ts *TagService) CreateSynonym(c *gin.Context) {
 	}
 
 	// Clear relevant caches
-	ts.clearTagCache(canonicalID.String())
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Synonym created successfully"})
 }

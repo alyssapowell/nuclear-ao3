@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 // Mount registers the tags routes.
@@ -123,11 +122,10 @@ func Mount(r *gin.Engine, tagService *TagService, d *platform.Deps) {
 
 // TagService holds all dependencies for tag management
 type TagService struct {
-	db    *sql.DB
-	redis *redis.Client
+	db *sql.DB
 }
 
-// New builds the tag service on top of the shared database and Redis.
-func New(db *sql.DB, rdb *redis.Client) *TagService {
-	return &TagService{db: db, redis: rdb}
+// New builds the tag service on top of the shared database.
+func New(db *sql.DB) *TagService {
+	return &TagService{db: db}
 }

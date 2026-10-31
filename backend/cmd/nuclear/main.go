@@ -5,7 +5,6 @@
 // important ones:
 //
 //	DATABASE_URL       Postgres connection string
-//	REDIS_URL          Redis host:port
 //	PORT               where the API listens (default 8080)
 //	METRICS_ADDR       where Prometheus metrics are served (default :9091);
 //	                   keep this port private
@@ -122,18 +121,14 @@ func main() {
 	}
 
 	// Auth comes first: everything else checks logins through it.
-	// Redis databases are numbered per area so cache keys can't collide.
 	var authSvc *auth.AuthService
 	deps := platform.NewDeps(db, func(token string) (uuid.UUID, error) { return authSvc.ValidateUserToken(token) })
 	defer deps.Close()
 
-	if err := deps.Redis(0).Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("startup: Redis not reachable: %v", err)
-	}
-	if authSvc, err = auth.New(db, deps.Redis(0)); err != nil {
+	if authSvc, err = auth.New(db); err != nil {
 		log.Fatalf("startup: %v", err)
 	}
-	worksSvc, err := works.New(db, deps.Redis(1))
+	worksSvc, err := works.New(db)
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
@@ -162,7 +157,7 @@ func main() {
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
 		works:  worksSvc,
-		tags:   tags.New(db, deps.Redis(2)),
+		tags:   tags.New(db),
 		notify: notifySvc,
 		export: exportSvc,
 		search: searchSvc,
@@ -175,6 +170,7 @@ func main() {
 	go serveMetrics(platform.Env("METRICS_ADDR", ":9091"))
 
 	stopWorkers := startWorkers(db, mail)
+	stopHits := worksSvc.StartHitFlusher()
 
 	srv := &http.Server{
 		Addr:              ":" + platform.Env("PORT", "8080"),
@@ -201,6 +197,8 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+	// After the server stops, so views from the last requests are counted.
+	stopHits()
 	stopWorkers()
 }
 

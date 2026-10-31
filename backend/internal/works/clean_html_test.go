@@ -8,10 +8,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
 	"nuclear-ao3/internal/testdb"
-	"nuclear-ao3/shared/cache"
 )
 
 const dirty = `<p>hi</p><img src=x onerror=alert(1)><script>alert(2)</script><a href="javascript:alert(3)" onclick="x()">link</a>`
@@ -36,9 +34,7 @@ func TestHandlersStoreCleanedHTML(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The handlers clear cache entries; nothing listens on this port, so they
-	// find nothing to clear.
-	ws := &WorkService{db: db, cache: cache.NewCache(redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"}), "test")}
+	ws := &WorkService{db: db}
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set("user_id", userID.String()) })
 	r.POST("/works", ws.CreateWork)

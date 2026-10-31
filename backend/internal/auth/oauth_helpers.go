@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -63,21 +64,23 @@ func (as *AuthService) authenticateClient(clientID, clientSecret string, r *http
 func (as *AuthService) storeAuthorizationRequest(req models.AuthorizeRequest) string {
 	requestID := uuid.New().String()
 
-	// Store in Redis with 10 minute expiry
+	// Kept for 10 minutes
 	reqJSON, _ := json.Marshal(req)
-	as.redis.Set(context.Background(), fmt.Sprintf("auth_req:%s", requestID), reqJSON, time.Minute*10)
+	if err := as.putPending(context.Background(), "auth_req:"+requestID, reqJSON); err != nil {
+		log.Printf("oauth: store authorization request: %v", err)
+	}
 
 	return requestID
 }
 
 func (as *AuthService) getAuthorizationRequest(requestID string) (*models.AuthorizeRequest, error) {
-	reqJSON, err := as.redis.Get(context.Background(), fmt.Sprintf("auth_req:%s", requestID)).Result()
+	reqJSON, err := as.getPending(context.Background(), "auth_req:"+requestID)
 	if err != nil {
 		return nil, err
 	}
 
 	var req models.AuthorizeRequest
-	if err := json.Unmarshal([]byte(reqJSON), &req); err != nil {
+	if err := json.Unmarshal(reqJSON, &req); err != nil {
 		return nil, err
 	}
 
@@ -103,29 +106,7 @@ func (as *AuthService) getAuthenticatedUser(c *gin.Context) *uuid.UUID {
 		}
 	}
 
-	// Check session cookie
-	if sessionID, err := c.Cookie("session_id"); err == nil {
-		if userID := as.getUserFromSession(sessionID); userID != nil {
-			return userID
-		}
-	}
-
 	return nil
-}
-
-func (as *AuthService) getUserFromSession(sessionID string) *uuid.UUID {
-	// Get user ID from Redis session
-	userIDStr, err := as.redis.Get(context.Background(), fmt.Sprintf("session:%s", sessionID)).Result()
-	if err != nil {
-		return nil
-	}
-
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		return nil
-	}
-
-	return &userID
 }
 
 // Consent management
@@ -173,7 +154,11 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 	}
 
 	consentJSON, _ := json.Marshal(consentData)
-	as.redis.Set(context.Background(), fmt.Sprintf("consent:%s", consentID), consentJSON, time.Minute*10)
+	if err := as.putPending(context.Background(), "consent:"+consentID, consentJSON); err != nil {
+		log.Printf("oauth: store consent request: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start consent"})
+		return
+	}
 
 	// For test mode, automatically approve consent; in production, render HTML
 	if gin.Mode() == gin.TestMode {
@@ -197,7 +182,7 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 
 func (as *AuthService) processConsent(c *gin.Context, consentID string, approved bool) {
 	// Get consent data
-	consentJSON, err := as.redis.Get(context.Background(), fmt.Sprintf("consent:%s", consentID)).Result()
+	consentJSON, err := as.getPending(context.Background(), "consent:"+consentID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent request"})
 		return
@@ -209,7 +194,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		Scopes           []string                `json:"scopes"`
 		AuthorizeRequest models.AuthorizeRequest `json:"authorize_request"`
 	}
-	if err := json.Unmarshal([]byte(consentJSON), &consentData); err != nil {
+	if err := json.Unmarshal(consentJSON, &consentData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent data"})
 		return
 	}
@@ -227,8 +212,12 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		c.JSON(http.StatusForbidden, gin.H{"error": "This consent request belongs to another user"})
 		return
 	}
-	// Each consent request can be answered once.
-	as.redis.Del(context.Background(), fmt.Sprintf("consent:%s", consentID))
+	// Each consent request can be answered once. If a second answer got here
+	// first, there is nothing left to take.
+	if _, err := as.takePending(context.Background(), "consent:"+consentID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent request"})
+		return
+	}
 
 	if !approved {
 		// User denied consent

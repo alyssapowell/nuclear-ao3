@@ -24,7 +24,6 @@ It runs everything in `docker-compose.yml` on that one machine, including monito
 |---|---|---|
 | app (the whole backend) | about 25 MB idle | **measured** with a small database; grows with traffic |
 | Postgres | about 1 GB | **estimate**: `shared_buffers` is 256 MB, plus connections and the operating system's file cache, which Postgres relies on |
-| Redis | at most 256 MB | capped in `docker-compose.yml` |
 | Prometheus | about 200 to 400 MB | **estimate** for 30 days of this app's metrics |
 | Grafana | about 100 to 200 MB | **estimate** |
 | Caddy, node-exporter | under 100 MB together | **estimate** |
@@ -37,7 +36,7 @@ The app itself is one 33 MB program (**measured**), and the website is 1.4 MB of
 Even the smallest archive needs all of the following. Without them, problems are found by readers instead of by you, and some can't be fixed afterwards.
 
 1. **The database on a disk that survives restarts.** It's the `postgres_data` volume. Never run Postgres on a disk that's thrown away when the machine is replaced.
-2. **Backups that leave the server.** The **ops-backup** workflow runs every day and keeps the newest 14 on the server, but a copy on the same machine is lost with the machine. Copy `backups/` somewhere else every day: another provider's object storage, or another machine. **This copy isn't automated yet.**
+2. **Backups that leave the server.** The **ops-backup** workflow runs every day and keeps the newest 14 on the server, but a copy on the same machine is lost with the machine. Set up the off-server copy (docs/BACKUPS.md): every backup is then encrypted and copied to storage at another company, and the daily run goes red if the copy fails. Until it's set up, **ops-diagnose** reports it as a problem every day.
 3. **A restore you have actually done.** Once a month, restore the latest backup onto a spare machine with **ops-restore**, and check that the site works. A backup that has never been restored can't be trusted.
 4. **The signing key, saved away from the server** (see "Set up the signing key" in docs/RUNBOOK.md). It isn't in the backups on purpose.
 5. **Logs kept for a while, with a limit.** Every service keeps about 100 MB of logs (5 files of 20 MB), which is days to weeks on a small site. That's enough to see what happened before a problem, and can't fill the disk.

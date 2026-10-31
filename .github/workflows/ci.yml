@@ -28,16 +28,6 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
     
     steps:
       - name: Checkout code
@@ -94,7 +84,6 @@ jobs:
         working-directory: backend
         env:
           TEST_DATABASE_URL: "postgres://ao3_user:ao3_password@localhost:5432/ao3_nuclear_test?sslmode=disable"
-          TEST_REDIS_URL: "localhost:6379"
         run: go test ./... -v -race -coverprofile=coverage.out
 
       - name: Upload coverage
@@ -189,7 +178,7 @@ jobs:
         run: |
           echo "🧪 Testing docker-compose startup..."
           # Start infrastructure services first
-          docker-compose up -d postgres redis
+          docker-compose up -d postgres
           
           # Wait for databases to be ready
           echo "⏳ Waiting for databases..."
@@ -326,9 +315,6 @@ jobs:
           
           # Test PostgreSQL
           docker-compose exec -T postgres psql -U ao3_user -d ao3_nuclear -c "SELECT version();" || echo "PostgreSQL test failed"
-          
-          # Test Redis
-          docker-compose exec -T redis redis-cli ping || echo "Redis test failed"
           
 
       - name: Cleanup

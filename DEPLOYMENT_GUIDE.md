@@ -97,7 +97,7 @@ POSTGRES_PASSWORD=your-secure-password
 ```bash
 # Start infrastructure services
 cd /opt/nuclear-ao3
-docker-compose up -d postgres redis
+docker-compose up -d postgres
 
 # Wait for services to be ready
 sleep 30

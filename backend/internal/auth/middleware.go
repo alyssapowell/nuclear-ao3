@@ -1,16 +1,12 @@
 package auth
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 // Rate limiting types and constants
@@ -48,9 +44,15 @@ type RateLimitHeaders struct {
 	Tier      string `json:"tier"`
 }
 
+// RateLimitManager counts requests per client in memory. Each copy of the
+// app enforces the limits on its own.
 type RateLimitManager struct {
-	redisClient *redis.Client
+	counter     *windowCounter
 	serviceName string
+}
+
+func newRateLimitManager(serviceName string) *RateLimitManager {
+	return &RateLimitManager{counter: newWindowCounter(maxRateLimitKeys), serviceName: serviceName}
 }
 
 // Helper functions for rate limiting
@@ -158,54 +160,18 @@ func (rlm *RateLimitManager) CheckRateLimit(clientInfo *ClientRateLimitInfo, cli
 }
 
 func (rlm *RateLimitManager) checkLimitWithConfig(key string, config RateLimitConfig) (*RateLimitHeaders, error) {
-	ctx := context.Background()
-	now := time.Now()
-	windowStart := now.Truncate(config.Window)
-	windowEnd := windowStart.Add(config.Window)
-
-	pipe := rlm.redisClient.Pipeline()
-	countCmd := pipe.Get(ctx, key)
-	_, err := pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
-		log.Printf("Redis error in rate limiting: %v", err)
-		return &RateLimitHeaders{
-			Limit:     config.Requests,
-			Remaining: config.Requests - 1,
-			Reset:     windowEnd.Unix(),
-			Tier:      string(config.Tier),
-		}, nil
-	}
-
-	currentCount := 0
-	if countStr, err := countCmd.Result(); err == nil {
-		if count, parseErr := strconv.Atoi(countStr); parseErr == nil {
-			currentCount = count
-		}
-	}
-
-	if currentCount >= config.Requests {
-		return &RateLimitHeaders{
-			Limit:     config.Requests,
-			Remaining: 0,
-			Reset:     windowEnd.Unix(),
-			Tier:      string(config.Tier),
-		}, fmt.Errorf("rate limit exceeded")
-	}
-
-	pipe = rlm.redisClient.Pipeline()
-	pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, config.Window)
-	_, err = pipe.Exec(ctx)
-	if err != nil {
-		log.Printf("Redis error incrementing rate limit: %v", err)
-	}
-
-	return &RateLimitHeaders{
+	used, windowEnd, allowed := rlm.counter.hit(key, config.Requests, config.Window)
+	headers := &RateLimitHeaders{
 		Limit:     config.Requests,
-		Remaining: config.Requests - currentCount - 1,
+		Remaining: config.Requests - used - 1,
 		Reset:     windowEnd.Unix(),
 		Tier:      string(config.Tier),
-	}, nil
+	}
+	if !allowed {
+		headers.Remaining = 0
+		return headers, fmt.Errorf("rate limit exceeded")
+	}
+	return headers, nil
 }
 
 // JWTAuthMiddleware validates JWT tokens
@@ -253,10 +219,7 @@ func JWTAuthMiddleware(authService *AuthService) gin.HandlerFunc {
 // visitors, each IP) can make requests. The IP comes from gin's ClientIP,
 // which only believes X-Forwarded-For from trusted proxies (see main).
 func (as *AuthService) RateLimitMiddleware() gin.HandlerFunc {
-	rateLimitManager := &RateLimitManager{
-		redisClient: as.redis,
-		serviceName: "app",
-	}
+	rateLimitManager := newRateLimitManager("app")
 
 	return func(c *gin.Context) {
 		if gin.Mode() == gin.TestMode {

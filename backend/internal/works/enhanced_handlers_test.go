@@ -308,12 +308,6 @@ func setupTestDatabase() interface{} {
 	return nil
 }
 
-func setupTestRedis() interface{} {
-	// This would set up a test Redis connection
-	// For now, return nil and handle in individual tests
-	return nil
-}
-
 func createTestUser() uuid.UUID {
 	// Helper to create test user
 	return uuid.New()

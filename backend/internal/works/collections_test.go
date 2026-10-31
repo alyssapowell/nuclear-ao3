@@ -37,7 +37,7 @@ func (suite *CollectionsTestSuite) SetupSuite() {
 	// Clean up any existing test data
 	suite.config.CleanupTestData()
 
-	suite.workService = &WorkService{db: suite.db, redis: nil}
+	suite.workService = &WorkService{db: suite.db}
 
 	gin.SetMode(gin.TestMode)
 	suite.router = gin.New()

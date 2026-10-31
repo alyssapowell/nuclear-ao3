@@ -6,7 +6,6 @@ This guide helps you test the Nuclear AO3 authentication service OAuth2/OIDC imp
 
 ### Prerequisites
 - PostgreSQL running (`brew services start postgresql`)
-- Redis running (`brew services start redis`)
 - Go 1.25+ installed
 
 ### Starting the Service
@@ -21,7 +20,6 @@ cd nuclear-ao3/backend/auth-service
 ```bash
 cd nuclear-ao3/backend/auth-service
 export DATABASE_URL="postgres://$(whoami)@localhost/ao3_nuclear_test?sslmode=disable"
-export REDIS_URL="localhost:6379" 
 export BASE_URL="http://localhost:8081"
 export GIN_MODE="debug"
 export PORT="8081"
@@ -279,14 +277,9 @@ SELECT client_id, client_name, is_public, scopes FROM oauth_clients;
 SELECT token, user_id, client_id, scopes, expires_at FROM oauth_access_tokens WHERE is_revoked = false;
 ```
 
-### Redis Inspection
-```bash
-# Connect to Redis
-redis-cli
-
-# View stored data
-KEYS *
-GET "consent:some-id"
+### Pending consent and sign-in requests
+```sql
+SELECT key, expires_at FROM oauth_pending WHERE expires_at > now();
 ```
 
 ## 🚨 Common Issues

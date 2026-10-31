@@ -323,7 +323,7 @@ class TestRunner:
             container_output = result.stdout
             required_containers = [
                 "ao3_api_gateway", "ao3_work_service", "ao3_auth_service",
-                "ao3_tag_service", "ao3_search_service", "ao3_postgres", "ao3_redis"
+                "ao3_tag_service", "ao3_search_service", "ao3_postgres"
             ]
             
             all_running = True

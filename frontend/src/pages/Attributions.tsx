@@ -56,14 +56,6 @@ export default function AttributionsPage() {
         publisher: 'PostgreSQL Global Development Group',
         description: 'Pure Go Postgres driver for database connectivity'
       },
-      'redis': {
-        name: 'Redis Go Client',
-        version: 'v9.2.1',
-        licenses: 'BSD-2-Clause',
-        repository: 'https://github.com/redis/go-redis',
-        publisher: 'Redis Ltd.',
-        description: 'Go client for Redis database'
-      },
       'jwt': {
         name: 'JWT Go Library',
         version: 'v5.0.0',

@@ -45,25 +45,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis for caching and sessions
-  redis:
-    logging: *logging
-    image: redis:7.4.2-alpine
-    container_name: nuclear-ao3-redis
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    # Redis only holds caches and rate-limit counters; a snapshot now and
-    # then is enough. Settings are here so no extra config file is needed.
-    command: ["redis-server", "--save", "300", "1", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # The whole backend: accounts, works, tags, search, notifications, exports.
   # One program, one port. Only Caddy talks to it from outside.
   app:
@@ -75,7 +56,6 @@ services:
       - PORT=8080
       - METRICS_ADDR=:9091
       - DATABASE_URL=postgres://${POSTGRES_USER:-ao3_user}:${POSTGRES_PASSWORD:-ao3_password}@postgres:5432/${POSTGRES_DB:-ao3_nuclear}?sslmode=disable
-      - REDIS_URL=redis:6379
       - JWT_ISSUER=nuclear-ao3
       - SIGNING_KEY_FILE=${SIGNING_KEY_FILE:-}
       - SIGNING_KEY_PREVIOUS_FILES=${SIGNING_KEY_PREVIOUS_FILES:-}
@@ -101,8 +81,6 @@ services:
       - "127.0.0.1:8088:8080"
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       smtp:
         condition: service_started
@@ -238,9 +216,6 @@ volumes:
   postgres_data:      # 20-50GB - Database 
     driver: local
   backup_data:       # 50-100GB - Backups
-    driver: local
-  
-  redis_data:        # caches and rate-limit counters
     driver: local
 
   # Prometheus numbers (30 days) and Grafana's own database

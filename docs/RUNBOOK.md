@@ -71,6 +71,8 @@ It takes a safety backup of the current database first, stops the app, loads the
 
 Manual steps: there is no safe hand-made version of this. Use `make ops-restore` on the server; it is the same script the workflow runs.
 
+If the server is gone and the backup is only off-server, fetch it first: see "Restoring onto a fresh server from off-server alone" in docs/BACKUPS.md.
+
 ### Log everyone out
 
 Use this after a password leak, or when you aren't sure who is logged in. Run the **ops-logout-everyone** workflow (Actions tab -> ops-logout-everyone -> Run workflow; `make ops-logout-everyone` on the server). Or the **ops-logout-user** workflow (`make ops-logout-user USER=name`) for one account. It ends all login sessions, OAuth tokens, unused authorization codes and app permissions, so people and connected apps have to log in again. The summary shows the counts. These need a reviewer's approval on GitHub.
@@ -197,6 +199,20 @@ The alerts "HighErrorRate" and "SlowResponses" lead here.
 3. Check "Database connections". If "in use" stays at "allowed", the database is the bottleneck: look for a long-running query, or restart the app with `docker-compose restart app`.
 4. Check "App memory" and the disk. If the server is out of either, free some or move to a bigger server.
 5. If it began right after an upgrade, run the **ops-upgrade** workflow with the previous version to go back.
+
+### Off-server backup problems
+
+The daily **ops-backup** run went red, or **ops-diagnose** reported a problem with the off-server backup. The backup on the server is still saved; the off-server copy didn't happen. Open the run's summary: it shows restic's own message.
+
+- "access denied" or "unable to open repository": the storage login in `secrets/offsite.env` is wrong, expired or missing permissions, or `OFFSITE_REPOSITORY` is mistyped.
+- "wrong password" or "no key could be found": `secrets/offsite-password` isn't the password the repository was created with. Put back your saved copy. **Never run `make offsite-init` again for a repository that already exists.**
+- Network or timeout errors: usually temporary. Run **ops-backup** again from the Actions tab.
+- "the weekly integrity check found a problem": the stored backups may be damaged. Set up a new repository (a new bucket or path, then `make offsite-init`), take a fresh backup, and keep the old repository until you're sure.
+- "Off-server backup is not set up": follow docs/BACKUPS.md.
+
+Fix the cause, then run **ops-backup** again. Until it's green, the newest backup exists only on this server.
+
+If the off-server password is lost and the server is gone, nobody can read those backups, including you. Set up a new repository and start again. This is why the password has to be saved somewhere other than the server.
 
 ### Search doesn't find a work
 

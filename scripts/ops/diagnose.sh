@@ -10,7 +10,7 @@ echo "# Diagnose"
 # --- containers
 h2 "Containers"
 states=""
-for svc in postgres redis app caddy smtp; do
+for svc in postgres app caddy smtp; do
 	id=$(compose ps -q "$svc" 2>/dev/null | head -n 1 || true)
 	if [ -z "$id" ]; then
 		state="not created"
@@ -86,6 +86,22 @@ else
 	para "\`$(basename "$newest")\`, $age_h hour(s) old."
 	if [ "$age_h" -gt 36 ]; then
 		problem "The newest backup is $age_h hours old." "back-up-the-database"
+	fi
+fi
+
+# --- off-server backup
+h2 "Off-server backup"
+if [ -z "$(env_get OFFSITE_REPOSITORY)" ]; then
+	para "Not set up: backups exist only on this server."
+	problem "Off-server backup is not set up, so losing this server would lose every backup." "off-server-backup-problems"
+else
+	offsite_age=$("$(dirname "${BASH_SOURCE[0]}")/offsite-list.sh" --newest-age-hours 2>/dev/null) || offsite_age=""
+	if [ -z "$offsite_age" ]; then
+		problem "Couldn't read the off-server backup repository, or it has no backups yet." "off-server-backup-problems"
+	elif [ "$offsite_age" -gt 36 ]; then
+		problem "The newest off-server backup is $offsite_age hours old." "off-server-backup-problems"
+	else
+		para "Newest off-server backup: $offsite_age hour(s) old."
 	fi
 fi
 

@@ -114,7 +114,7 @@ func (info *ClientRateLimitInfo) GetRateLimitConfig() RateLimitConfig {
 	return configs[tier]
 }
 
-// GenerateRateLimitKey creates a consistent rate limiting key for Redis
+// GenerateRateLimitKey creates a consistent rate limiting key
 func (info *ClientRateLimitInfo) GenerateRateLimitKey() string {
 	tier := info.DetermineRateLimitTier()
 

@@ -41,10 +41,8 @@ func (suite *AdminHandlersTestSuite) SetupSuite() {
 	// Clean up any existing test data
 	suite.config.CleanupTestData()
 
-	// Create work service (we can pass nil for redis since we're not testing caching)
 	suite.workService = &WorkService{
-		db:    suite.db,
-		redis: nil, // Not testing cache functionality
+		db: suite.db,
 	}
 
 	suite.createTestUsers()

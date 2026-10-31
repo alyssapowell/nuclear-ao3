@@ -124,7 +124,7 @@ Runs on every pull request to `main`:
 ┌─────────────────────────────────────────────────────────┐
 │ Integration Tests                                       │
 ├─────────────────────────────────────────────────────────┤
-│ • Database connectivity (Postgres, Redis, ES)           │
+│ • Database connectivity (Postgres)           │
 │ • Service health endpoints                              │
 │ • API Gateway routing                                   │
 │ • Frontend accessibility                                │
@@ -196,7 +196,6 @@ test('BookmarkButton renders correctly', () => {
 # Backend
 - Go 1.21+
 - PostgreSQL 15+
-- Redis 7+
 
 # Frontend
 - Node.js 20+

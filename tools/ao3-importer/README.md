@@ -452,7 +452,6 @@ monitoring:
 
 ### **System Requirements**
 - [ ] PostgreSQL 15+ running with sufficient disk space (2x source data)
-- [ ] Redis 7+ for temporary caching during migration  
 - [ ] Sufficient RAM (recommend 32GB+ for large migrations)
 - [ ] Network bandwidth to source database (1Gbps+ recommended)
 - [ ] Backup of source database before migration

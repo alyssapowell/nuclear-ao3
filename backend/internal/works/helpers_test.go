@@ -3,7 +3,6 @@ package works
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	"nuclear-ao3/internal/platform"
 )
@@ -16,13 +15,13 @@ func setupRouter(ws *WorkService) *gin.Engine {
 	return r
 }
 
-// NewWorkService connects to the test database and Redis, for tests.
+// NewWorkService connects to the test database, for tests.
 func NewWorkService() *WorkService {
 	db, err := platform.OpenDB()
 	if err != nil {
 		panic(err)
 	}
-	ws, err := New(db, redis.NewClient(&redis.Options{Addr: platform.Env("REDIS_URL", "localhost:6379"), DB: 1}))
+	ws, err := New(db)
 	if err != nil {
 		panic(err)
 	}
@@ -31,5 +30,4 @@ func NewWorkService() *WorkService {
 
 func (ws *WorkService) Close() {
 	ws.db.Close()
-	ws.redis.Close()
 }

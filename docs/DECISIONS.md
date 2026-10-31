@@ -8,6 +8,23 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: Redis removed
+
+**Decision:** The stack is Postgres, the app and Caddy (plus monitoring). Redis is gone.
+
+**Why:** Nothing used its speed. It held rate-limit counters, ten-minute OAuth prompts and two small caches in front of queries Postgres answers in milliseconds. It was still a service to run, back up, size and keep healthy, and the app refused to start without it.
+
+**What replaced each use:**
+- **Rate limits:** counters in the app's memory (`internal/auth/ratelimit.go`). Fixed windows per client, the same limits and `X-RateLimit-*` headers as before. Idle keys are dropped every minute, and at most 100,000 keys are tracked; when that is full the least recently used are dropped, and requests are never refused for it.
+- **OAuth sign-in and consent state:** the `oauth_pending` table (migration 032), with an expiry time of ten minutes. Writes are upserts, expired rows are ignored when read, a consent is used up with `DELETE ... RETURNING` so it can only be answered once, and the jobs cleanup removes old rows. The `session:<id>` cookie lookup was removed because nothing ever wrote that key.
+- **Tag and work caches:** removed. Handlers query Postgres directly, and so the invalidation code is gone too.
+- **Work view counts:** counted in memory and added to `work_statistics.hits` in one batched statement every 30 seconds and on shutdown. The old per-view write named a column (`collections`) that does not exist, so it failed and no views were recorded; the new write works.
+
+**Cost:**
+- **Each copy of the app enforces rate limits on its own.** With N copies behind Caddy, a client can make up to N times the limit. A restart gives every client a fresh window. For one server this changes nothing. If copies are added, lower the limits to match.
+- A crash loses up to 30 seconds of view counts.
+- Pages are never served from a cache, so every read goes to Postgres.
+
 ## 2026-10-30: User HTML follows AO3's allowlist, is cleaned when saved, and cleaned again in the browser
 
 **Decision:** The tags, attributes and link protocols users may use in summaries, notes, chapters, comments and profiles are AO3's (`config/initializers/gem-plugin_config/sanitizer_config.rb`): no scripts, event handlers, `style`, `iframe`, `object`, `embed` or `form`, and links get `rel="nofollow noopener"`. One Go policy, `internal/html`, cleans every such field when it is created or updated, so the database only ever holds clean HTML. Rows saved before that are cleaned by a background job queued by migration 031. The job rewrites a row only if cleaning changes it, and does not touch `updated_at` or send notifications: the triggers that do those things skip work while the job's transaction has `nuclear.maintenance` set. The browser cleans again with DOMPurify, configured with the same list, in `frontend/src/lib/safeHtml.ts`; every place that shows HTML goes through it, and a test fails if any other file uses `dangerouslySetInnerHTML`.

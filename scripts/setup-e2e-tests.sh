@@ -35,13 +35,6 @@ while ! docker-compose exec -T db pg_isready -h localhost -p 5432 -U ao3_user; d
     sleep 1
 done
 
-# Check if Redis is ready
-echo "🔴 Checking Redis connection..."
-if ! docker-compose exec -T redis redis-cli ping >/dev/null 2>&1; then
-    echo "❌ Redis is not responding"
-    exit 1
-fi
-
 # Check if backend services are ready
 echo "🔧 Checking backend services..."
 services=("auth-service:8081" "work-service:8082" "tag-service:8083" "search-service:8084" "api-gateway:8080")

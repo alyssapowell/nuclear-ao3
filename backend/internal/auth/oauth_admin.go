@@ -25,8 +25,8 @@ func (as *AuthService) GetJWKS(c *gin.Context) {
 func (as *AuthService) ShowConsent(c *gin.Context) {
 	consentID := c.Param("consent_id")
 
-	// Get consent data from Redis
-	consentJSON, err := as.redis.Get(c.Request.Context(), "consent:"+consentID).Result()
+	// Get consent data
+	consentJSON, err := as.getPending(c.Request.Context(), "consent:"+consentID)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"Error": "Consent request not found or expired",
@@ -37,7 +37,7 @@ func (as *AuthService) ShowConsent(c *gin.Context) {
 	// Render consent screen (this would be a proper HTML template)
 	c.HTML(http.StatusOK, "consent.html", gin.H{
 		"ConsentID": consentID,
-		"Data":      consentJSON,
+		"Data":      string(consentJSON),
 	})
 }
 

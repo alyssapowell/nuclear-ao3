@@ -11,7 +11,7 @@ All persistent data is stored in **5 Docker volumes** to minimize cloud provider
 | `postgres_data` | **Database only** | **20-50GB** | €2-5/month | ~1-5GB/month |
 | `es_data` | **Search indexes only** | **10-20GB** | €1-2/month | ~500MB/month |
 | `backup_data` | **Backups only** | **50-100GB** | €5-10/month | ~2-10GB/month |
-| `monitoring_data` | **Shared**: Redis + Prometheus + Grafana + Loki | **20GB** | €2/month | ~1.5GB/month |
+| `monitoring_data` | **Shared**: Prometheus + Grafana + Loki | **20GB** | €2/month | ~1.5GB/month |
 | `config_data` | **Shared**: Caddy SSL + config + logs | **10GB** | €1/month | ~100MB/month |
 
 **\*Hetzner pricing: ~€0.10/GB/month for Block Storage*
@@ -19,7 +19,6 @@ All persistent data is stored in **5 Docker volumes** to minimize cloud provider
 ### **Shared Volume Contents**
 
 **`monitoring_data` (20GB shared):**
-- Redis cache/sessions (~2-5GB)
 - Prometheus metrics (~10GB)  
 - Grafana dashboards (~500MB)
 - Loki logs (~5-10GB)
@@ -125,7 +124,7 @@ CPX41: 8 vCPU, 16GB RAM, 240GB SSD
 Backups are automatically retained for **30 days** by default:
 
 ```
-Backup Size = (PostgreSQL + Redis) × 30 days
+Backup Size = PostgreSQL × 30 days
 Small:  (500MB + 50MB + 200MB) × 30 = ~22GB
 Medium: (2.5GB + 200MB + 1GB) × 30 = ~110GB  
 Large:  (7.5GB + 500MB + 3GB) × 30 = ~330GB

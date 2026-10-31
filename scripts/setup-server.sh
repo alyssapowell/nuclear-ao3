@@ -268,7 +268,6 @@ docker exec nuclear-ao3-postgres pg_dump -U ao3_user ao3_nuclear | gzip > $BACKU
 
 # Backup Docker volumes
 docker run --rm -v nuclear-ao3_postgres_data:/data -v $BACKUP_DIR:/backup ubuntu tar czf /backup/postgres_data_$DATE.tar.gz -C /data .
-docker run --rm -v nuclear-ao3_redis_data:/data -v $BACKUP_DIR:/backup ubuntu tar czf /backup/redis_data_$DATE.tar.gz -C /data .
 
 # Export running containers (for restore reference)
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}" > $BACKUP_DIR/containers_$DATE.txt

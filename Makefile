@@ -12,7 +12,7 @@ help: ## Show this help message
 # Database Management
 db-status: ## Check database status and connection
 	@echo "🔍 Checking database status..."
-	@docker-compose ps postgres redis
+	@docker-compose ps postgres
 	@echo "\n📊 Database statistics:"
 	@docker exec nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -c "\
 		SELECT 'Users' as table, COUNT(*) as count FROM users \
@@ -25,12 +25,12 @@ db-flush: ## Completely flush all databases (DESTRUCTIVE)
 	@echo "⚠️  This will DELETE ALL DATA. Press Ctrl+C to cancel, Enter to continue..."
 	@read
 	@docker-compose down
-	@docker volume rm nuclear-ao3_postgres_data nuclear-ao3_redis_data 2>/dev/null || true
+	@docker volume rm nuclear-ao3_postgres_data 2>/dev/null || true
 	@echo "✅ Databases flushed"
 
 db-start: ## Start database services only
 	@echo "🚀 Starting database services..."
-	@docker-compose up -d postgres redis
+	@docker-compose up -d postgres
 	@echo "⏳ Waiting for services to be healthy..."
 	@sleep 15
 	@make db-status
@@ -272,3 +272,15 @@ version: ## Show version information
 	@echo "Docker Compose version: $(shell docker-compose --version)"
 	@echo "Node.js version: $(shell node --version 2>/dev/null || echo 'Not installed')"
 	@echo "Go version: $(shell go version 2>/dev/null || echo 'Not installed')"
+
+# Off-server backups (docs/BACKUPS.md). Run these on the server.
+.PHONY: offsite-init offsite-list offsite-fetch
+offsite-init: ## One-time: create the encrypted off-server backup repository
+	@scripts/ops/offsite-init.sh
+
+offsite-list: ## List the backups stored off-server
+	@scripts/ops/offsite-list.sh
+
+offsite-fetch: ## Bring a backup back from off-server: make offsite-fetch ID=<snapshot-id|latest>
+	@if [ -z "$(ID)" ]; then echo "usage: make offsite-fetch ID=<snapshot-id or latest> (see make offsite-list)"; exit 1; fi
+	@scripts/ops/offsite-fetch.sh "$(ID)"

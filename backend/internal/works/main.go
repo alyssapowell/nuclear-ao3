@@ -6,10 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 
 	"nuclear-ao3/internal/platform"
-	"nuclear-ao3/shared/cache"
 	"nuclear-ao3/shared/notifications"
 )
 
@@ -26,12 +24,12 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 		legacy.Use(d.OptionalUser)
 		{
 			legacy.GET("", workService.SearchWorks)                              // GET /api/v1/works?q=search&fandom=HP (browse/search)
-			legacy.GET("/:work_id", workService.CachedGetWork)                   // GET /api/v1/works/123 or /works/uuid (redirects legacy IDs)
+			legacy.GET("/:work_id", workService.GetWorkWithAuthors)              // GET /api/v1/works/123 or /works/uuid (redirects legacy IDs)
 			legacy.GET("/:work_id/chapters", workService.GetChapters)            // GET /api/v1/works/123/chapters
 			legacy.GET("/:work_id/chapters/:chapter_id", workService.GetChapter) // GET /api/v1/works/123/chapters/1
 			legacy.GET("/:work_id/comments", workService.GetComments)            // GET /api/v1/works/123/comments
 			legacy.GET("/:work_id/kudos", workService.GetKudos)                  // GET /api/v1/works/123/kudos
-			legacy.GET("/:work_id/stats", workService.CachedGetWorkStats)        // GET /api/v1/works/123/stats
+			legacy.GET("/:work_id/stats", workService.GetWorkStats)              // GET /api/v1/works/123/stats
 			legacy.POST("/:work_id/comments", workService.CreateComment)         // POST /api/v1/works/123/comments (guest + auth comments)
 		}
 
@@ -39,12 +37,12 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 		modern := api.Group("/work")
 		modern.Use(d.OptionalUser)
 		{
-			modern.GET("/:work_id", workService.CachedGetWork)                   // GET /api/v1/work/{uuid} (permanent)
+			modern.GET("/:work_id", workService.GetWorkWithAuthors)              // GET /api/v1/work/{uuid} (permanent)
 			modern.GET("/:work_id/chapters", workService.GetChapters)            // GET /api/v1/work/{uuid}/chapters
 			modern.GET("/:work_id/chapters/:chapter_id", workService.GetChapter) // GET /api/v1/work/{uuid}/chapters/{uuid}
 			modern.GET("/:work_id/comments", workService.GetComments)            // GET /api/v1/work/{uuid}/comments
 			modern.GET("/:work_id/kudos", workService.GetKudos)                  // GET /api/v1/work/{uuid}/kudos
-			modern.GET("/:work_id/stats", workService.CachedGetWorkStats)        // GET /api/v1/work/{uuid}/stats
+			modern.GET("/:work_id/stats", workService.GetWorkStats)              // GET /api/v1/work/{uuid}/stats
 			modern.POST("/:work_id/comments", workService.CreateComment)         // POST /api/v1/work/{uuid}/comments (guest + auth comments)
 		}
 
@@ -173,21 +171,18 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 // WorkService holds all dependencies for work management
 type WorkService struct {
 	db                  *sql.DB
-	redis               *redis.Client
-	cache               *cache.Cache
+	hits                hitCounter
 	notificationService *notifications.NotificationService
 }
 
-// New builds the works service on top of the shared database and Redis.
+// New builds the works service on top of the shared database.
 // It refuses to start if the database schema doesn't match what the code expects.
-func New(db *sql.DB, rdb *redis.Client) (*WorkService, error) {
+func New(db *sql.DB) (*WorkService, error) {
 	if err := NewSchemaValidator(db).ValidateAllSchemas(); err != nil {
 		return nil, fmt.Errorf("schema validation failed: %w", err)
 	}
 	return &WorkService{
 		db:                  db,
-		redis:               rdb,
-		cache:               cache.NewCache(rdb, "work-service"),
 		notificationService: nil, // set by SetNotifier
 	}, nil
 }

@@ -187,6 +187,9 @@ func (q *Queue) cleanup(ctx context.Context) {
 		fmt.Sprintf("%d seconds", int(keepDone.Seconds()))); err != nil {
 		log.Printf("jobs: cleanup: %v", err)
 	}
+	if _, err := q.db.ExecContext(ctx, `DELETE FROM oauth_pending WHERE expires_at < now()`); err != nil {
+		log.Printf("jobs: cleanup oauth_pending: %v", err)
+	}
 }
 
 // Summary is how many jobs are in each state, by kind.

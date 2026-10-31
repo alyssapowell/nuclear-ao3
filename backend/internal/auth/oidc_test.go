@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,7 +18,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -31,7 +29,6 @@ type OIDCTestSuite struct {
 	service     *AuthService
 	router      *gin.Engine
 	db          *sql.DB
-	redis       *redis.Client
 	testUsers   map[string]*models.User
 	testClients map[string]*models.OAuthClient
 }
@@ -47,26 +44,13 @@ func (suite *OIDCTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 	suite.db = db
 
-	// Use test redis instance
-	testRedis := os.Getenv("TEST_REDIS_URL")
-	if testRedis == "" {
-		testRedis = "localhost:6379"
-	}
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: testRedis,
-		DB:   4, // Use DB 4 for OIDC tests
-	})
-	suite.redis = rdb
-
 	// Create test auth service
 	jwtManager, err := newTestJWTManager("test-oidc-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{
-		db:    db,
-		redis: rdb,
-		jwt:   jwtManager,
+		db:  db,
+		jwt: jwtManager,
 	}
 
 	// Setup test router
@@ -80,13 +64,11 @@ func (suite *OIDCTestSuite) SetupSuite() {
 }
 
 func (suite *OIDCTestSuite) SetupTest() {
-	suite.redis.FlushDB(context.Background())
 }
 
 func (suite *OIDCTestSuite) TearDownSuite() {
 	suite.cleanupTestData()
 	suite.db.Close()
-	suite.redis.Close()
 }
 
 func (suite *OIDCTestSuite) cleanupTestData() {

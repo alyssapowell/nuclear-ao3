@@ -59,7 +59,6 @@ This comprehensive testing suite validates the OAuth2/OIDC authentication implem
 ### Prerequisites
 - **Go 1.21+**: Test runtime
 - **PostgreSQL**: Test database (`ao3_nuclear_test`)
-- **Redis**: Session and cache storage
 - **Database Migrations**: OAuth2 schema setup
 
 ### Manual Test Execution
@@ -80,17 +79,17 @@ go tool cover -html=coverage.out
 
 #### 1. **OAuth2TestSuite**
 - **Purpose**: Core OAuth2 functionality validation
-- **Database**: Redis DB 3
+- **Database**: the test Postgres database
 - **Focus**: Authorization flows, token management, client validation
 
 #### 2. **OIDCTestSuite**  
 - **Purpose**: OpenID Connect specific features
-- **Database**: Redis DB 4
+- **Database**: the test Postgres database
 - **Focus**: ID tokens, discovery, user claims
 
 #### 3. **OAuth2PerformanceTestSuite**
 - **Purpose**: Performance and load validation
-- **Database**: Redis DB 5
+- **Database**: the test Postgres database
 - **Focus**: Throughput, latency, concurrent operations
 
 ### Test Data Management
@@ -195,7 +194,6 @@ TestMixedOperations_LoadTest()          // Target: 50+ mixed ops/sec
 ### Environment Variables
 ```bash
 TEST_DATABASE_URL="postgres://ao3_user:ao3_password@localhost/ao3_nuclear_test?sslmode=disable"
-TEST_REDIS_URL="localhost:6379"
 BASE_URL="https://test.nuclear-ao3.com"
 GIN_MODE="test"
 ```
@@ -206,13 +204,8 @@ Required tables (created by migrations):
 - `oauth_access_tokens`, `oauth_refresh_tokens`
 - `user_consents`, `user_sessions`
 
-### Redis Usage
-- **DB 0**: Production data (not used in tests)
-- **DB 1**: Development cache
-- **DB 2**: Core auth tests
-- **DB 3**: OAuth2 tests  
-- **DB 4**: OIDC tests
-- **DB 5**: Performance tests
+### Temporary OAuth state
+Sign-in requests and consent prompts live in the `oauth_pending` table for ten minutes.
 
 ## 🐛 Debugging Tests
 
@@ -235,16 +228,7 @@ cat test_results_performance.log
    createdb ao3_nuclear_test
    ```
 
-2. **Redis Connection**
-   ```bash
-   # Check Redis status
-   redis-cli ping
-   
-   # Clear test databases
-   redis-cli -n 3 FLUSHDB
-   ```
-
-3. **Migration Issues**
+2. **Migration Issues**
    ```bash
    # Apply all migrations (from the backend folder)
    DATABASE_URL=postgres://localhost/ao3_nuclear_test?sslmode=disable go run ./cmd/nuclear migrate
@@ -270,7 +254,6 @@ Before deploying OAuth2/OIDC to production:
 - [ ] Coverage report shows >90%
 - [ ] No flaky or intermittent failures
 - [ ] Database migrations applied
-- [ ] Redis configuration verified
 
 ## 🔄 Continuous Integration
 
@@ -288,8 +271,6 @@ jobs:
           POSTGRES_DB: ao3_nuclear_test
           POSTGRES_USER: ao3_user
           POSTGRES_PASSWORD: ao3_password
-      redis:
-        image: redis:7
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4

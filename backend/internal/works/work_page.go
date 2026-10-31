@@ -12,15 +12,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
-	"nuclear-ao3/shared/cache"
 	"nuclear-ao3/shared/models"
 )
 
-// CachedGetWork handles work retrieval with Redis caching
-func (ws *WorkService) CachedGetWork(c *gin.Context) {
+// GetWorkWithAuthors returns a work and its authors. Legacy numeric IDs
+// redirect to the UUID URL.
+func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	workIDParam := c.Param("work_id")
 	ctx := c.Request.Context()
-	log.Printf("=== CACHEDGETWORK HANDLER CALLED for work_id: %s ===", workIDParam)
+	log.Printf("=== GETWORKWITHAUTHORS HANDLER CALLED for work_id: %s ===", workIDParam)
 
 	// Parse work ID (UUID or legacy)
 	workID, isRedirect, redirectURL := ws.parseWorkID(workIDParam)
@@ -35,15 +35,7 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 		return
 	}
 
-	// Check cache first
-	cacheKey := fmt.Sprintf("work:%s", workID.String())
-	var cachedWork models.Work
-
-	err := ws.cache.GetOrSet(ctx, cacheKey, &cachedWork, cache.MediumTTL, func() (interface{}, error) {
-		// Cache miss - fetch from database
-		return ws.fetchWorkFromDB(ctx, workID)
-	})
-
+	work, err := ws.fetchWorkFromDB(ctx, workID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
@@ -53,14 +45,14 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 		return
 	}
 
-	// Apply privacy filters (this needs to be done per-request)
+	// Apply privacy filters
 	userID := ws.getUserIDFromContext(c)
 	if !ws.canViewWork(ctx, workID, userID) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
 
-	// Fetch authors (not cached as it depends on viewer's permissions)
+	// Fetch authors (what the viewer may see depends on who they are)
 	authors, err := ws.fetchWorkAuthors(ctx, workID, userID)
 	if err != nil {
 		log.Printf("Failed to fetch authors for work %s: %v", workID, err)
@@ -70,14 +62,14 @@ func (ws *WorkService) CachedGetWork(c *gin.Context) {
 
 	// Return work with authors in expected format
 	response := gin.H{
-		"work":    cachedWork,
+		"work":    work,
 		"authors": authors,
 	}
 	c.JSON(http.StatusOK, response)
 }
 
-// CachedGetWorkStats provides cached work statistics
-func (ws *WorkService) CachedGetWorkStats(c *gin.Context) {
+// GetWorkStats returns a work's counts.
+func (ws *WorkService) GetWorkStats(c *gin.Context) {
 	workIDParam := c.Param("work_id")
 	ctx := c.Request.Context()
 
@@ -87,40 +79,13 @@ func (ws *WorkService) CachedGetWorkStats(c *gin.Context) {
 		return
 	}
 
-	cacheKey := fmt.Sprintf("work_stats:%s", workID.String())
-	var stats map[string]interface{}
-
-	err = ws.cache.GetOrSet(ctx, cacheKey, &stats, cache.ShortTTL, func() (interface{}, error) {
-		return ws.fetchWorkStatsFromDB(ctx, workID)
-	})
-
+	stats, err := ws.fetchWorkStatsFromDB(ctx, workID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work stats"})
 		return
 	}
 
 	c.JSON(http.StatusOK, stats)
-}
-
-// CachedSearchWorks provides cached search results for common queries
-func (ws *WorkService) CachedSearchWorks(c *gin.Context) {
-	// Create cache key from query parameters
-	cacheKey := ws.buildSearchCacheKey(c.Request.URL.Query())
-	ctx := c.Request.Context()
-
-	var results map[string]interface{}
-
-	err := ws.cache.GetOrSet(ctx, cacheKey, &results, cache.ShortTTL, func() (interface{}, error) {
-		// Cache miss - perform actual search
-		return ws.performSearchFromDB(ctx, c.Request.URL.Query())
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
-		return
-	}
-
-	c.JSON(http.StatusOK, results)
 }
 
 // Helper functions
@@ -146,7 +111,7 @@ func (ws *WorkService) parseWorkID(workIDParam string) (uuid.UUID, bool, string)
 	return uuid.Nil, false, ""
 }
 
-func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (interface{}, error) {
+func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (*models.Work, error) {
 	log.Printf("DEBUG: fetchWorkFromDB called for work %s", workID.String())
 	var work models.Work
 
@@ -235,7 +200,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID) (i
 
 	log.Printf("DEBUG: fetchWorkFromDB successfully fetched work %s - Status: %s", work.Title, work.Status)
 
-	return work, nil
+	return &work, nil
 }
 
 func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) ([]models.WorkAuthor, error) {
@@ -294,7 +259,7 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 	return authors, nil
 }
 
-func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUID) (interface{}, error) {
+func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUID) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
 	// Fetch various stats
@@ -321,31 +286,6 @@ func (ws *WorkService) fetchWorkStatsFromDB(ctx context.Context, workID uuid.UUI
 	return stats, nil
 }
 
-func (ws *WorkService) performSearchFromDB(ctx context.Context, params map[string][]string) (interface{}, error) {
-	// Placeholder for search implementation
-	results := map[string]interface{}{
-		"works": []interface{}{},
-		"total": 0,
-		"page":  1,
-	}
-	return results, nil
-}
-
-func (ws *WorkService) buildSearchCacheKey(params map[string][]string) string {
-	// Build deterministic cache key from search parameters
-	// For now, simplified version
-	var query, page string
-	if q, ok := params["q"]; ok && len(q) > 0 {
-		query = q[0]
-	}
-	if p, ok := params["page"]; ok && len(p) > 0 {
-		page = p[0]
-	} else {
-		page = "1"
-	}
-	return fmt.Sprintf("search:%s:page:%s", query, page)
-}
-
 func (ws *WorkService) getUserIDFromContext(c *gin.Context) *uuid.UUID {
 	userID, hasUser := c.Get("user_id")
 	if !hasUser {
@@ -361,8 +301,7 @@ func (ws *WorkService) getUserIDFromContext(c *gin.Context) *uuid.UUID {
 }
 
 // canViewWork asks the database, which knows about drafts, co-authors,
-// restricted works, blocks and mutes. The work itself may come from the
-// cache, but this check never does.
+// restricted works, blocks and mutes.
 func (ws *WorkService) canViewWork(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) bool {
 	var ok bool
 	if err := ws.db.QueryRowContext(ctx, "SELECT can_user_view_work($1, $2)", workID, userID).Scan(&ok); err != nil {
@@ -370,33 +309,4 @@ func (ws *WorkService) canViewWork(ctx context.Context, workID uuid.UUID, userID
 		return false
 	}
 	return ok
-}
-
-// Cache invalidation helpers
-
-func (ws *WorkService) InvalidateWorkCache(workID uuid.UUID) error {
-	ctx := context.Background()
-
-	// Invalidate work cache
-	cacheKey := fmt.Sprintf("work:%s", workID.String())
-	if err := ws.cache.Delete(ctx, cacheKey); err != nil {
-		return err
-	}
-
-	// Invalidate stats cache
-	statsKey := fmt.Sprintf("work_stats:%s", workID.String())
-	if err := ws.cache.Delete(ctx, statsKey); err != nil {
-		return err
-	}
-
-	// Invalidate related search caches
-	return ws.cache.DeletePattern(ctx, "search:*")
-}
-
-func (ws *WorkService) InvalidateUserCache(userID uuid.UUID) error {
-	ctx := context.Background()
-
-	// Invalidate user-specific caches
-	pattern := fmt.Sprintf("user:%s:*", userID.String())
-	return ws.cache.DeletePattern(ctx, pattern)
 }

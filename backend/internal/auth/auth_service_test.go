@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -26,7 +24,6 @@ type AuthServiceTestSuite struct {
 	service   *AuthService
 	router    *gin.Engine
 	db        *sql.DB
-	redis     *redis.Client
 	testUsers map[string]*models.User
 }
 
@@ -41,26 +38,13 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 	suite.db = db
 
-	// Use test redis instance (different DB)
-	testRedis := os.Getenv("TEST_REDIS_URL")
-	if testRedis == "" {
-		testRedis = "localhost:6379"
-	}
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: testRedis,
-		DB:   2, // Use DB 2 for auth tests
-	})
-	suite.redis = rdb
-
 	// Create test auth service
 	jwtManager, err := newTestJWTManager("test-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{
-		db:    db,
-		redis: rdb,
-		jwt:   jwtManager,
+		db:  db,
+		jwt: jwtManager,
 	}
 
 	// Setup test router
@@ -80,8 +64,6 @@ func (suite *AuthServiceTestSuite) SetupSuite() {
 }
 
 func (suite *AuthServiceTestSuite) SetupTest() {
-	// Clear Redis cache only (reuse database users across tests)
-	suite.redis.FlushDB(context.Background())
 }
 
 func (suite *AuthServiceTestSuite) TearDownTest() {
@@ -92,7 +74,6 @@ func (suite *AuthServiceTestSuite) TearDownSuite() {
 	// Clean up only at the very end
 	suite.cleanupTestData()
 	suite.db.Close()
-	suite.redis.Close()
 }
 
 func (suite *AuthServiceTestSuite) cleanupTestData() {

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 
 	"nuclear-ao3/internal/platform"
 )
@@ -14,14 +13,13 @@ func setupRouter(as *AuthService) *gin.Engine {
 	return r
 }
 
-// NewAuthService connects to the test database and Redis, for tests.
+// NewAuthService connects to the test database, for tests.
 func NewAuthService() *AuthService {
 	db, err := platform.OpenDB()
 	if err != nil {
 		panic(err)
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: platform.Env("REDIS_URL", "localhost:6379")})
-	as, err := newTestAuthService(db, rdb)
+	as, err := newTestAuthService(db)
 	if err != nil {
 		panic(err)
 	}
@@ -30,5 +28,4 @@ func NewAuthService() *AuthService {
 
 func (as *AuthService) Close() {
 	as.db.Close()
-	as.redis.Close()
 }

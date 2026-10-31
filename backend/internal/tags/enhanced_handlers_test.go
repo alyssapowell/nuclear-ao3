@@ -19,7 +19,7 @@ import (
 
 // =============================================================================
 // ENHANCED TAG SERVICE TESTS - Hecate Core Tag Service
-// Comprehensive test suite for advanced tag features including caching,
+// Comprehensive test suite for advanced tag features:
 // autocomplete, work integration, and tag relationships
 // =============================================================================
 
@@ -31,7 +31,6 @@ func setupTagTestRouter() (*gin.Engine, *TagService) {
 	// Mock dependencies would be injected here
 	ts := &TagService{
 		// db: mockDB,
-		// redis: mockRedis,
 	}
 
 	return router, ts
@@ -402,52 +401,6 @@ func TestUpdateTag_InvalidUUID(t *testing.T) {
 }
 
 // =============================================================================
-// CACHING TESTS
-// =============================================================================
-
-func TestCaching_AutocompleteCache(t *testing.T) {
-	// Test that autocomplete results are cached properly
-	// This would require Redis mocking to test properly
-
-	router, ts := setupTagTestRouter()
-	router.GET("/api/v1/tags/autocomplete", ts.AutocompleteTags)
-
-	// First request
-	req1, _ := http.NewRequest("GET", "/api/v1/tags/autocomplete?q=test", nil)
-	w1 := httptest.NewRecorder()
-	router.ServeHTTP(w1, req1)
-
-	// Second identical request (should hit cache)
-	req2, _ := http.NewRequest("GET", "/api/v1/tags/autocomplete?q=test", nil)
-	w2 := httptest.NewRecorder()
-	router.ServeHTTP(w2, req2)
-
-	// Both should return the same status (success or error)
-	assert.Equal(t, w1.Code, w2.Code)
-}
-
-func TestCaching_TagCache(t *testing.T) {
-	// Test that individual tags are cached
-	router, ts := setupTagTestRouter()
-	router.GET("/api/v1/tags/:id", ts.GetTag)
-
-	tagID := uuid.New()
-
-	// First request
-	req1, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/tags/%s", tagID), nil)
-	w1 := httptest.NewRecorder()
-	router.ServeHTTP(w1, req1)
-
-	// Second identical request (should hit cache)
-	req2, _ := http.NewRequest("GET", fmt.Sprintf("/api/v1/tags/%s", tagID), nil)
-	w2 := httptest.NewRecorder()
-	router.ServeHTTP(w2, req2)
-
-	// Both should return the same status
-	assert.Equal(t, w1.Code, w2.Code)
-}
-
-// =============================================================================
 // PERFORMANCE TESTS
 // =============================================================================
 
@@ -508,27 +461,9 @@ func TestErrorHandling_DatabaseFailure(t *testing.T) {
 	assert.Contains(t, []int{http.StatusOK, http.StatusInternalServerError}, w.Code)
 }
 
-func TestErrorHandling_RedisFailure(t *testing.T) {
-	// Test Redis cache failure scenarios
-	router, ts := setupTagTestRouter()
-	router.GET("/api/v1/tags/autocomplete", ts.AutocompleteTags)
-
-	req, _ := http.NewRequest("GET", "/api/v1/tags/autocomplete?q=test", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Should handle Redis failure gracefully
-	assert.Contains(t, []int{http.StatusOK, http.StatusInternalServerError, http.StatusBadRequest}, w.Code)
-}
-
 // =============================================================================
 // INTEGRATION TEST HELPERS
 // =============================================================================
-
-func setupTestRedis() interface{} {
-	// This would set up a test Redis connection
-	return nil
-}
 
 func createTestTag(name, tagType string) *models.Tag {
 	return &models.Tag{
@@ -611,7 +546,7 @@ func TestE2E_TagWorkflow(t *testing.T) {
 	// 6. Verifies caching
 	// 7. Cleans up test data
 
-	t.Skip("Requires full database and Redis setup")
+	t.Skip("Requires full database setup")
 }
 
 func TestE2E_TagRelationshipWorkflow(t *testing.T) {
@@ -623,15 +558,4 @@ func TestE2E_TagRelationshipWorkflow(t *testing.T) {
 	// 5. Test cascade operations
 
 	t.Skip("Requires full database setup")
-}
-
-func TestE2E_CachingWorkflow(t *testing.T) {
-	// This would test the complete caching workflow:
-	// 1. Verify cold cache misses
-	// 2. Populate cache with requests
-	// 3. Verify cache hits
-	// 4. Test cache invalidation
-	// 5. Verify cache expiration
-
-	t.Skip("Requires Redis setup")
 }

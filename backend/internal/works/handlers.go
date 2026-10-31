@@ -401,7 +401,6 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 	}
 
 	// Clear cache
-	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	// Fetch updated work
 	work, err := ws.getWorkByID(workID)
@@ -488,7 +487,6 @@ func (ws *WorkService) DeleteWork(c *gin.Context) {
 	}
 
 	// Clear cache
-	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	c.JSON(http.StatusOK, gin.H{"message": "Work deleted successfully"})
 }
@@ -952,20 +950,10 @@ func (ws *WorkService) getWorkByID(workID uuid.UUID) (*models.Work, error) {
 	return &work, nil
 }
 
+// incrementHits counts a view. The count is kept in memory and written to
+// work_statistics in batches (see FlushHits).
 func (ws *WorkService) incrementHits(workID uuid.UUID) {
-	// Increment hit counter asynchronously
-	go func() {
-		_, err := ws.db.Exec(`
-			INSERT INTO work_statistics (work_id, hits, kudos, comments, bookmarks, collections, updated_at)
-			VALUES ($1, 1, 0, 0, 0, 0, NOW())
-			ON CONFLICT (work_id)
-			DO UPDATE SET hits = work_statistics.hits + 1, updated_at = NOW()`,
-			workID)
-		if err != nil {
-			// Log error but don't fail the request
-			fmt.Printf("Failed to increment hits for work %s: %v\n", workID, err)
-		}
-	}()
+	ws.hits.add(workID)
 }
 
 func countWords(text string) int {
@@ -1053,7 +1041,7 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 		return
 	}
 
-	chapterNumber, err := strconv.Atoi(c.Param("chapter_number"))
+	chapterNumber, err := strconv.Atoi(c.Param("chapter_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chapter number"})
 		return
@@ -1424,8 +1412,6 @@ func (ws *WorkService) UpdateChapter(c *gin.Context) {
 	}
 
 	// Clear cache
-	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
-	ws.cache.Delete(c.Request.Context(), fmt.Sprintf("chapter:%s", chapterID))
 
 	// Trigger notification for chapter update
 	go func() {
@@ -1572,8 +1558,6 @@ func (ws *WorkService) DeleteChapter(c *gin.Context) {
 	}
 
 	// Clear cache
-	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
-	ws.cache.Delete(c.Request.Context(), fmt.Sprintf("chapter:%s", chapterID))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":                "Chapter deleted successfully",
@@ -5989,9 +5973,6 @@ func (ws *WorkService) AdminDeleteWork(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit deletion"})
 		return
 	}
-
-	// Clear any cached data (if Redis is available)
-	ws.InvalidateWorkCache(workID) // cache keys are prefixed; never delete them by hand
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":         "Work permanently deleted",

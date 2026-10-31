@@ -64,7 +64,6 @@ make service-status
 
 - **API**: http://localhost:8088 - the whole backend (one program: accounts, works, tags, search, notifications, exports)
 - **Database**: localhost:5432 - PostgreSQL 
-- **Cache**: localhost:6379 - Redis
 - **Monitoring**: http://localhost:3002 - Grafana (admin/admin)
 
 ### 🎯 Take It for a Test Drive
@@ -175,8 +174,7 @@ Caddy (HTTPS)  ── serves the website: plain files built from frontend/
    ▼
 nuclear (one Go program): accounts, works, tags, search, notifications, exports
    │
-   ├── PostgreSQL: all data, including search
-   └── Redis: caching only (optional)
+   └── PostgreSQL: all data, including search and background jobs
 ```
 
 There's one backend program to run, upgrade and watch. Search is part of
@@ -221,7 +219,6 @@ nuclear-ao3/
 | `make frontend-dev` | Start frontend development server |
 | `docker exec -it nuclear-ao3-auth bash` | Open shell in auth service |
 | `docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear` | Open PostgreSQL shell |
-| `docker exec -it nuclear-ao3-redis redis-cli` | Open Redis shell |
 
 ### Testing & Quality
 | Command | Description |
@@ -317,7 +314,7 @@ apply, and anonymous works never reveal their creator.
 ## 🚦 Performance Features
 
 ### Caching Strategy
-- **Redis multi-layer caching** for frequently accessed data
+- **Rate limits** counted in the app's memory; every read goes straight to Postgres
 - **HTTP caching headers** for static content
 - **Database query optimization** with proper indexing
 
@@ -427,7 +424,6 @@ make logs
 # Access individual service shells
 docker exec -it nuclear-ao3-auth bash
 docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear
-docker exec -it nuclear-ao3-redis redis-cli
 
 # Clean reset
 make clean-all
@@ -462,10 +458,6 @@ The app reads these environment variables (all of them are listed in `.env.examp
 ```bash
 # Database
 DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
-
-# Redis
-REDIS_URL=redis:6379
-REDIS_PASSWORD=
 
 # Login tokens
 JWT_ISSUER=nuclear-ao3

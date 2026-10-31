@@ -1,5 +1,5 @@
 // Package platform holds what every area of the app shares: configuration,
-// the database and Redis connections, and the login and role checks.
+// the database connection, and the login and role checks.
 //
 // Each area (auth, works, tags, ...) gets a Deps value and mounts its routes
 // with it. There is exactly one place that decides who a request belongs to,
@@ -13,13 +13,11 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 // Env returns the environment variable key, or def when it is unset.
@@ -54,51 +52,16 @@ type TokenValidator func(token string) (uuid.UUID, error)
 type Deps struct {
 	DB *sql.DB
 
-	validate  TokenValidator
-	redisAddr string
-	redisPass string
-	mu        sync.Mutex
-	redis     map[int]*redis.Client
+	validate TokenValidator
 }
 
 // NewDeps builds the shared dependencies.
 func NewDeps(db *sql.DB, validate TokenValidator) *Deps {
-	return &Deps{
-		DB:        db,
-		validate:  validate,
-		redisAddr: Env("REDIS_URL", "localhost:6379"),
-		redisPass: Env("REDIS_PASSWORD", ""),
-		redis:     map[int]*redis.Client{},
-	}
+	return &Deps{DB: db, validate: validate}
 }
 
-// Redis returns a client for the given Redis database number. Areas keep
-// separate database numbers so their cache keys can't collide.
-func (d *Deps) Redis(n int) *redis.Client {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if c, ok := d.redis[n]; ok {
-		return c
-	}
-	c := redis.NewClient(&redis.Options{
-		Addr:         d.redisAddr,
-		Password:     d.redisPass,
-		DB:           n,
-		PoolSize:     10,
-		MinIdleConns: 2,
-		MaxRetries:   3,
-	})
-	d.redis[n] = c
-	return c
-}
-
-// Close shuts down every connection Deps opened.
+// Close shuts down the database connection.
 func (d *Deps) Close() {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, c := range d.redis {
-		c.Close()
-	}
 	d.DB.Close()
 }
 
@@ -181,18 +144,14 @@ func (d *Deps) RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// Health reports whether the database and Redis are reachable.
+// Health reports whether the database is reachable.
 func (d *Deps) Health(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
-	checks := gin.H{"database": "ok", "redis": "ok"}
+	checks := gin.H{"database": "ok"}
 	status := http.StatusOK
 	if err := d.DB.PingContext(ctx); err != nil {
 		checks["database"] = err.Error()
-		status = http.StatusServiceUnavailable
-	}
-	if err := d.Redis(0).Ping(ctx).Err(); err != nil {
-		checks["redis"] = err.Error()
 		status = http.StatusServiceUnavailable
 	}
 	c.JSON(status, gin.H{"status": http.StatusText(status), "checks": checks})

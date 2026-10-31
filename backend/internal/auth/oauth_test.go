@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -32,7 +30,6 @@ type OAuth2TestSuite struct {
 	service     *AuthService
 	router      *gin.Engine
 	db          *sql.DB
-	redis       *redis.Client
 	testUsers   map[string]*models.User
 	testClients map[string]*models.OAuthClient
 }
@@ -48,26 +45,13 @@ func (suite *OAuth2TestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 	suite.db = db
 
-	// Use test redis instance
-	testRedis := os.Getenv("TEST_REDIS_URL")
-	if testRedis == "" {
-		testRedis = "localhost:6379"
-	}
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: testRedis,
-		DB:   3, // Use DB 3 for OAuth tests
-	})
-	suite.redis = rdb
-
 	// Create test auth service
 	jwtManager, err := newTestJWTManager("test-oauth-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{
-		db:    db,
-		redis: rdb,
-		jwt:   jwtManager,
+		db:  db,
+		jwt: jwtManager,
 	}
 
 	// Setup test router
@@ -83,9 +67,6 @@ func (suite *OAuth2TestSuite) SetupTest() {
 	// Clear test data
 	suite.cleanupOAuthTestData()
 
-	// Clear Redis cache
-	suite.redis.FlushDB(context.Background())
-
 	// Create fresh test data for each test
 	suite.createTestUsers()
 	suite.createTestClients()
@@ -98,7 +79,6 @@ func (suite *OAuth2TestSuite) TearDownTest() {
 func (suite *OAuth2TestSuite) TearDownSuite() {
 	suite.cleanupOAuthTestData()
 	suite.db.Close()
-	suite.redis.Close()
 }
 
 func (suite *OAuth2TestSuite) cleanupOAuthTestData() {

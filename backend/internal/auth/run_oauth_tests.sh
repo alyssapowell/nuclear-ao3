@@ -55,12 +55,6 @@ check_prerequisites() {
         createdb "$DB_NAME" 2>/dev/null || print_warning "Database might already exist"
     fi
     
-    # Check if Redis is running
-    if ! redis-cli ping &> /dev/null; then
-        print_error "Redis is not running. Please start Redis server."
-        exit 1
-    fi
-    
     print_success "Prerequisites check passed"
 }
 
@@ -70,7 +64,6 @@ setup_test_env() {
     
     # Set test environment variables
     export TEST_DATABASE_URL="postgres://ao3_user:ao3_password@localhost/$DB_NAME?sslmode=disable"
-    export TEST_REDIS_URL="localhost:6379"
     export GIN_MODE="test"
     export BASE_URL="https://test.nuclear-ao3.com"
     
@@ -139,12 +132,6 @@ cleanup() {
         DELETE FROM oauth_clients WHERE created_at > NOW() - INTERVAL '1 day';
         DELETE FROM users WHERE created_at > NOW() - INTERVAL '1 day';
     " 2>/dev/null || true
-    
-    # Clean Redis test databases
-    redis-cli -n 2 FLUSHDB &>/dev/null || true
-    redis-cli -n 3 FLUSHDB &>/dev/null || true
-    redis-cli -n 4 FLUSHDB &>/dev/null || true
-    redis-cli -n 5 FLUSHDB &>/dev/null || true
     
     print_success "Cleanup completed"
 }

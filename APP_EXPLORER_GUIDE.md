@@ -121,13 +121,6 @@ docker stats --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 docker exec ao3_postgres psql -U ao3_user -d ao3_nuclear -c "SELECT COUNT(*) as works, COUNT(DISTINCT user_id) as users FROM works;"
 ```
 
-### **Redis Cache Status**
-```bash
-# Check cache usage
-docker exec ao3_redis redis-cli INFO memory
-docker exec ao3_redis redis-cli -n 1 KEYS "*work*" | wc -l
-```
-
 ---
 
 ## 🎯 **Key Optimizations You'll See**
@@ -135,7 +128,6 @@ docker exec ao3_redis redis-cli -n 1 KEYS "*work*" | wc -l
 ### **1. Lightning-Fast Response Times**
 - **Average: 7.23ms** (excellent for budget hosting)
 - **95th percentile: 27ms** (very responsive)
-- **Cache hits: <1ms** (Redis optimization working)
 
 ### **2. Efficient Resource Usage**
 - **Database connections: 10 max** (optimized for $5/month VPS)
@@ -144,7 +136,6 @@ docker exec ao3_redis redis-cli -n 1 KEYS "*work*" | wc -l
 ### **3. High Throughput**
 - **92+ requests/second** (sufficient for 100-200 concurrent users)
 - **Concurrent load handling** (20+ simultaneous requests)
-- **Intelligent caching** (Redis TTL-based invalidation)
 
 ---
 
@@ -152,7 +143,7 @@ docker exec ao3_redis redis-cli -n 1 KEYS "*work*" | wc -l
 
 1. **Browse works** - Click through the paginated work list
 2. **Search functionality** - Try different search terms
-3. **Individual work views** - See the caching in action
+3. **Individual work views** - Read a work and its chapters
 4. **Performance monitoring** - Watch Grafana dashboards update
 5. **API exploration** - Test endpoints directly
 
@@ -168,7 +159,6 @@ This optimized Nuclear AO3 instance is configured for:
 
 The performance optimizations are **live and working**! You can see them in action across:
 - ✅ Database connection pooling
-- ✅ Redis caching layer
 - ✅ Postgres full-text search
 - ✅ Alpine Docker containers
 - ✅ Intelligent load balancing

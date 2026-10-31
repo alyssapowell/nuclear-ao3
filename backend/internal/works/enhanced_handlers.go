@@ -232,8 +232,7 @@ func (ws *WorkService) GetWorkWithTags(c *gin.Context) {
 		})
 	}
 
-	// Increment hit count asynchronously
-	go ws.incrementHits(workID)
+	ws.incrementHits(workID)
 }
 
 // getWorkTags returns the tags attached to a work.

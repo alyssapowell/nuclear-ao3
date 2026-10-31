@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -41,12 +40,12 @@ func newTestJWTManager(issuer string) (*JWTManager, error) {
 }
 
 // newTestAuthService is what New does, minus the key files.
-func newTestAuthService(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
+func newTestAuthService(db *sql.DB) (*AuthService, error) {
 	jm, err := newTestJWTManager("nuclear-ao3")
 	if err != nil {
 		return nil, err
 	}
-	return &AuthService{db: db, redis: rdb, jwt: jm}, nil
+	return &AuthService{db: db, jwt: jm}, nil
 }
 
 func newKey(t *testing.T, bits int) *rsa.PrivateKey {

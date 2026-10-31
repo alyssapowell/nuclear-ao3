@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -31,7 +29,6 @@ type OAuth2PerformanceTestSuite struct {
 	service     *AuthService
 	router      *gin.Engine
 	db          *sql.DB
-	redis       *redis.Client
 	testUsers   map[string]*models.User
 	testClients map[string]*models.OAuthClient
 }
@@ -53,26 +50,13 @@ func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 	suite.db = db
 
-	// Use test redis instance
-	testRedis := os.Getenv("TEST_REDIS_URL")
-	if testRedis == "" {
-		testRedis = "localhost:6379"
-	}
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: testRedis,
-		DB:   5, // Use DB 5 for performance tests
-	})
-	suite.redis = rdb
-
 	// Create test auth service
 	jwtManager, err := newTestJWTManager("test-perf-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{
-		db:    db,
-		redis: rdb,
-		jwt:   jwtManager,
+		db:  db,
+		jwt: jwtManager,
 	}
 
 	// Setup test router
@@ -86,13 +70,11 @@ func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
 }
 
 func (suite *OAuth2PerformanceTestSuite) SetupTest() {
-	suite.redis.FlushDB(context.Background())
 }
 
 func (suite *OAuth2PerformanceTestSuite) TearDownSuite() {
 	suite.cleanupTestData()
 	suite.db.Close()
-	suite.redis.Close()
 }
 
 func (suite *OAuth2PerformanceTestSuite) cleanupTestData() {

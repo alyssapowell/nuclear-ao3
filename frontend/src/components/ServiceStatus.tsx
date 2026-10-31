@@ -43,7 +43,7 @@ export default function ServiceStatus() {
         const services: ServiceStatus[] = [];
         
         // The server reports one line per dependency, e.g.
-        // { "status": "OK", "checks": { "database": "ok", "redis": "ok" } }
+        // { "status": "OK", "checks": { "database": "ok" } }
         services.push({
           name: 'Archive',
           url: GATEWAY_HEALTH_URL,

@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
-	"github.com/redis/go-redis/v9"
 )
 
 // Mount registers the account, session, admin and OAuth2/OIDC routes.
@@ -111,16 +110,15 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 
 // AuthService holds all dependencies for authentication
 type AuthService struct {
-	db    *sql.DB
-	redis *redis.Client
-	jwt   *JWTManager
-	mail  *email.Config // nil until SetMail: no emails are sent
+	db   *sql.DB
+	jwt  *JWTManager
+	mail *email.Config // nil until SetMail: no emails are sent
 }
 
-// New builds the auth service on top of the shared database and Redis. The
+// New builds the auth service on top of the shared database. The
 // login signing key is read from the files named by SIGNING_KEY_FILE and
 // SIGNING_KEY_PREVIOUS_FILES; without a valid key it returns an error.
-func New(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
+func New(db *sql.DB) (*AuthService, error) {
 	jwtManager, err := LoadJWTManager(
 		platform.Env("JWT_ISSUER", "nuclear-ao3"),
 		os.Getenv("SIGNING_KEY_FILE"),
@@ -129,7 +127,7 @@ func New(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AuthService{db: db, redis: rdb, jwt: jwtManager}, nil
+	return &AuthService{db: db, jwt: jwtManager}, nil
 }
 
 // SetMail turns on account emails (activation and password reset), sent from
