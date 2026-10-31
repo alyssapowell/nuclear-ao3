@@ -375,9 +375,16 @@ func TestPasswordChangeRevokesAppsAndResetLinks(t *testing.T) {
 			VALUES ($1, $2, $3, $4, '{read}', now() + interval '1 hour')`, uuid.New(), uuid.NewString(), userID, client)
 	}
 	liveAppTokens := func() (n int) {
-		e.as.db.QueryRow(`SELECT count(*) FROM oauth_access_tokens WHERE user_id = $1 AND NOT is_revoked`, userID).Scan(&n)
+		e.as.db.QueryRow(`SELECT
+			(SELECT count(*) FROM oauth_access_tokens WHERE user_id = $1 AND NOT is_revoked) +
+			(SELECT count(*) FROM authorization_codes WHERE user_id = $1 AND used_at IS NULL) +
+			(SELECT count(*) FROM user_consents WHERE user_id = $1 AND NOT is_revoked)`, userID).Scan(&n)
 		return
 	}
+	e.mustExec(`INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, expires_at)
+		VALUES ('unexchanged', $1, $2, 'https://app.example', '{read}', now() + interval '10 minutes')`, client, userID)
+	e.mustExec(`INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at) VALUES ($1, $2, $3, '{read}', now())`,
+		uuid.New(), userID, client)
 
 	addAppToken()
 	e.status("POST", authAPI+"/reset-password", "", map[string]string{"email": "connected@example.org"})

@@ -489,13 +489,18 @@ func (as *AuthService) ChangePassword(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// revokeAppAccess cancels every token the user has given to OAuth apps, so
-// an app connected by someone who had the old password loses access too.
-// The apps can ask the user to connect again.
+// revokeAppAccess cuts off every OAuth app the user has connected, so an app
+// connected by someone who had the old password loses access too: its
+// tokens stop working, a code it hasn't exchanged yet can't be, and the
+// user's earlier approval is forgotten, so the app has to ask again.
 func revokeAppAccess(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
-	for _, table := range []string{"oauth_access_tokens", "oauth_refresh_tokens"} {
-		if _, err := tx.ExecContext(ctx, `UPDATE `+table+` SET is_revoked = true, revoked_at = now()
-			WHERE user_id = $1 AND NOT is_revoked`, userID); err != nil {
+	for _, q := range []string{
+		`UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND NOT is_revoked`,
+		`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND NOT is_revoked`,
+		`UPDATE authorization_codes SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`,
+		`UPDATE user_consents SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND NOT is_revoked`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
 			return err
 		}
 	}
