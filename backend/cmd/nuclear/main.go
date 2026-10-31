@@ -13,6 +13,11 @@
 //	SITE_URL           the archive's public address, for links in emails
 //	SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USERNAME, SMTP_PASSWORD
 //	                   the mail server emails are sent through
+//	SIGNING_KEY_FILE   the PEM file with the key that signs logins (required;
+//	                   create it with "nuclear keys generate")
+//	SIGNING_KEY_PREVIOUS_FILES
+//	                   optional comma-separated list of old key files, accepted
+//	                   only to check logins made before a planned key change
 //	JOB_WORKERS        how many background jobs run at once (default 2)
 //	MIGRATE_ON_START   set to "false" to skip applying database migrations
 //	                   at startup (then run "nuclear migrate" yourself)
@@ -26,6 +31,12 @@
 //	                          running and failed, and the latest failures
 //	nuclear jobs retry [id]   put a failed job (or, with no id, every failed
 //	                          job) back in the queue
+//	nuclear keys generate [path]
+//	                          create a new signing key file (default
+//	                          secrets/signing-key-DATE.pem) and print what to
+//	                          do with it. Needs no database.
+//	nuclear keys show         print the ID of the current signing key and of
+//	                          each previous key, to match against a saved copy
 //	nuclear grant <username> <role>
 //	                          give an existing account a role: admin,
 //	                          moderator or tag_wrangler. This is how a new
@@ -68,6 +79,11 @@ import (
 
 func main() {
 	_ = godotenv.Load() // a local .env file is optional
+
+	// Key commands work without a database.
+	if len(os.Args) > 1 && os.Args[1] == "keys" {
+		os.Exit(runKeys(os.Args[2:]))
+	}
 
 	db, err := platform.OpenDB()
 	if err != nil {
@@ -255,7 +271,7 @@ func runCommand(db *sql.DB, args []string) int {
 		log.Printf("grant: %s now has the %s role", args[1], args[2])
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | grant <username> <role>]\n", strings.Join(args, " "))
+		fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | grant <username> <role> | keys generate|show]\n", strings.Join(args, " "))
 		return 2
 	}
 }

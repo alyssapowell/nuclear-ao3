@@ -75,7 +75,6 @@ HETZNER_SSH_KEY: |                      # Private SSH key content
 
 # Application Configuration
 DOMAIN: "your-domain.com"
-JWT_SECRET: "your-super-secret-jwt-key-here"  # Generate: openssl rand -base64 32
 
 # Database Passwords (Optional - will use defaults)
 POSTGRES_PASSWORD: "secure-db-password"
@@ -119,7 +118,6 @@ sudo -u deploy nano .env  # Edit configuration
 ENVIRONMENT=production
 DOMAIN=your-domain.com
 POSTGRES_PASSWORD=your-secure-password
-JWT_SECRET=your-jwt-secret
 ```
 
 ### 2. Initial Database Setup

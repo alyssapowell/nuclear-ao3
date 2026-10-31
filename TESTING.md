@@ -217,8 +217,6 @@ DATABASE_URL=postgres://test:test@localhost:5432/test_db
 SMTP_HOST=localhost
 SMTP_PORT=1025
 
-# JWT test secret
-JWT_SECRET=test-secret-key-for-testing-only
 ```
 
 ## Running Specific Test Suites

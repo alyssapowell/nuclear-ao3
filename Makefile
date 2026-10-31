@@ -1,7 +1,7 @@
 # Nuclear AO3 Development Makefile
 # Provides convenient commands for database management, testing, and development
 
-.PHONY: help migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
+.PHONY: help keys keys-show keys-setup migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
 
 # Default target
 help: ## Show this help message
@@ -45,6 +45,28 @@ seed: ## Load sample accounts and works for development (password: password123)
 	@docker-compose run --rm app nuclear migrate
 	@docker exec -i nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -v ON_ERROR_STOP=1 -1 < backend/migrations/dev/seed.sql
 	@echo "Sample data loaded. Log in as admin@example.org / password123"
+
+# Runs inside the app image so you don't need Go installed. It runs as your
+# own user (-u) so the key file in ./secrets is yours, mode 0600, and the -v
+# makes ./secrets writable for this one command (the app itself gets it
+# read-only).
+keys: ## Create a new login signing key in ./secrets (then see docs/RUNBOOK.md)
+	@mkdir -p secrets && chmod 700 secrets
+	@docker-compose run --rm --no-deps -u "$$(id -u):$$(id -g)" -v "$$(pwd)/secrets:/secrets" app nuclear keys generate /secrets/signing-key-$$(date +%Y-%m-%d).pem
+
+keys-show: ## Show the ID of the signing key in use and of the previous keys
+	@docker-compose run --rm --no-deps app nuclear keys show
+
+# Makes a key and points .env at it, if there is no key yet. Used by dev-setup.
+keys-setup:
+	@if ls secrets/*.pem >/dev/null 2>&1; then echo "Signing key already exists in secrets/"; else $(MAKE) keys; fi
+	@key=$$(ls -t secrets/*.pem | head -1); \
+	if ! grep -q '^SIGNING_KEY_FILE=.' .env 2>/dev/null; then \
+		touch .env; grep -v '^SIGNING_KEY_FILE=$$' .env > .env.tmp; \
+		echo "SIGNING_KEY_FILE=/secrets/$$(basename $$key)" >> .env.tmp; mv .env.tmp .env; \
+		echo "Set SIGNING_KEY_FILE in .env. Save a copy of $$key somewhere outside this server."; \
+	fi; \
+	if ! grep -q '^APP_UID=' .env; then echo "APP_UID=$$(id -u)" >> .env; fi
 
 grant: ## Give an account a role: make grant USER=name ROLE=admin|moderator|tag_wrangler
 	@if [ -z "$(USER)" ] || [ -z "$(ROLE)" ]; then echo "usage: make grant USER=name ROLE=admin"; exit 1; fi
@@ -102,6 +124,7 @@ logs-db: ## Show database logs only
 # Development Setup
 dev-setup: ## Complete development environment setup
 	@echo "🛠️  Setting up development environment..."
+	@make keys-setup
 	@make db-reset
 	@make services
 	@cd frontend && npm install

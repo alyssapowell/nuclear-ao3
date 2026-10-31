@@ -134,20 +134,37 @@ describe('Register', () => {
 })
 
 describe('Activate', () => {
-  it('verifies once under StrictMode and links to log in', async () => {
+  const activate = async (password = 'secret-pw') => {
+    await userEvent.type(screen.getByLabelText('Password'), password)
+    await userEvent.click(screen.getByRole('button', { name: 'Activate account' }))
+  }
+
+  it('sends the token with the password, once, and links to log in', async () => {
     h.search = 'token=abc'
     mockApi({ 'POST /verify-email': { status: 204 } })
     render(<StrictMode><Activate /></StrictMode>)
+    expect(calls()).toHaveLength(0)
+    await activate()
     expect(await screen.findByText(/account is activated/i)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/auth/login')
     expect(calls()).toHaveLength(1)
-    expect(bodyOf(0)).toEqual({ token: 'abc' })
+    expect(bodyOf(0)).toEqual({ token: 'abc', password: 'secret-pw' })
+  })
+
+  it('on a wrong password, points to resetting it', async () => {
+    h.search = 'token=abc'
+    mockApi({ 'POST /verify-email': { status: 401, body: { error: 'wrong_password' } } })
+    render(<Activate />)
+    await activate('not-mine')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/isn't this account's password/i)
+    expect(screen.getByRole('link', { name: 'reset the password' })).toHaveAttribute('href', '/auth/forgot-password')
   })
 
   it('shows an invalid message with a resend form', async () => {
     h.search = 'token=bad'
     mockApi({ 'POST /verify-email': { status: 400, body: { error: 'invalid_token' } } })
     render(<Activate />)
+    await activate()
     expect(await screen.findByRole('alert')).toHaveTextContent(/invalid or has expired/i)
     expect(screen.getByLabelText('Email address')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Resend activation email' })).toBeInTheDocument()

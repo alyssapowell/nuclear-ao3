@@ -36,7 +36,6 @@ jobs:
             
             echo '🔧 Setting up environment...'
             export DOMAIN=${{ secrets.DOMAIN }}
-            export JWT_SECRET='${{ secrets.JWT_SECRET }}'
             export DEPLOY_ENV=${{ inputs.environment }}
             
             cd /opt/nuclear-ao3
@@ -48,7 +47,6 @@ jobs:
             # Create environment file
             cat > .env << EOF
             DOMAIN=\${DOMAIN}
-            JWT_SECRET=\${JWT_SECRET}
             ENVIRONMENT=\${DEPLOY_ENV}
             NEXT_PUBLIC_API_GATEWAY_URL=
             EOF

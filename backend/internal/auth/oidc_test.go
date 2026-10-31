@@ -60,7 +60,7 @@ func (suite *OIDCTestSuite) SetupSuite() {
 	suite.redis = rdb
 
 	// Create test auth service
-	jwtManager, err := NewJWTManager("test-oidc-secret", "test-oidc-issuer", nil)
+	jwtManager, err := newTestJWTManager("test-oidc-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{

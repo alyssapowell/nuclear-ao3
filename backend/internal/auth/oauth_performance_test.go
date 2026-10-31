@@ -66,7 +66,7 @@ func (suite *OAuth2PerformanceTestSuite) SetupSuite() {
 	suite.redis = rdb
 
 	// Create test auth service
-	jwtManager, err := NewJWTManager("test-perf-secret", "test-perf-issuer", nil)
+	jwtManager, err := newTestJWTManager("test-perf-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{

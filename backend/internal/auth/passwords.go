@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
@@ -11,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -191,6 +193,13 @@ func useToken(c *gin.Context, tx *sql.Tx, k tokenKind, token string) (userID uui
 	return userID, err == nil, err
 }
 
+// usernamePattern is AO3's rule: 3 to 40 letters, numbers and underscores,
+// starting and ending with a letter or number. It also means a username can
+// never look like an email address, so login can tell them apart by "@".
+var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9_]{1,38})[A-Za-z0-9]$`)
+
+const usernameMessage = "Usernames are 3 to 40 characters: letters, numbers and underscores, starting and ending with a letter or number."
+
 // Register creates an account that can't log in until it is activated from
 // the email sent to it.
 func (as *AuthService) Register(c *gin.Context) {
@@ -206,8 +215,12 @@ func (as *AuthService) Register(c *gin.Context) {
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
-	if _, err := mail.ParseAddress(req.Email); req.Username == "" || err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "A username and a valid email address are required."})
+	if !usernamePattern.MatchString(req.Username) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_username", "message": usernameMessage})
+		return
+	}
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "A valid email address is required."})
 		return
 	}
 	if !passwordOK(req.Password) {
@@ -263,10 +276,34 @@ func (as *AuthService) Register(c *gin.Context) {
 // VerifyEmail activates the account an activation link was sent to.
 func (as *AuthService) VerifyEmail(c *gin.Context) {
 	var req struct {
-		Token string `json:"token"`
+		Token    string `json:"token"`
+		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
+		return
+	}
+	// Activating needs the account's password as well as the link. Otherwise
+	// someone could sign up with another person's email address and a
+	// password of their own, wait for that person to click the link, and
+	// then log in to the account. The real owner can't activate it, but can
+	// take it over with "forgot password", which ends the other password.
+	var hash string
+	err := as.db.QueryRowContext(c, `
+		SELECT u.password_hash FROM email_verification_tokens t JOIN users u ON u.id = t.user_id
+		WHERE t.token_hash = $1 AND t.used_at IS NULL AND t.expires_at > now()`, hashToken(req.Token)).Scan(&hash)
+	if err == sql.ErrNoRows || req.Token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_token", "message": "This activation link is invalid, already used, or has expired."})
+		return
+	}
+	if err != nil {
+		log.Printf("verify email: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.Password)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "wrong_password",
+			"message": "That isn't this account's password. If you didn't create this account, use \"Forgot password\" to take it over."})
 		return
 	}
 	tx, err := as.db.BeginTx(c, nil)
@@ -370,6 +407,9 @@ func (as *AuthService) ConfirmPasswordReset(c *gin.Context) {
 		err = as.revokeSessions(c, tx, userID, uuid.Nil)
 	}
 	if err == nil && ok {
+		err = revokeAppAccess(c, tx, userID)
+	}
+	if err == nil && ok {
 		err = tx.Commit()
 	}
 	if err != nil {
@@ -429,7 +469,14 @@ func (as *AuthService) ChangePassword(c *gin.Context) {
 	defer tx.Rollback()
 	_, err = tx.ExecContext(c, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(hash))
 	if err == nil {
+		// A reset link sent before the change could otherwise undo it.
+		_, err = tx.ExecContext(c, `UPDATE password_reset_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL`, userID)
+	}
+	if err == nil {
 		err = as.revokeSessions(c, tx, userID, currentSessionID(c))
+	}
+	if err == nil {
+		err = revokeAppAccess(c, tx, userID)
 	}
 	if err == nil {
 		err = tx.Commit()
@@ -440,4 +487,17 @@ func (as *AuthService) ChangePassword(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// revokeAppAccess cancels every token the user has given to OAuth apps, so
+// an app connected by someone who had the old password loses access too.
+// The apps can ask the user to connect again.
+func revokeAppAccess(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
+	for _, table := range []string{"oauth_access_tokens", "oauth_refresh_tokens"} {
+		if _, err := tx.ExecContext(ctx, `UPDATE `+table+` SET is_revoked = true, revoked_at = now()
+			WHERE user_id = $1 AND NOT is_revoked`, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }

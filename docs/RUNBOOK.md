@@ -10,11 +10,44 @@ Commands assume you're in the repo folder on the server, using Docker Compose. `
 
 ### Set up a brand-new archive
 
-1. `docker-compose up -d`. The app creates the database tables itself the first time it starts.
-2. Register your own account on the site like any user.
-3. Make yourself an admin: `make grant USER=yourname ROLE=admin`.
+1. Set up the signing key (next section). The app won't start without it.
+2. `docker-compose up -d`. The app creates the database tables itself the first time it starts.
+3. Register your own account on the site like any user.
+4. Make yourself an admin: `make grant USER=yourname ROLE=admin`.
 
 There are no built-in accounts or default passwords.
+
+### Set up the signing key
+
+The signing key is what proves a login is real. You make it once, and you keep it. It lives in a file in `secrets/` and is never put in the database or the backups.
+
+1. `make keys`. It creates `secrets/signing-key-DATE.pem` and prints a key ID.
+2. **Save a copy of that file outside this server**: a password manager or offline storage. If the server is lost and you have no copy, the only fix is a new key, and everyone has to log in again.
+3. In `.env`, set `SIGNING_KEY_FILE=/secrets/signing-key-DATE.pem` (use the file name from step 1). On Linux also set `APP_UID` to the number printed by `id -u`.
+4. `docker-compose up -d app`.
+5. Check it: `make keys-show` prints the key ID. It should match the one from step 1.
+
+If the app says "SIGNING_KEY_FILE is not set" or can't read the key, one of these steps is missing. There is no automatic fallback.
+
+### Change the signing key (planned)
+
+Do this now and then, or when someone who held a copy of the key leaves. People stay logged in.
+
+1. `make keys`. Save a copy of the new file outside this server.
+2. In `.env`, change `SIGNING_KEY_FILE` to the new file, and put the old file in `SIGNING_KEY_PREVIOUS_FILES`, for example `SIGNING_KEY_PREVIOUS_FILES=/secrets/signing-key-OLDDATE.pem`.
+3. `docker-compose up -d app`.
+4. `make keys-show` should list the new key as current and the old one as previous.
+5. **After 14 days**, take the old file out of `SIGNING_KEY_PREVIOUS_FILES` and run `docker-compose up -d app` again. By then every login made with it has expired.
+
+### Change the signing key right now (it may have leaked)
+
+Anyone with the key can make logins for any account, so don't wait.
+
+1. `make keys`. Save a copy of the new file outside this server.
+2. In `.env`, change `SIGNING_KEY_FILE` to the new file, and make `SIGNING_KEY_PREVIOUS_FILES` empty. Don't list the old key.
+3. `docker-compose up -d app`.
+4. Every login ends at once and everyone has to log in again. Apps connected through OAuth fetch the new public key from `/auth/jwks` by themselves; if one keeps failing, ask its owner to refresh it.
+5. Destroy the old key file and every copy of it, including old backups of the `secrets/` folder and the copy in your password manager.
 
 ### Give someone a role
 

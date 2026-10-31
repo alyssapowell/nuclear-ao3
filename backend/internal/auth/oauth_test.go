@@ -61,7 +61,7 @@ func (suite *OAuth2TestSuite) SetupSuite() {
 	suite.redis = rdb
 
 	// Create test auth service
-	jwtManager, err := NewJWTManager("test-oauth-secret", "test-oauth-issuer", nil)
+	jwtManager, err := newTestJWTManager("test-oauth-issuer")
 	require.NoError(suite.T(), err)
 
 	suite.service = &AuthService{

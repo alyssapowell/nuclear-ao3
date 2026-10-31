@@ -21,7 +21,7 @@ func NewAuthService() *AuthService {
 		panic(err)
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: platform.Env("REDIS_URL", "localhost:6379")})
-	as, err := New(db, rdb)
+	as, err := newTestAuthService(db, rdb)
 	if err != nil {
 		panic(err)
 	}

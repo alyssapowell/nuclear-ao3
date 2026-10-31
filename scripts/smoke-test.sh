@@ -47,6 +47,13 @@ except Exception:
 	done
 }
 
+# activate TOKEN PASSWORD -> prints the HTTP status. (The JSON body is built
+# in a variable: macOS's bash 3.2 brace-expands an inline body with a comma.)
+activate() {
+	local body="{\"token\":\"$1\",\"password\":\"$2\"}"
+	code -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' -d "$body"
+}
+
 register() { # name
 	curl -s -X POST "$B/auth/register" -H 'Content-Type: application/json' \
 		-d "{\"username\":\"$1\",\"email\":\"$1@example.org\",\"password\":\"$PW\",\"confirm_password\":\"$PW\"}"
@@ -60,8 +67,7 @@ token_of() { sed '$d' | json "d.get('access_token','')"; }
 account() {
 	local name="smoke$RANDOM$RANDOM"
 	register "$name" >/dev/null
-	curl -s -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' \
-		-d "{\"token\":\"$(token_for "$name@example.org" /auth/activate)\"}" >/dev/null
+	activate "$(token_for "$name@example.org" /auth/activate)" "$PW" >/dev/null
 	login "$name" "$PW" | token_of
 }
 
@@ -77,8 +83,11 @@ check "can't log in before activating" 403 "$(login "$NAME" "$PW" | tail -n1)"
 check "wrong password doesn't reveal the account" 401 "$(login "$NAME" "wrong-$PW" | tail -n1)"
 ACT=$(token_for "$NAME@example.org" /auth/activate)
 [ -n "$ACT" ]; check "activation email arrives" 0 $?
-check "activate the account" 204 "$(code -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' -d "{\"token\":\"$ACT\"}")"
-check "activation link works once" 400 "$(code -X POST "$B/auth/verify-email" -H 'Content-Type: application/json' -d "{\"token\":\"$ACT\"}")"
+check "activating needs the account's password" 401 "$(activate "$ACT" "wrong-$PW")"
+check "activate the account" 204 "$(activate "$ACT" "$PW")"
+check "activation link works once" 400 "$(activate "$ACT" "$PW")"
+AT_NAME='{"username":"a@b.org","email":"ab@example.org","password":"long-enough-1"}'
+check "usernames can't contain @" 400 "$(code -X POST "$B/auth/register" -H 'Content-Type: application/json' -d "$AT_NAME")"
 OLD=$(login "$NAME" "$PW" | token_of)
 [ -n "$OLD" ]; check "log in once activated" 0 $?
 NEWPW="Changed-$RANDOM-Password2"

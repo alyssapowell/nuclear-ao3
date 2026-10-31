@@ -177,3 +177,6 @@ frontend/accessibility-validation-results.json
 
 # Browser-automation scratch files
 .playwright-mcp/
+
+# Login signing keys: never commit
+secrets/

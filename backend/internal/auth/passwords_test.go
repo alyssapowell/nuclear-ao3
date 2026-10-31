@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"nuclear-ao3/shared/email"
+
+	"github.com/google/uuid"
 )
 
 const authAPI = "/api/v1/auth"
@@ -106,13 +108,13 @@ func TestRegisterAndActivate(t *testing.T) {
 		t.Errorf("wrong password on unactivated account: %d (must not reveal not_activated)", wrong.Code)
 	}
 
-	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token}); c != http.StatusNoContent {
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token, "password": "secret1"}); c != http.StatusNoContent {
 		t.Fatalf("verify: %d", c)
 	}
 	if c := e.status("POST", authAPI+"/login", "", login); c != http.StatusOK {
 		t.Errorf("login after activation: %d", c)
 	}
-	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token}); c != http.StatusBadRequest {
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token, "password": "secret1"}); c != http.StatusBadRequest {
 		t.Errorf("activation token reused: %d", c)
 	}
 	var stored string
@@ -127,10 +129,10 @@ func TestActivationTokenExpires(t *testing.T) {
 	e.register("slowpoke", "secret1")
 	token := tokenIn(t, e.queued("slowpoke@example.org")[0], "/auth/activate")
 	e.mustExec(`UPDATE email_verification_tokens SET expires_at = now() - interval '1 second'`)
-	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token}); c != http.StatusBadRequest {
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token, "password": "secret1"}); c != http.StatusBadRequest {
 		t.Errorf("expired token: %d", c)
 	}
-	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": "garbage"}); c != http.StatusBadRequest {
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": "garbage", "password": "secret1"}); c != http.StatusBadRequest {
 		t.Errorf("unknown token: %d", c)
 	}
 }
@@ -205,7 +207,7 @@ func TestResendThrottle(t *testing.T) {
 		t.Errorf("unknown address: %d", c)
 	}
 	// An activated account gets nothing.
-	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": tokenIn(t, mails[1], "/auth/activate")}); c != http.StatusNoContent {
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": tokenIn(t, mails[1], "/auth/activate"), "password": "secret1"}); c != http.StatusNoContent {
 		t.Fatalf("verify: %d", c)
 	}
 	e.mustExec(`UPDATE email_verification_tokens SET created_at = now() - interval '1 hour'`)
@@ -320,4 +322,85 @@ func TestChangePassword(t *testing.T) {
 		t.Errorf("other session: %d", c)
 	}
 	e.login("changer", strings.Repeat("x", 40))
+}
+
+// Someone who signs up with another person's address can't have that
+// person activate the account for them: activating needs the password.
+func TestActivationNeedsThePassword(t *testing.T) {
+	e := newPasswordEnv(t)
+	e.register("squatter", "attackers-pw")
+	token := tokenIn(t, e.queued("squatter@example.org")[0], "/auth/activate")
+	w := e.do("POST", authAPI+"/verify-email", "", map[string]string{"token": token, "password": "owners-guess"})
+	if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "wrong_password") {
+		t.Fatalf("wrong password: %d %s", w.Code, w.Body)
+	}
+	var verified bool
+	e.as.db.QueryRow(`SELECT is_verified FROM users WHERE username = 'squatter'`).Scan(&verified)
+	if verified {
+		t.Fatal("activated with the wrong password")
+	}
+	// A wrong password doesn't use up the link.
+	if c := e.status("POST", authAPI+"/verify-email", "", map[string]string{"token": token, "password": "attackers-pw"}); c != http.StatusNoContent {
+		t.Errorf("right password after a wrong one: %d", c)
+	}
+}
+
+func TestUsernamesFollowAO3Rules(t *testing.T) {
+	e := newPasswordEnv(t)
+	for name, want := range map[string]int{
+		"ab": http.StatusBadRequest, "a@b.org": http.StatusBadRequest, "_lead": http.StatusBadRequest,
+		"trail_": http.StatusBadRequest, "has space": http.StatusBadRequest, strings.Repeat("a", 41): http.StatusBadRequest,
+		"abc": http.StatusCreated, "under_score9": http.StatusCreated, strings.Repeat("b", 40): http.StatusCreated,
+	} {
+		w := e.do("POST", authAPI+"/register", "", map[string]string{
+			"username": name, "email": strings.ReplaceAll(strings.ReplaceAll(name, "@", "at"), " ", "") + "@example.org", "password": "secret1"})
+		if w.Code != want {
+			t.Errorf("username %q: %d, want %d (%s)", name, w.Code, want, w.Body)
+		}
+	}
+}
+
+// Changing or resetting a password also cuts off OAuth apps and cancels
+// reset links sent earlier.
+func TestPasswordChangeRevokesAppsAndResetLinks(t *testing.T) {
+	e := newPasswordEnv(t)
+	e.addUser("connected", "connected@example.org", "old-password")
+	tok := e.login("connected", "old-password")
+	var userID uuid.UUID
+	e.as.db.QueryRow(`SELECT id FROM users WHERE username = 'connected'`).Scan(&userID)
+	client := uuid.New()
+	e.mustExec(`INSERT INTO oauth_clients (client_id, client_name, redirect_uris, scopes) VALUES ($1, 'Reader app', '{https://app.example}', '{read}')`, client)
+	addAppToken := func() {
+		e.mustExec(`INSERT INTO oauth_access_tokens (id, token, user_id, client_id, scopes, expires_at)
+			VALUES ($1, $2, $3, $4, '{read}', now() + interval '1 hour')`, uuid.New(), uuid.NewString(), userID, client)
+	}
+	liveAppTokens := func() (n int) {
+		e.as.db.QueryRow(`SELECT count(*) FROM oauth_access_tokens WHERE user_id = $1 AND NOT is_revoked`, userID).Scan(&n)
+		return
+	}
+
+	addAppToken()
+	e.status("POST", authAPI+"/reset-password", "", map[string]string{"email": "connected@example.org"})
+	resetLink := tokenIn(t, e.queued("connected@example.org")[0], "/auth/reset-password")
+	if c := e.status("POST", authAPI+"/change-password", tok, map[string]string{"current_password": "old-password", "new_password": "new-password"}); c != http.StatusNoContent {
+		t.Fatalf("change: %d", c)
+	}
+	if n := liveAppTokens(); n != 0 {
+		t.Errorf("%d app tokens still work after a password change", n)
+	}
+	if c := e.status("POST", authAPI+"/reset-password/confirm", "", map[string]string{"token": resetLink, "password": "sneaky-pass"}); c != http.StatusBadRequest {
+		t.Errorf("a reset link from before the change still worked: %d", c)
+	}
+
+	addAppToken()
+	e.mustExec(`UPDATE password_reset_tokens SET created_at = now() - interval '10 minutes'`)
+	e.status("POST", authAPI+"/reset-password", "", map[string]string{"email": "connected@example.org"})
+	mails := e.queued("connected@example.org")
+	link := tokenIn(t, mails[len(mails)-1], "/auth/reset-password")
+	if c := e.status("POST", authAPI+"/reset-password/confirm", "", map[string]string{"token": link, "password": "reset-pass"}); c != http.StatusNoContent {
+		t.Fatalf("reset: %d", c)
+	}
+	if n := liveAppTokens(); n != 0 {
+		t.Errorf("%d app tokens still work after a reset", n)
+	}
 }

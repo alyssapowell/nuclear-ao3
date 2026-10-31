@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"os"
 
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/email"
@@ -117,15 +117,17 @@ type AuthService struct {
 	mail  *email.Config // nil until SetMail: no emails are sent
 }
 
-// New builds the auth service on top of the shared database and Redis.
+// New builds the auth service on top of the shared database and Redis. The
+// login signing key is read from the files named by SIGNING_KEY_FILE and
+// SIGNING_KEY_PREVIOUS_FILES; without a valid key it returns an error.
 func New(db *sql.DB, rdb *redis.Client) (*AuthService, error) {
-	jwtManager, err := NewJWTManager(
-		platform.Env("JWT_SECRET", ""),
+	jwtManager, err := LoadJWTManager(
 		platform.Env("JWT_ISSUER", "nuclear-ao3"),
-		db,
+		os.Getenv("SIGNING_KEY_FILE"),
+		os.Getenv("SIGNING_KEY_PREVIOUS_FILES"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create JWT manager: %w", err)
+		return nil, err
 	}
 	return &AuthService{db: db, redis: rdb, jwt: jwtManager}, nil
 }

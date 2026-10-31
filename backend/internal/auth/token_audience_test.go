@@ -12,7 +12,7 @@ import (
 // to third-party apps are signed with the same key, so the audience and
 // issuer checks are what keep them out.
 func TestValidateTokenAcceptsOnlyLoginTokens(t *testing.T) {
-	jm, err := NewJWTManager("", "nuclear-ao3", nil)
+	jm, err := newTestJWTManager("nuclear-ao3")
 	if err != nil {
 		t.Fatal(err)
 	}

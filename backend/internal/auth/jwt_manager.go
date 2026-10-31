@@ -1,14 +1,11 @@
 package auth
 
 import (
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"database/sql"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"math/big"
 	"time"
 
@@ -16,107 +13,66 @@ import (
 	"github.com/google/uuid"
 )
 
-// JWTManager handles JWT token operations
+// JWTManager signs login tokens with one key and checks them against that
+// key plus any previous keys kept for a planned rotation. The keys come from
+// files the admin holds (see keys.go); nothing is stored in the database.
 type JWTManager struct {
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
 	issuer     string
 	keyID      string
+
+	previous []*rsa.PublicKey          // old keys, verify only, in the order given
+	verify   map[string]*rsa.PublicKey // kid -> public key, current and previous
 }
 
-// NewJWTManager creates a new JWT manager with persistent keys
-func NewJWTManager(secret, issuer string, db *sql.DB) (*JWTManager, error) {
-	var privateKey *rsa.PrivateKey
-	var keyID string
-	var err error
-
-	// If database is available, try to load/save persistent keys
-	if db != nil {
-		// Try to load existing key from database
-		privateKey, keyID, err = loadJWTKeyFromDB(db)
-		if err != nil {
-			log.Printf("No existing JWT key found, generating new one: %v", err)
-			// Generate new key pair
-			privateKey, err = rsa.GenerateKey(rand.Reader, 2048)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate private key: %v", err)
-			}
-			keyID = uuid.New().String()
-
-			// Save to database for persistence
-			if err := saveJWTKeyToDB(db, privateKey, keyID); err != nil {
-				log.Printf("Warning: Failed to save JWT key to database: %v", err)
-			} else {
-				log.Printf("Generated and saved new JWT signing key with ID: %s", keyID)
-			}
-		} else {
-			log.Printf("Loaded existing JWT signing key with ID: %s", keyID)
-		}
-	} else {
-		// No database available (test mode) - generate ephemeral key
-		log.Printf("No database available, generating ephemeral JWT key for testing")
-		privateKey, err = rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate private key: %v", err)
-		}
-		keyID = uuid.New().String()
+// NewJWTManager builds a manager that signs with key and also accepts tokens
+// signed by the previous public keys. The server gets its keys from files
+// through LoadJWTManager; tests call this directly.
+func NewJWTManager(issuer string, key *rsa.PrivateKey, previous ...*rsa.PublicKey) (*JWTManager, error) {
+	if key == nil {
+		return nil, fmt.Errorf("no signing key")
 	}
-
-	return &JWTManager{
-		privateKey: privateKey,
-		publicKey:  &privateKey.PublicKey,
+	if err := checkKeySize(&key.PublicKey); err != nil {
+		return nil, err
+	}
+	jm := &JWTManager{
+		privateKey: key,
+		publicKey:  &key.PublicKey,
 		issuer:     issuer,
-		keyID:      keyID,
-	}, nil
+		keyID:      KeyID(&key.PublicKey),
+		verify:     map[string]*rsa.PublicKey{},
+	}
+	jm.verify[jm.keyID] = jm.publicKey
+	for _, pub := range previous {
+		if err := checkKeySize(pub); err != nil {
+			return nil, err
+		}
+		kid := KeyID(pub)
+		if _, dup := jm.verify[kid]; dup {
+			continue
+		}
+		jm.verify[kid] = pub
+		jm.previous = append(jm.previous, pub)
+	}
+	return jm, nil
 }
 
-// loadJWTKeyFromDB loads the JWT signing key from the database
-func loadJWTKeyFromDB(db *sql.DB) (*rsa.PrivateKey, string, error) {
-	var keyData string
-	var keyID string
-
-	err := db.QueryRow("SELECT key_data, key_id FROM jwt_signing_keys WHERE is_active = true ORDER BY created_at DESC LIMIT 1").Scan(&keyData, &keyID)
-	if err != nil {
-		return nil, "", err
+// verificationKey is the jwt key function: it picks the key named by the
+// token's kid header and refuses a token whose kid isn't one we hold.
+func (jm *JWTManager) verificationKey(token *jwt.Token) (interface{}, error) {
+	if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 	}
-
-	// Decode PEM data
-	block, _ := pem.Decode([]byte(keyData))
-	if block == nil {
-		return nil, "", fmt.Errorf("failed to decode PEM block")
+	kid, _ := token.Header["kid"].(string)
+	if kid == "" {
+		return nil, fmt.Errorf("token has no key id")
 	}
-
-	// Parse private key
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to parse private key: %v", err)
+	pub, ok := jm.verify[kid]
+	if !ok {
+		return nil, fmt.Errorf("token was signed with an unknown key")
 	}
-
-	return privateKey, keyID, nil
-}
-
-// saveJWTKeyToDB saves the JWT signing key to the database
-func saveJWTKeyToDB(db *sql.DB, privateKey *rsa.PrivateKey, keyID string) error {
-	// Encode private key to PEM format
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: privateKeyBytes,
-	})
-
-	// Deactivate old keys
-	_, err := db.Exec("UPDATE jwt_signing_keys SET is_active = false WHERE is_active = true")
-	if err != nil {
-		return fmt.Errorf("failed to deactivate old keys: %v", err)
-	}
-
-	// Insert new key
-	_, err = db.Exec(`
-		INSERT INTO jwt_signing_keys (key_id, key_data, is_active, created_at) 
-		VALUES ($1, $2, true, NOW())
-	`, keyID, string(privateKeyPEM))
-
-	return err
+	return pub, nil
 }
 
 // GenerateToken creates a new JWT token
@@ -176,12 +132,7 @@ func (jm *JWTManager) GenerateLoginToken(userID, sessionID uuid.UUID, expiresIn 
 // login token. It does not check that the session is still active.
 func (jm *JWTManager) parseLoginToken(tokenString string) (*loginClaims, error) {
 	claims := &loginClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return jm.publicKey, nil
-	}, jwt.WithAudience(LoginAudience), jwt.WithIssuer(jm.issuer), jwt.WithExpirationRequired())
+	token, err := jwt.ParseWithClaims(tokenString, claims, jm.verificationKey, jwt.WithAudience(LoginAudience), jwt.WithIssuer(jm.issuer), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, err
 	}
@@ -223,19 +174,24 @@ func (jm *JWTManager) GetPublicKeyPEM() (string, error) {
 	return string(pubKeyPEM), nil
 }
 
-// GetJWKS returns the JSON Web Key Set for the public key
+// GetJWKS returns the JSON Web Key Set: the current key first, then the
+// previous public keys, so apps can still check tokens signed before a rotation.
 func (jm *JWTManager) GetJWKS() map[string]interface{} {
+	keys := []map[string]interface{}{jwk(jm.publicKey)}
+	for _, pub := range jm.previous {
+		keys = append(keys, jwk(pub))
+	}
+	return map[string]interface{}{"keys": keys}
+}
+
+func jwk(pub *rsa.PublicKey) map[string]interface{} {
 	return map[string]interface{}{
-		"keys": []map[string]interface{}{
-			{
-				"kty": "RSA",
-				"use": "sig",
-				"alg": "RS256",
-				"kid": jm.keyID,
-				"n":   encodeRSAPublicKeyComponent(jm.publicKey.N),
-				"e":   encodeRSAPublicKeyComponent(big.NewInt(int64(jm.publicKey.E))),
-			},
-		},
+		"kty": "RSA",
+		"use": "sig",
+		"alg": "RS256",
+		"kid": KeyID(pub),
+		"n":   encodeRSAPublicKeyComponent(pub.N),
+		"e":   encodeRSAPublicKeyComponent(big.NewInt(int64(pub.E))),
 	}
 }
 

@@ -54,7 +54,6 @@ SERVER_SSH_KEY     = Your private SSH key (entire key including headers)
 SERVER_HOST        = Your server IP address (e.g., 64.23.45.67)
 SERVER_USER        = SSH username (usually 'root' or 'ubuntu')
 DOMAIN             = Your domain name (e.g., nuclear-ao3.com or ngrok URL)
-JWT_SECRET         = Random secure string (generate with: openssl rand -base64 32)
 ```
 
 ### Example SSH Key Format:

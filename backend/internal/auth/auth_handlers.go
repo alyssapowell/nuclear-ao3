@@ -41,8 +41,8 @@ func (as *AuthService) Login(c *gin.Context) {
 	var passwordHash string
 	err := as.db.QueryRowContext(c, `
 		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at
-		FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)
-		ORDER BY (lower(email) = lower($1)) DESC LIMIT 1`, login).Scan(
+		FROM users WHERE CASE WHEN strpos($1, '@') > 0 THEN lower(email) = lower($1) ELSE lower(username) = lower($1) END
+		LIMIT 1`, login).Scan(
 		&user.ID, &user.Username, &user.Email, &passwordHash, &user.DisplayName,
 		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt)
 	if err == sql.ErrNoRows {

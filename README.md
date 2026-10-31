@@ -468,7 +468,6 @@ REDIS_URL=redis:6379
 REDIS_PASSWORD=
 
 # Login tokens
-JWT_SECRET=your-super-secret-key
 JWT_ISSUER=nuclear-ao3
 
 # Application

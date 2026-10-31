@@ -70,6 +70,8 @@ services:
       - DATABASE_URL=postgres://ao3_user:ao3_password@postgres:5432/ao3_nuclear?sslmode=disable
       - REDIS_URL=redis:6379
       - JWT_ISSUER=nuclear-ao3
+      - SIGNING_KEY_FILE=${SIGNING_KEY_FILE:-}
+      - SIGNING_KEY_PREVIOUS_FILES=${SIGNING_KEY_PREVIOUS_FILES:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       - SMTP_HOST=smtp
       - SMTP_PORT=1025
@@ -77,6 +79,12 @@ services:
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Nuclear AO3}
       - SITE_URL=${SITE_URL:-http://localhost}
       - JOB_WORKERS=${JOB_WORKERS:-2}
+    # The key files are readable only by their owner, so the app must run as
+    # the user who owns ./secrets. Linux: set APP_UID in .env to `id -u`.
+    user: "${APP_UID:-1001}"
+    volumes:
+      # Login signing keys (see "Set up the signing key" in docs/RUNBOOK.md).
+      - ./secrets:/secrets:ro
     ports:
       # Published on localhost only, for `npm run dev` in frontend/. Caddy is
       # the public entrance.

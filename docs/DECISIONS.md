@@ -8,6 +8,14 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-10-30: The login signing key is a file the admin holds
+
+**Decision:** One RSA key signs logins. The admin creates it with `nuclear keys generate`, keeps a copy outside the server, and points the app at it with `SIGNING_KEY_FILE`. It is never stored in the database. To change it, set `SIGNING_KEY_FILE` to a new file; for a planned change, list the old file in `SIGNING_KEY_PREVIOUS_FILES` for 14 days (the longest a login lasts) so people stay logged in. Each key's ID is its RFC 7638 thumbprint, tokens carry it, and a token with an unknown ID is refused. The app won't start without a valid key (RSA, at least 2048 bits) and never makes one itself.
+
+**Why:** The app used to create the key on first start and keep the private half as plain text in the database. Anyone who got a database backup or a read-only SQL injection could forge a login for any account, including an admin's, and nothing would show it. Backups get copied to more places than anything else, so the key must not be in them. A key in a file the admin controls can be changed with a config edit and a restart, with no code or database step.
+
+**Cost:** The admin has a new thing to look after: if every copy of the key is lost, everyone is logged out once and a new key is needed. Migration 030 drops the old table, so on upgrade everyone logs in again once. Old backups still contain the old key.
+
 ## 2026-10-29: Anyone can create new tags when posting, including fandoms
 
 **Decision:** When a work is posted with a tag that doesn't exist yet, of any type including fandom, the tag is created unwrangled. Wranglers decide later whether it becomes canonical or a synonym.

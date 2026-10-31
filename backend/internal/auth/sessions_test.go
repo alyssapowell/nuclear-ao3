@@ -27,7 +27,7 @@ func newSessionEnv(t *testing.T) *sessionEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := testdb.New(t)
-	as, err := New(db, nil)
+	as, err := newTestAuthService(db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

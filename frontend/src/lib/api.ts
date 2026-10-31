@@ -2597,8 +2597,9 @@ export function register(username: string, email: string, password: string): Pro
   return accountCall('register', 'POST', { username, email, password });
 }
 
-export function verifyEmail(token: string): Promise<AccountResult> {
-  return accountCall('verify-email', 'POST', { token });
+/** Activation needs the account's password as well as the emailed token. */
+export function verifyEmail(token: string, password: string): Promise<AccountResult> {
+  return accountCall('verify-email', 'POST', { token, password });
 }
 
 export function resendVerification(email: string): Promise<AccountResult> {
