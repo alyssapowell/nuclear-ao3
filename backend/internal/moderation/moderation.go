@@ -317,7 +317,7 @@ func (s *Service) UserByRef(ctx context.Context, ref string) (uuid.UUID, error) 
 		return found, err
 	}
 	var id uuid.UUID
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE lower(email) = lower($1)`, ref).Scan(&id)
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE email = $1`, ref).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return uuid.Nil, fmt.Errorf("no account with email %q: %w", ref, ErrNotFound)
 	}

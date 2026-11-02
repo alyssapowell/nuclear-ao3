@@ -49,7 +49,7 @@ func (as *AuthService) Login(c *gin.Context) {
 	err := as.db.QueryRowContext(c.Request.Context(), `
 		SELECT id, email, password_hash, COALESCE(display_name, ''), is_active, is_verified, created_at, updated_at,
 		       locked_until IS NOT NULL AND locked_until > now()
-		FROM users WHERE lower(email) = $1
+		FROM users WHERE email = $1
 		LIMIT 1`, login).Scan(
 		&user.ID, &user.Email, &passwordHash, &user.DisplayName,
 		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt, &locked)

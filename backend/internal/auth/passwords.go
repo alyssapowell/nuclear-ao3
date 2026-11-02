@@ -149,7 +149,7 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 	// The row lock makes two requests at once send one email, not two.
 	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT u.id, u.email FROM users u
-		WHERE lower(u.email) = lower($1) AND `+k.eligible+`
+		WHERE u.email = $1 AND `+k.eligible+`
 		LIMIT 1 FOR UPDATE`, address).Scan(&userID, &to)
 	if err == sql.ErrNoRows {
 		return
@@ -310,7 +310,7 @@ func (as *AuthService) tellOwnerOfSignUp(c *gin.Context, address string) {
 	defer tx.Rollback()
 	var userID uuid.UUID
 	var to string
-	err = tx.QueryRowContext(ctx, `SELECT id, email FROM users WHERE lower(email) = lower($1) FOR UPDATE`, address).Scan(&userID, &to)
+	err = tx.QueryRowContext(ctx, `SELECT id, email FROM users WHERE email = $1 FOR UPDATE`, address).Scan(&userID, &to)
 	if err != nil {
 		log.Printf("register: sign-up attempt email: %v", err)
 		return
