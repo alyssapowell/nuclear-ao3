@@ -282,3 +282,25 @@ func (c *Config) AccountLocked(to, username string) (Message, error) {
 		"Reset my password", c.SiteURL+"/auth/forgot-password",
 		"If it wasn't you, resetting your password is safe and ends the pause straight away.")
 }
+
+// AppReviewed tells the person who registered an app what an admin decided:
+// outcome is "approved", "rejected" or "suspended". The admin's note, if
+// there is one, is quoted. It never says which admin decided.
+func (c *Config) AppReviewed(to, username, appName, outcome, note string) (Message, error) {
+	var intro string
+	switch outcome {
+	case "approved":
+		intro = fmt.Sprintf("Your app %q has been approved. People can now sign in to it with their %s account.", appName, c.FromName)
+	case "rejected":
+		intro = fmt.Sprintf("Your app %q was not approved, so it cannot be used yet.", appName)
+	case "suspended":
+		intro = fmt.Sprintf("Your app %q has been suspended. It cannot sign anyone in, and every access it held has been ended.", appName)
+	default:
+		return Message{}, fmt.Errorf("email: unknown app outcome %q", outcome)
+	}
+	outro := "You can see the status of your apps on the site."
+	if note = strings.TrimSpace(note); note != "" {
+		outro = "Note from the reviewer: " + note
+	}
+	return c.linkMessage(to, username, "Your app was "+outcome, intro, "Open "+c.FromName, c.SiteURL, outro)
+}

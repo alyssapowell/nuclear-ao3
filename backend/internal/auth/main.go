@@ -65,6 +65,28 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		}
 	}
 
+	// Apps people register themselves. A new app is pending until an admin
+	// approves it (see oauth_apps.go). Banned and suspended people can't use
+	// any of these.
+	apps := r.Group("/api/v1/apps", d.RequireUser, d.ActiveAccount)
+	{
+		apps.POST("", authService.RegisterApp)
+		apps.GET("", authService.ListMyApps)
+		apps.PATCH("/:id", authService.UpdateMyApp)
+		apps.POST("/:id/reset-secret", authService.ResetMyAppSecret)
+		apps.DELETE("/:id", authService.DeleteMyApp)
+	}
+
+	// The review queue and the four decisions, for admins.
+	review := r.Group("/api/v1/admin/apps", d.RequireUser, d.ActiveAccount, d.RequireRole("admin"))
+	{
+		review.GET("", authService.AdminListApps)
+		review.POST("/:id/approve", authService.adminReview("approve"))
+		review.POST("/:id/reject", authService.adminReview("reject"))
+		review.POST("/:id/suspend", authService.adminReview("suspend"))
+		review.POST("/:id/reinstate", authService.adminReview("reinstate"))
+	}
+
 	// OAuth2/OIDC Discovery endpoints
 	r.GET("/.well-known/openid-configuration", authService.WellKnownOIDC)
 	r.GET("/.well-known/oauth-authorization-server", authService.WellKnownOAuth2)

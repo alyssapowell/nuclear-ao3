@@ -393,7 +393,7 @@ func subsetOf(sub, super []string) bool {
 }
 
 // validateAccessToken finds a live access token. The app must still be
-// active and the person must still be an active user who is not banned or
+// approved and the person must still be an active user who is not banned or
 // suspended, so the token stops working the moment either changes.
 func (as *AuthService) validateAccessToken(token string) (*models.OAuthAccessToken, error) {
 	if token == "" || len(token) > 512 {
@@ -404,7 +404,7 @@ func (as *AuthService) validateAccessToken(token string) (*models.OAuthAccessTok
 	err := as.db.QueryRow(`
 		SELECT t.id, t.user_id, t.client_id, t.scopes, t.token_type, t.expires_at, t.created_at
 		FROM oauth_access_tokens t
-		JOIN oauth_clients c ON c.client_id = t.client_id AND c.is_active
+		JOIN oauth_clients c ON c.client_id = t.client_id AND c.status = 'approved'
 		JOIN users u ON u.id = t.user_id AND u.is_active
 		WHERE t.token_hash = $1 AND NOT t.is_revoked AND t.expires_at > now()
 		  AND user_standing(u.id) IS NULL`, hashSecret(token)).Scan(

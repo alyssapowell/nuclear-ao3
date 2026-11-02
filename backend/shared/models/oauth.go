@@ -26,7 +26,8 @@ type OAuthClient struct {
 	OwnerID         *uuid.UUID `json:"owner_id" db:"owner_id"`                   // User who registered the client
 	AccessTokenTTL  int        `json:"access_token_ttl" db:"access_token_ttl"`   // Seconds
 	RefreshTokenTTL int        `json:"refresh_token_ttl" db:"refresh_token_ttl"` // Seconds
-	IsActive        bool       `json:"is_active" db:"is_active"`
+	IsActive        bool       `json:"is_active" db:"is_active"`                 // true only while Status is approved
+	Status          string     `json:"status" db:"status"`                       // pending, approved, rejected or suspended
 	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
 }

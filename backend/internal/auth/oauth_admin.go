@@ -257,13 +257,13 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 	// Every app is listed, switched off or not.
 	query := `
 		SELECT oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
-			oc.is_active, oc.created_at, oc.updated_at,
+			oc.is_active, oc.status, oc.created_at, oc.updated_at,
 			COUNT(DISTINCT at.user_id) as unique_users,
 			COUNT(at.id) as total_tokens
 		FROM oauth_clients oc
 		LEFT JOIN oauth_access_tokens at ON oc.client_id = at.client_id
 		GROUP BY oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
-			oc.is_active, oc.created_at, oc.updated_at
+			oc.is_active, oc.status, oc.created_at, oc.updated_at
 		ORDER BY oc.created_at DESC, oc.client_id
 		LIMIT $1 OFFSET $2`
 
@@ -280,11 +280,12 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 		var clientName string
 		var description sql.NullString
 		var isPublic, isFirstParty, isActive bool
+		var status string
 		var createdAt, updatedAt time.Time
 		var uniqueUsers, totalTokens int
 
 		err := rows.Scan(&clientID, &clientName, &description, &isPublic, &isFirstParty,
-			&isActive, &createdAt, &updatedAt, &uniqueUsers, &totalTokens)
+			&isActive, &status, &createdAt, &updatedAt, &uniqueUsers, &totalTokens)
 		if err != nil {
 			continue
 		}
@@ -296,6 +297,7 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 			"is_public":      isPublic,
 			"is_first_party": isFirstParty,
 			"is_active":      isActive,
+			"status":         status,
 			"created_at":     createdAt,
 			"updated_at":     updatedAt,
 			"unique_users":   uniqueUsers,
@@ -351,6 +353,7 @@ func (as *AuthService) AdminGetClient(c *gin.Context) {
 		"access_token_ttl":  client.AccessTokenTTL,
 		"refresh_token_ttl": client.RefreshTokenTTL,
 		"is_active":         client.IsActive,
+		"status":            client.Status,
 		"created_at":        client.CreatedAt,
 		"updated_at":        client.UpdatedAt,
 	}
@@ -484,8 +487,25 @@ func (as *AuthService) AdminUpdateClient(c *gin.Context) {
 		v := clampRefreshTTL(*up.RefreshTokenTTL)
 		set("refresh_token_ttl", v, "refresh_token_ttl", v)
 	}
+	// is_active follows the status (migration 047), so this changes the
+	// status. Off means suspended. On is only for a suspended app, which is
+	// a reinstatement; a waiting or refused app has to be approved.
 	if up.IsActive != nil {
-		set("is_active", *up.IsActive, "is_active", *up.IsActive)
+		switch {
+		case *up.IsActive && client.Status == "approved", !*up.IsActive && client.Status == "suspended":
+			// already so
+		case *up.IsActive && client.Status != "suspended":
+			bad("invalid_request", "this app is "+client.Status+"; approve it from the review queue")
+			return
+		default:
+			status := "suspended"
+			if *up.IsActive {
+				status = "approved"
+			}
+			set("status", status, "status", status)
+			set("reviewed_by", actor.UserID, "reviewed_by", "admin")
+			set("reviewed_at", time.Now(), "reviewed_at", "now")
+		}
 	}
 	if up.IsTrusted != nil {
 		set("is_trusted", *up.IsTrusted, "is_trusted", *up.IsTrusted)
@@ -508,7 +528,7 @@ func (as *AuthService) AdminUpdateClient(c *gin.Context) {
 		fmt.Sprintf(", updated_at = now() WHERE client_id = $%d", len(args)), args...)
 
 	// Switching an app off ends everything it was given.
-	if err == nil && up.IsActive != nil && !*up.IsActive {
+	if err == nil && up.IsActive != nil && !*up.IsActive && client.Status != "suspended" {
 		err = revokeClientAccess(ctx, tx, clientUUID, true)
 	}
 	// Taking a scope away from an app takes it from tokens already issued.
@@ -579,7 +599,7 @@ func (as *AuthService) AdminDeleteClient(c *gin.Context) {
 
 	// Soft delete (deactivate) instead of hard delete to preserve audit trail,
 	// and take back everything the app was given.
-	_, err = tx.ExecContext(ctx, `UPDATE oauth_clients SET is_active = false, updated_at = NOW() WHERE client_id = $1`, clientUUID)
+	_, err = tx.ExecContext(ctx, `UPDATE oauth_clients SET status = 'suspended', updated_at = NOW() WHERE client_id = $1`, clientUUID)
 	if err == nil {
 		err = revokeClientAccess(ctx, tx, clientUUID, true)
 	}

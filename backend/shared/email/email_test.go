@@ -203,3 +203,23 @@ func TestAccountLockedEmail(t *testing.T) {
 		t.Error("the username went into the HTML unescaped")
 	}
 }
+
+func TestAppReviewed(t *testing.T) {
+	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
+	for _, outcome := range []string{"approved", "rejected", "suspended"} {
+		m, err := c.AppReviewed("owner@example.org", "owner", "My Reader", outcome, "Please <b>fix</b> the redirect")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.Subject != "Your app was "+outcome || !strings.Contains(m.Text, "My Reader") ||
+			!strings.Contains(m.Text, "Please <b>fix</b> the redirect") {
+			t.Errorf("%s: unexpected message %+v", outcome, m)
+		}
+		if strings.Contains(m.HTML, "<b>fix</b>") {
+			t.Errorf("%s: the note must be escaped in the HTML body", outcome)
+		}
+	}
+	if _, err := c.AppReviewed("a@b.c", "x", "y", "bogus", ""); err == nil {
+		t.Error("an unknown outcome should be an error")
+	}
+}

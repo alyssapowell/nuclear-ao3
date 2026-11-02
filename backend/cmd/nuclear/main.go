@@ -61,10 +61,21 @@
 //	                          ban an account (it can read but not post) and log
 //	                          it out
 //	nuclear unban <username>
+//	nuclear apps [--status pending]
+//	                          list apps other people registered (default: the
+//	                          ones waiting for review; "--status all" lists
+//	                          every app)
+//	nuclear apps approve <id>
+//	nuclear apps reject <id> --note "..."
+//	nuclear apps suspend <id> --note "..."
+//	                          decide on an app. Reject and suspend end every
+//	                          token, code and consent it holds, and tell its
+//	                          owner by email. For incidents: cut off an app you
+//	                          don't trust.
 //	nuclear audit [--since 2026-10-01] [--limit 50]
 //	                          list recent admin actions, newest first
 //
-// Every one of the moderation commands, and "grant", is also written to the
+// Every one of the moderation commands, "apps" and "grant" is also written to the
 // audit log as cli:<your operating system user>.
 package main
 
@@ -325,10 +336,13 @@ func runCommand(db *sql.DB, args []string) int {
 		log.Printf("grant: %s now has the %s role", args[1], args[2])
 		return 0
 	}
+	if args[0] == "apps" {
+		return appsCommand(ctx, db, email.LoadConfigFromEnv(), args[1:])
+	}
 	if handled, code := moderationCommand(ctx, db, args); handled {
 		return code
 	}
-	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | roles | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <username> | audit | keys generate|show]\n", strings.Join(args, " "))
+	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | roles | apps [approve|reject|suspend <id>] | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <username> | audit | keys generate|show]\n", strings.Join(args, " "))
 	return 2
 }
 

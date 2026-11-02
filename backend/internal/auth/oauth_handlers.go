@@ -211,15 +211,16 @@ func (as *AuthService) RegisterClient(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	// The route only lets admins through; the admin owns the client.
-	// Self-registered apps are not trusted or first-party.
+	// The route only lets admins through; the admin owns the client. The
+	// admin is the reviewer, so the app is approved at once. It is not
+	// trusted or first-party.
 	var createdAt time.Time
 	err = tx.QueryRowContext(c.Request.Context(), `
 		INSERT INTO oauth_clients (
 			client_id, client_secret, client_name, description, website, logo_url,
 			redirect_uris, scopes, grant_types, response_types, is_public, is_confidential,
-			is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl, is_active
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false, false, $13, $14, $15, true)
+			is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl, status, reviewed_by, reviewed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false, false, $13, $14, $15, 'approved', $13, now())
 		RETURNING created_at`,
 		clientID, secretHash, strings.TrimSpace(req.Name), req.Description, req.Website, req.LogoURL,
 		pq.Array(redirectURIs), pq.Array(scopes), pq.Array(grantTypes), pq.Array(responseTypes),
@@ -596,7 +597,7 @@ func (as *AuthService) revokeOwnToken(ctx context.Context, clientID uuid.UUID, t
 const clientColumns = `client_id, COALESCE(client_secret, ''), client_name, COALESCE(description, ''),
 	COALESCE(website, ''), COALESCE(logo_url, ''), redirect_uris, scopes, grant_types, response_types,
 	is_public, is_confidential, is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl,
-	is_active, created_at, updated_at`
+	status, created_at, updated_at`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -607,25 +608,28 @@ func scanClient(row rowScanner) (*models.OAuthClient, error) {
 		pq.Array(&client.RedirectURIs), pq.Array(&client.Scopes), pq.Array(&client.GrantTypes),
 		pq.Array(&client.ResponseTypes), &client.IsPublic, &client.IsConfidential,
 		&client.IsTrusted, &client.IsFirstParty, &client.OwnerID, &client.AccessTokenTTL,
-		&client.RefreshTokenTTL, &client.IsActive, &client.CreatedAt, &client.UpdatedAt)
+		&client.RefreshTokenTTL, &client.Status, &client.CreatedAt, &client.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	// is_active is a copy of the status (migration 047); read it from there.
+	client.IsActive = client.Status == "approved"
 	return client, nil
 }
 
-// getClientByID finds an app that is switched on. It is what every user-facing
-// and app-facing path uses: a switched-off app does not exist to them.
+// getClientByID finds an app that is approved. It is what every user-facing
+// and app-facing path uses: an app that is pending, rejected or suspended
+// does not exist to them.
 func (as *AuthService) getClientByID(clientID string) (*models.OAuthClient, error) {
 	id, err := uuid.Parse(clientID)
 	if err != nil {
 		return nil, err
 	}
 	return scanClient(as.db.QueryRow(
-		`SELECT `+clientColumns+` FROM oauth_clients WHERE client_id = $1 AND is_active = true`, id))
+		`SELECT `+clientColumns+` FROM oauth_clients WHERE client_id = $1 AND status = 'approved'`, id))
 }
 
-// getClientForAdmin finds an app whether or not it is switched on.
+// getClientForAdmin finds an app in any status.
 func (as *AuthService) getClientForAdmin(id uuid.UUID) (*models.OAuthClient, error) {
 	return scanClient(as.db.QueryRow(
 		`SELECT `+clientColumns+` FROM oauth_clients WHERE client_id = $1`, id))
