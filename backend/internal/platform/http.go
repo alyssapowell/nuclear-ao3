@@ -46,10 +46,17 @@ func SecurityHeaders() gin.HandlerFunc {
 	}
 }
 
-// Logger writes one line per request.
+// Logger writes one line per request. It logs the path without the query
+// string: queries can carry secrets (the live-notifications connection sends
+// its login token as ?token=, and OAuth requests carry codes and state), and
+// logs are kept, copied and read by more people than should see those.
 func Logger() gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
+		path := p.Path
+		if p.Request != nil && p.Request.URL != nil {
+			path = p.Request.URL.Path
+		}
 		return fmt.Sprintf("%s %s %s %d %s %s\n",
-			p.TimeStamp.Format(time.RFC3339), p.Method, p.Path, p.StatusCode, p.Latency, p.ErrorMessage)
+			p.TimeStamp.Format(time.RFC3339), p.Method, path, p.StatusCode, p.Latency, p.ErrorMessage)
 	})
 }

@@ -54,13 +54,18 @@
         file_server
     }
 
-    # Request logging
+    # Request logging. Query strings are dropped from the log: the live
+    # notifications connection sends its login token as ?token=, and other
+    # queries can carry codes. (Caddy already leaves out the Authorization
+    # and Cookie headers.)
     log {
         output file /var/log/caddy/nuclear-ao3.log {
             roll_size 100MB
             roll_keep 5
         }
-        format json
+        format filter {
+            request>uri regexp \?.*$ ""
+        }
     }
 }
 
