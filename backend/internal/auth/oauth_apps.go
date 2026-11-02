@@ -56,6 +56,8 @@ var (
 	ErrNoteRequired = errors.New("a note is required to reject or suspend an app")
 	ErrNoteTooLong  = errors.New("the note is too long")
 	ErrUnknownCmd   = errors.New("unknown review action")
+	// ErrAppChanged means the app was edited after the reviewer looked at it.
+	ErrAppChanged = errors.New("the app changed since you looked at it; look at its new settings and decide again")
 )
 
 // reviewRule says which statuses an action may start from and where it ends.
@@ -65,6 +67,7 @@ type reviewRule struct {
 	needsNote   bool
 	revoke      bool // ends every token, code and consent the app holds
 	emailsOwner bool
+	display     bool // decides the owner's proposed display changes; the app stays approved
 }
 
 var reviewRules = map[string]reviewRule{
@@ -72,6 +75,10 @@ var reviewRules = map[string]reviewRule{
 	"reject":    {from: []string{statusPending}, to: statusRejected, needsNote: true, revoke: true, emailsOwner: true},
 	"suspend":   {from: []string{statusApproved, statusPending}, to: statusSuspended, needsNote: true, revoke: true, emailsOwner: true},
 	"reinstate": {from: []string{statusSuspended}, to: statusApproved},
+	// Display changes proposed by the owner of an approved app. Nobody is
+	// signed out by either decision.
+	"approve_display": {from: []string{statusApproved}, to: statusApproved, emailsOwner: true, display: true},
+	"reject_display":  {from: []string{statusApproved}, to: statusApproved, needsNote: true, emailsOwner: true, display: true},
 }
 
 // ReviewResult is what a review changed.
@@ -83,11 +90,15 @@ type ReviewResult struct {
 }
 
 // ReviewApp approves, rejects, suspends or reinstates an app (action is
-// "approve", "reject", "suspend" or "reinstate"). The status change, the
+// "approve", "reject", "suspend" or "reinstate"), or approves or rejects an
+// owner's proposed display changes ("approve_display", "reject_display").
+// expectRevision is the revision the reviewer looked at; if the app has
+// changed since, nothing happens and ErrAppChanged is returned. 0 skips the
+// check (the command line, which shows the settings and acts at once). The status change, the
 // revocation of everything the app holds (for reject and suspend), the audit
 // row and the email to the owner are one transaction. mail may be nil, which
 // turns the email off. The owner is not emailed about their own action.
-func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.Actor, id uuid.UUID, action, note string) (*ReviewResult, error) {
+func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.Actor, id uuid.UUID, action, note string, expectRevision int) (*ReviewResult, error) {
 	rule, ok := reviewRules[action]
 	if !ok {
 		return nil, ErrUnknownCmd
@@ -108,24 +119,40 @@ func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.
 
 	var name, from string
 	var owner *uuid.UUID
+	var revision int
+	var displayPending bool
 	err = tx.QueryRowContext(ctx,
-		`SELECT client_name, status, owner_id FROM oauth_clients WHERE client_id = $1 FOR UPDATE`, id).Scan(&name, &from, &owner)
+		`SELECT client_name, status, owner_id, revision, display_review_pending FROM oauth_clients WHERE client_id = $1 FOR UPDATE`, id).
+		Scan(&name, &from, &owner, &revision, &displayPending)
 	if err == sql.ErrNoRows {
 		return nil, ErrAppNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+	if expectRevision > 0 && revision != expectRevision {
+		return nil, ErrAppChanged
+	}
 	if !contains(rule.from, from) {
 		return nil, fmt.Errorf("%w: it is %s", ErrWrongStatus, from)
+	}
+	if rule.display && !displayPending {
+		return nil, fmt.Errorf("%w: it has no display changes waiting", ErrWrongStatus)
 	}
 
 	var reviewer any // NULL when it was done from the command line
 	if actor.UserID != nil {
 		reviewer = *actor.UserID
 	}
+	clearProposal := `display_review_pending = false, proposed_name = NULL, proposed_description = NULL,
+		proposed_website = NULL, proposed_logo_url = NULL`
+	apply := ""
+	if action == "approve_display" {
+		apply = `client_name = COALESCE(proposed_name, client_name), description = COALESCE(proposed_description, description),
+			website = COALESCE(proposed_website, website), logo_url = COALESCE(proposed_logo_url, logo_url), `
+	}
 	if _, err = tx.ExecContext(ctx, `
-		UPDATE oauth_clients SET status = $2, reviewed_by = $3, reviewed_at = now(),
+		UPDATE oauth_clients SET `+apply+clearProposalFor(rule, clearProposal)+`status = $2, reviewed_by = $3, reviewed_at = now(),
 			review_note = NULLIF($4, ''), updated_at = now()
 		WHERE client_id = $1`, id, rule.to, reviewer, note); err != nil {
 		return nil, err
@@ -149,7 +176,14 @@ func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.
 			return nil, err
 		}
 		if err == nil {
-			msg, merr := mail.AppReviewed(to, username, name, rule.to, note)
+			outcome := rule.to
+			switch action {
+			case "approve_display":
+				outcome = "display_approved"
+			case "reject_display":
+				outcome = "display_rejected"
+			}
+			msg, merr := mail.AppReviewed(to, username, name, outcome, note)
 			if merr != nil {
 				return nil, merr
 			}
@@ -165,12 +199,21 @@ func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.
 	return res, nil
 }
 
+// clearProposalFor says whether a decision also clears the owner's proposed
+// display changes: both display decisions do. (Other decisions leave them.)
+func clearProposalFor(rule reviewRule, clause string) string {
+	if rule.display {
+		return clause + ", "
+	}
+	return ""
+}
+
 // reviewStatusCode turns a ReviewApp error into an HTTP status.
 func reviewStatusCode(err error) int {
 	switch {
 	case errors.Is(err, ErrAppNotFound):
 		return http.StatusNotFound
-	case errors.Is(err, ErrWrongStatus):
+	case errors.Is(err, ErrWrongStatus), errors.Is(err, ErrAppChanged):
 		return http.StatusConflict
 	case errors.Is(err, ErrNoteRequired), errors.Is(err, ErrNoteTooLong), errors.Is(err, ErrUnknownCmd):
 		return http.StatusBadRequest
@@ -194,6 +237,15 @@ type AppSummary struct {
 	IsTrusted    bool
 	CreatedAt    time.Time
 	ReviewedAt   *time.Time
+	// Revision is the version the reviewer is looking at; a decision has to
+	// send it back.
+	Revision int
+	// DisplayPending says the owner proposed new display details for this
+	// approved app. Until an admin approves them, everything above is what
+	// people see.
+	DisplayPending                    bool
+	ProposedName, ProposedDescription string
+	ProposedWebsite, ProposedLogoURL  string
 	// The owner is shown as their default pseud only: no account id and no
 	// username. Zero when the account is gone.
 	OwnerPseudID   *uuid.UUID
@@ -203,23 +255,25 @@ type AppSummary struct {
 // ListApps returns apps in one status (all of them when status is empty),
 // oldest first, so the queue is worked in order.
 func ListApps(ctx context.Context, db *sql.DB, status string, limit, offset int) ([]AppSummary, int, error) {
-	if status != "" && !contains(appStatuses, status) {
-		return nil, 0, fmt.Errorf("status must be one of %s", strings.Join(appStatuses, ", "))
+	if status != "" && status != "display" && !contains(appStatuses, status) {
+		return nil, 0, fmt.Errorf("status must be one of %s, or display", strings.Join(appStatuses, ", "))
 	}
 	var total int
 	if err := db.QueryRowContext(ctx,
-		`SELECT count(*) FROM oauth_clients WHERE $1 = '' OR status = $1`, status).Scan(&total); err != nil {
+		`SELECT count(*) FROM oauth_clients WHERE $1 = '' OR status = $1 OR ($1 = 'display' AND display_review_pending)`, status).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := db.QueryContext(ctx, `
 		SELECT oc.client_id, oc.client_name, COALESCE(oc.description, ''), COALESCE(oc.website, ''), COALESCE(oc.logo_url, ''),
 			oc.status, COALESCE(oc.review_note, ''), oc.redirect_uris, oc.scopes, oc.grant_types,
-			oc.is_public, oc.is_trusted, oc.created_at, oc.reviewed_at, p.id, p.name
+			oc.is_public, oc.is_trusted, oc.created_at, oc.reviewed_at, oc.revision, oc.display_review_pending,
+			COALESCE(oc.proposed_name, ''), COALESCE(oc.proposed_description, ''),
+			COALESCE(oc.proposed_website, ''), COALESCE(oc.proposed_logo_url, ''), p.id, p.name
 		FROM oauth_clients oc
 		LEFT JOIN LATERAL (
 			SELECT id, name FROM pseuds WHERE user_id = oc.owner_id AND is_default ORDER BY created_at, id LIMIT 1
 		) p ON true
-		WHERE $1 = '' OR oc.status = $1
+		WHERE $1 = '' OR oc.status = $1 OR ($1 = 'display' AND oc.display_review_pending)
 		ORDER BY oc.created_at, oc.client_id
 		LIMIT $2 OFFSET $3`, status, limit, offset)
 	if err != nil {
@@ -233,7 +287,8 @@ func ListApps(ctx context.Context, db *sql.DB, status string, limit, offset int)
 		var pseudName sql.NullString
 		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.Website, &a.LogoURL, &a.Status, &a.ReviewNote,
 			pq.Array(&a.RedirectURIs), pq.Array(&a.Scopes), pq.Array(&a.GrantTypes),
-			&a.IsPublic, &a.IsTrusted, &a.CreatedAt, &a.ReviewedAt, &pseudID, &pseudName); err != nil {
+			&a.IsPublic, &a.IsTrusted, &a.CreatedAt, &a.ReviewedAt, &a.Revision, &a.DisplayPending,
+			&a.ProposedName, &a.ProposedDescription, &a.ProposedWebsite, &a.ProposedLogoURL, &pseudID, &pseudName); err != nil {
 			return nil, 0, err
 		}
 		a.OwnerPseudID, a.OwnerPseudName = pseudID, pseudName.String
@@ -253,8 +308,8 @@ func (as *AuthService) AdminListApps(c *gin.Context) {
 	if status == "all" {
 		status = ""
 	}
-	if status != "" && !contains(appStatuses, status) {
-		c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "status must be pending, approved, rejected, suspended or all"))
+	if status != "" && status != "display" && !contains(appStatuses, status) {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "status must be pending, approved, rejected, suspended, display or all"))
 		return
 	}
 	page, limit, offset := pageParams(c)
@@ -276,12 +331,22 @@ func (as *AuthService) AdminListApps(c *gin.Context) {
 			"redirect_uris": a.RedirectURIs, "scopes": a.Scopes, "grant_types": a.GrantTypes,
 			"is_public": a.IsPublic, "is_trusted": a.IsTrusted,
 			"created_at": a.CreatedAt, "reviewed_at": a.ReviewedAt, "owner": owner,
+			"revision": a.Revision, "display_review_pending": a.DisplayPending,
+			"proposed": proposedView(a.DisplayPending, a.ProposedName, a.ProposedDescription, a.ProposedWebsite, a.ProposedLogoURL),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"apps":       out,
 		"pagination": gin.H{"page": page, "limit": limit, "total": total, "pages": (total + limit - 1) / limit},
 	})
+}
+
+// proposedView is the owner's proposed display details, or nil when none wait.
+func proposedView(pending bool, name, desc, site, logo string) any {
+	if !pending {
+		return nil
+	}
+	return gin.H{"client_name": name, "description": desc, "website": site, "logo_url": logo}
 }
 
 // adminReview returns the handler for one review action.
@@ -298,7 +363,8 @@ func (as *AuthService) adminReview(action string) gin.HandlerFunc {
 			return
 		}
 		var body struct {
-			Note string `json:"note"`
+			Note     string `json:"note"`
+			Revision int    `json:"revision"`
 		}
 		if c.Request.ContentLength != 0 {
 			dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10))
@@ -308,7 +374,12 @@ func (as *AuthService) adminReview(action string) gin.HandlerFunc {
 				return
 			}
 		}
-		res, err := ReviewApp(c.Request.Context(), as.db, as.mail, actor, id, action, body.Note)
+		// A decision applies to the version the admin looked at.
+		if body.Revision < 1 {
+			c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "revision is required: send the revision you reviewed"))
+			return
+		}
+		res, err := ReviewApp(c.Request.Context(), as.db, as.mail, actor, id, action, body.Note, body.Revision)
 		if err != nil {
 			code := reviewStatusCode(err)
 			if code == http.StatusInternalServerError {
@@ -316,7 +387,11 @@ func (as *AuthService) adminReview(action string) gin.HandlerFunc {
 				c.JSON(code, gin.H{"error": "Failed to " + action + " the app"})
 				return
 			}
-			c.JSON(code, problemJSON("invalid_request", err.Error()))
+			kind := "invalid_request"
+			if errors.Is(err, ErrAppChanged) {
+				kind = "app_changed"
+			}
+			c.JSON(code, problemJSON(kind, err.Error()))
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"client_id": res.ClientID, "status": res.To})
@@ -527,7 +602,9 @@ func (as *AuthService) ListMyApps(c *gin.Context) {
 	}
 	rows, err := as.db.QueryContext(c.Request.Context(), `
 		SELECT client_id, client_name, COALESCE(description, ''), COALESCE(website, ''), COALESCE(logo_url, ''),
-			status, COALESCE(review_note, ''), redirect_uris, scopes, is_public, created_at, reviewed_at
+			status, COALESCE(review_note, ''), redirect_uris, scopes, is_public, created_at, reviewed_at,
+			display_review_pending, COALESCE(proposed_name, ''), COALESCE(proposed_description, ''),
+			COALESCE(proposed_website, ''), COALESCE(proposed_logo_url, '')
 		FROM oauth_clients WHERE owner_id = $1 ORDER BY created_at, client_id`, owner)
 	if err != nil {
 		log.Printf("list my apps: %v", err)
@@ -543,8 +620,11 @@ func (as *AuthService) ListMyApps(c *gin.Context) {
 		var public bool
 		var created time.Time
 		var reviewed *time.Time
+		var pending bool
+		var pName, pDesc, pSite, pLogo string
 		if err := rows.Scan(&id, &name, &desc, &website, &logo, &status, &note,
-			pq.Array(&redirects), pq.Array(&scopes), &public, &created, &reviewed); err != nil {
+			pq.Array(&redirects), pq.Array(&scopes), &public, &created, &reviewed,
+			&pending, &pName, &pDesc, &pSite, &pLogo); err != nil {
 			log.Printf("list my apps: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list apps"})
 			return
@@ -553,6 +633,7 @@ func (as *AuthService) ListMyApps(c *gin.Context) {
 			"client_id": id, "client_name": name, "description": desc, "website": website, "logo_url": logo,
 			"status": status, "review_note": note, "redirect_uris": redirects, "scopes": scopes,
 			"is_public": public, "created_at": created, "reviewed_at": reviewed,
+			"display_review_pending": pending, "proposed": proposedView(pending, pName, pDesc, pSite, pLogo),
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"apps": apps})
@@ -612,13 +693,23 @@ type appRow struct {
 // description, website, logo, redirect addresses and scopes, and nothing
 // else (the status can only be changed by an admin).
 //
-// Changing the redirect addresses or scopes of an approved app puts it back
-// to pending: a new redirect address could carry codes to someone else. It
-// also ends every token, code and consent the app holds and drops its
-// "trusted" mark, because those were given for the reviewed settings, and an
-// old consent would let the new address receive codes without asking
-// anyone. A rejected app that is edited goes back to pending (the owner is
-// resubmitting it). A suspended app cannot be edited.
+// What an edit does depends on the app as it is when the row is locked, not
+// as it was a moment earlier, so it can't slip past an admin's decision:
+//
+//   - Changing the redirect addresses or scopes puts the app back to pending
+//     (whatever it was, except suspended, which can't be edited). If it was
+//     approved, every token, code and consent it holds ends too: those were
+//     given for the reviewed settings, and an old consent would let a new
+//     address receive codes without asking anyone.
+//   - Changing only how an approved app is shown (name, website, logo,
+//     description) is kept aside as a proposal. People keep seeing the
+//     approved details, and nobody is signed out, until an admin approves the
+//     change. Otherwise an approved app could rename itself to look like
+//     someone trusted.
+//   - On an app that is not approved, display changes just apply: nobody is
+//     using it yet, and an admin reviews all of it.
+//   - A rejected app that is edited goes back to pending (it is resubmitted).
+//   - Any edit drops the app's "trusted" mark and is written to the audit log.
 func (as *AuthService) UpdateMyApp(c *gin.Context) {
 	app, ok := as.ownedApp(c)
 	if !ok {
@@ -628,58 +719,36 @@ func (as *AuthService) UpdateMyApp(c *gin.Context) {
 	if !decodeStrict(c, &up) {
 		return
 	}
-	if app.status == statusSuspended {
-		c.JSON(http.StatusConflict, problemJSON("suspended", "This app is suspended. Ask the admins to look at it."))
-		return
-	}
-
-	var sets []string
-	var args []any
-	set := func(column string, value any) {
-		args = append(args, value)
-		sets = append(sets, fmt.Sprintf("%s = $%d", column, len(args)))
-	}
 	bad := func(code, desc string) { c.JSON(http.StatusBadRequest, problemJSON(code, desc)) }
 
 	if up.Name != nil {
-		if n := len([]rune(strings.TrimSpace(*up.Name))); n == 0 || n > maxClientNameLen {
+		trimmed := strings.TrimSpace(*up.Name)
+		if n := len([]rune(trimmed)); n == 0 || n > maxClientNameLen {
 			bad("invalid_client_metadata", "client_name must be 1 to 100 characters")
 			return
 		}
-		set("client_name", strings.TrimSpace(*up.Name))
+		up.Name = &trimmed
 	}
-	if up.Description != nil {
-		if len([]rune(*up.Description)) > maxDescriptionLen {
-			bad("invalid_client_metadata", "description is too long")
-			return
-		}
-		set("description", *up.Description)
+	if up.Description != nil && len([]rune(*up.Description)) > maxDescriptionLen {
+		bad("invalid_client_metadata", "description is too long")
+		return
 	}
-	if up.Website != nil {
-		if !validOptionalURL(*up.Website) {
-			bad("invalid_client_metadata", "website must be an https address")
-			return
-		}
-		set("website", *up.Website)
+	if up.Website != nil && !validOptionalURL(*up.Website) {
+		bad("invalid_client_metadata", "website must be an https address")
+		return
 	}
-	if up.LogoURL != nil {
-		if !validOptionalURL(*up.LogoURL) {
-			bad("invalid_client_metadata", "logo_url must be an https address")
-			return
-		}
-		set("logo_url", *up.LogoURL)
+	if up.LogoURL != nil && !validOptionalURL(*up.LogoURL) {
+		bad("invalid_client_metadata", "logo_url must be an https address")
+		return
 	}
-	sensitive := false
+	var newURIs, newScopes []string
 	if up.RedirectURIs != nil {
 		uris, problem := cleanRedirectURIs(*up.RedirectURIs, app.isPublic)
 		if problem != "" {
 			bad("invalid_redirect_uri", problem)
 			return
 		}
-		if !sameSet(uris, app.redirectURIs) {
-			sensitive = true
-		}
-		set("redirect_uris", pq.Array(uris))
+		newURIs = uris
 	}
 	if up.Scopes != nil {
 		scopes, problem := cleanScopes(*up.Scopes)
@@ -687,30 +756,17 @@ func (as *AuthService) UpdateMyApp(c *gin.Context) {
 			bad("invalid_scope", problem)
 			return
 		}
-		if !sameSet(scopes, app.scopes) {
-			sensitive = true
-		}
-		set("scopes", pq.Array(scopes))
+		newScopes = scopes
 	}
-	if len(sets) == 0 {
+	if up.Name == nil && up.Description == nil && up.Website == nil && up.LogoURL == nil &&
+		up.RedirectURIs == nil && up.Scopes == nil {
 		bad("invalid_request", "Nothing to change")
 		return
 	}
-
-	newStatus := app.status
-	switch {
-	case app.status == statusApproved && sensitive:
-		newStatus = statusPending
-	case app.status == statusRejected:
-		newStatus = statusPending
-	}
-	resubmitted := newStatus != app.status
-	if resubmitted {
-		set("status", newStatus)
-		sets = append(sets, "review_note = NULL")
-		if app.status == statusApproved {
-			sets = append(sets, "is_trusted = false")
-		}
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
 	}
 
 	ctx := c.Request.Context()
@@ -720,11 +776,125 @@ func (as *AuthService) UpdateMyApp(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Lock the row and decide from what is in it now.
+	var cur struct {
+		status                   string
+		name, desc, site, logo   string
+		uris, scopes             []string
+		pending                  bool
+		pName, pDesc, pSite, pLo sql.NullString
+	}
+	err = tx.QueryRowContext(ctx, `
+		SELECT status, client_name, COALESCE(description, ''), COALESCE(website, ''), COALESCE(logo_url, ''),
+			redirect_uris, scopes, display_review_pending,
+			proposed_name, proposed_description, proposed_website, proposed_logo_url
+		FROM oauth_clients WHERE client_id = $1 AND owner_id = $2 FOR UPDATE`, app.id, actor.UserID).Scan(
+		&cur.status, &cur.name, &cur.desc, &cur.site, &cur.logo,
+		pq.Array(&cur.uris), pq.Array(&cur.scopes), &cur.pending,
+		&cur.pName, &cur.pDesc, &cur.pSite, &cur.pLo)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "App not found"})
+		return
+	}
+	if err != nil {
+		log.Printf("update app: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update app"})
+		return
+	}
+	if cur.status == statusSuspended {
+		c.JSON(http.StatusConflict, problemJSON("suspended", "This app is suspended. Ask the admins to look at it."))
+		return
+	}
+
+	sensitive := (newURIs != nil && !sameSet(newURIs, cur.uris)) || (newScopes != nil && !sameSet(newScopes, cur.scopes))
+	newStatus := cur.status
+	if sensitive || cur.status == statusRejected {
+		newStatus = statusPending
+	}
+	resubmitted := newStatus != cur.status
+	proposeOnly := cur.status == statusApproved && !sensitive
+
+	var sets []string
+	var args []any
+	set := func(column string, value any) {
+		args = append(args, value)
+		sets = append(sets, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	pick := func(patch *string, current string) string {
+		if patch != nil {
+			return *patch
+		}
+		return current
+	}
+	// What the display would be after this edit, starting from the earlier
+	// proposal if one is waiting.
+	base := struct{ name, desc, site, logo string }{cur.name, cur.desc, cur.site, cur.logo}
+	if cur.pending {
+		base.name, base.desc = cur.pName.String, cur.pDesc.String
+		base.site, base.logo = cur.pSite.String, cur.pLo.String
+	}
+	next := struct{ name, desc, site, logo string }{
+		pick(up.Name, base.name), pick(up.Description, base.desc), pick(up.Website, base.site), pick(up.LogoURL, base.logo)}
+	displayGiven := up.Name != nil || up.Description != nil || up.Website != nil || up.LogoURL != nil
+
+	proposed := false
+	if proposeOnly {
+		if displayGiven {
+			same := next.name == cur.name && next.desc == cur.desc && next.site == cur.site && next.logo == cur.logo
+			if same { // back to the approved details: nothing left to review
+				set("display_review_pending", false)
+				sets = append(sets, "proposed_name = NULL", "proposed_description = NULL", "proposed_website = NULL", "proposed_logo_url = NULL")
+			} else {
+				proposed = true
+				set("proposed_name", next.name)
+				set("proposed_description", next.desc)
+				set("proposed_website", next.site)
+				set("proposed_logo_url", next.logo)
+				set("display_review_pending", true)
+			}
+		}
+	} else {
+		// Not live, or going back to full review: the display applies now,
+		// and any proposal is folded in.
+		set("client_name", next.name)
+		set("description", next.desc)
+		set("website", next.site)
+		set("logo_url", next.logo)
+		set("display_review_pending", false)
+		sets = append(sets, "proposed_name = NULL", "proposed_description = NULL", "proposed_website = NULL", "proposed_logo_url = NULL")
+	}
+	if newURIs != nil {
+		set("redirect_uris", pq.Array(newURIs))
+	}
+	if newScopes != nil {
+		set("scopes", pq.Array(newScopes))
+	}
+	set("status", newStatus)
+	sets = append(sets, "is_trusted = false")
+	if resubmitted {
+		sets = append(sets, "review_note = NULL")
+	}
+
 	args = append(args, app.id)
 	_, err = tx.ExecContext(ctx, "UPDATE oauth_clients SET "+strings.Join(sets, ", ")+
 		fmt.Sprintf(", updated_at = now() WHERE client_id = $%d", len(args)), args...)
-	if err == nil && app.status == statusApproved && resubmitted {
+	if err == nil && cur.status == statusApproved && sensitive {
 		err = revokeClientAccess(ctx, tx, app.id, true)
+	}
+	if err == nil {
+		changed := []string{}
+		for name, on := range map[string]bool{
+			"client_name": up.Name != nil, "description": up.Description != nil, "website": up.Website != nil,
+			"logo_url": up.LogoURL != nil, "redirect_uris": up.RedirectURIs != nil, "scopes": up.Scopes != nil} {
+			if on {
+				changed = append(changed, name)
+			}
+		}
+		sort.Strings(changed)
+		err = audit.Record(ctx, tx, actor, "oauth_client.owner_update", "oauth_client", app.id.String(), "",
+			map[string]any{"client_name": cur.name, "fields": changed, "from": cur.status, "to": newStatus,
+				"sensitive": sensitive, "display_proposed": proposed})
 	}
 	if err == nil {
 		err = tx.Commit()
@@ -734,7 +904,11 @@ func (as *AuthService) UpdateMyApp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update app"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"client_id": app.id, "status": newStatus})
+	waiting := proposeOnly && cur.pending
+	if proposeOnly && displayGiven {
+		waiting = proposed
+	}
+	c.JSON(http.StatusOK, gin.H{"client_id": app.id, "status": newStatus, "display_review_pending": waiting})
 }
 
 // ResetMyAppSecret is POST /api/v1/apps/:id/reset-secret. The new secret is

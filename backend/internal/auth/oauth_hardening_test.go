@@ -1295,8 +1295,11 @@ func TestAuthorizeParameterSizeCapsAndPendingRows(t *testing.T) {
 	// At the limit is fine.
 	w = e.do("GET", a.authorizeURL("read", "&state="+long(512)+"&nonce="+long(512)+"&login_hint="+long(512)), nil, nil)
 	assert.Equal(t, http.StatusFound, w.Code)
-	assert.Contains(t, w.Header().Get("Location"), "/login?auth_request=")
-	assert.Equal(t, 1, e.count(`SELECT count(*) FROM oauth_pending`))
+	// Logged out: the request travels in the address to the website's own
+	// authorize page, and nothing is stored on the server.
+	assert.True(t, strings.HasPrefix(w.Header().Get("Location"), "/oauth/authorize?client_id=") ||
+		strings.HasPrefix(w.Header().Get("Location"), "/oauth/authorize?response_type=code&client_id="), w.Header().Get("Location")[:60])
+	assert.Equal(t, 0, e.count(`SELECT count(*) FROM oauth_pending`))
 
 	// Unknown, malformed and switched-off apps leave nothing behind.
 	e.db.Exec(`DELETE FROM oauth_pending`)

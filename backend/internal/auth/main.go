@@ -85,6 +85,19 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 		review.POST("/:id/reject", authService.adminReview("reject"))
 		review.POST("/:id/suspend", authService.adminReview("suspend"))
 		review.POST("/:id/reinstate", authService.adminReview("reinstate"))
+		review.POST("/:id/approve-display", authService.adminReview("approve_display"))
+		review.POST("/:id/reject-display", authService.adminReview("reject_display"))
+	}
+
+	// The website's side of "sign in with this archive". The browser can't send
+	// its login on a redirect, so the website's /oauth/authorize page calls
+	// these with the Bearer header and follows the {"redirect": ...} answer.
+	flow := r.Group("/api/v1/oauth", JWTAuthMiddleware(authService), d.ActiveAccount)
+	{
+		flow.GET("/authorize", authService.oauthLimit("authorize"), authService.AuthorizeJSON)
+		flow.POST("/consent/:consent_id", authService.oauthLimit("authorize"), authService.ProcessConsentJSON)
+		flow.GET("/authorized-applications", authService.GetAuthorizedApplications)
+		flow.DELETE("/authorized-applications/:client_id", authService.RevokeApplication)
 	}
 
 	// OAuth2/OIDC Discovery endpoints

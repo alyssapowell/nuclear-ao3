@@ -28,6 +28,13 @@ import (
 //	nuclear apps approve <id>
 //	nuclear apps reject <id> --note "..."
 //	nuclear apps suspend <id> --note "..."
+//	nuclear apps approve-display <id>   apply the display changes (name, website,
+//	                                    logo, description) an owner proposed
+//	nuclear apps reject-display <id> --note "..."
+//	nuclear apps --status display       list approved apps with changes waiting
+//
+// The command line skips the revision check the website makes: it lists the
+// current settings and acts at once.
 func appsCommand(ctx context.Context, db *sql.DB, mail *email.Config, args []string) int {
 	if _, err := migrations.Up(ctx, db); err != nil {
 		log.Printf("apps: %v", err)
@@ -37,13 +44,15 @@ func appsCommand(ctx context.Context, db *sql.DB, mail *email.Config, args []str
 		return listAppsCmd(ctx, db, args)
 	}
 	action := args[0]
-	if action != "approve" && action != "reject" && action != "suspend" {
-		log.Printf("apps: unknown action %q (use approve, reject or suspend)", action)
+	if action != "approve" && action != "reject" && action != "suspend" && action != "approve-display" && action != "reject-display" {
+		log.Printf("apps: unknown action %q (use approve, reject, suspend, approve-display or reject-display)", action)
 		return 2
 	}
+	needsNote := action != "approve" && action != "approve-display"
+	action = strings.ReplaceAll(action, "-", "_")
 	plain, opts, err := parseFlags(args[1:], "note")
 	if err != nil || len(plain) != 1 {
-		log.Printf("usage: nuclear apps %s <id>%s", action, map[bool]string{true: ` --note "..."`, false: ""}[action != "approve"])
+		log.Printf("usage: nuclear apps %s <id>%s", action, map[bool]string{true: ` --note "..."`, false: ""}[needsNote])
 		return 2
 	}
 	id, err := uuid.Parse(plain[0])
@@ -51,7 +60,7 @@ func appsCommand(ctx context.Context, db *sql.DB, mail *email.Config, args []str
 		log.Printf("apps: %q is not an app id", plain[0])
 		return 2
 	}
-	res, err := auth.ReviewApp(ctx, db, mail, audit.CLIActor(), id, action, opts["note"])
+	res, err := auth.ReviewApp(ctx, db, mail, audit.CLIActor(), id, action, opts["note"], 0) // 0: no revision check; the command shows the settings and acts at once
 	switch {
 	case errors.Is(err, auth.ErrNoteRequired):
 		log.Printf("apps %s: --note \"...\" is required, and the owner is told it", action)
@@ -71,7 +80,7 @@ func appsCommand(ctx context.Context, db *sql.DB, mail *email.Config, args []str
 func listAppsCmd(ctx context.Context, db *sql.DB, args []string) int {
 	plain, opts, err := parseFlags(args, "status")
 	if err != nil || len(plain) != 0 {
-		log.Printf("usage: nuclear apps [--status pending|approved|rejected|suspended|all]")
+		log.Printf("usage: nuclear apps [--status pending|approved|rejected|suspended|display|all]")
 		return 2
 	}
 	status := "pending"
@@ -96,6 +105,10 @@ func listAppsCmd(ctx context.Context, db *sql.DB, args []string) int {
 			owner = a.OwnerPseudName
 		}
 		fmt.Printf("%s  %-9s  %q  by %s  registered %s\n", a.ID, a.Status, a.Name, owner, a.CreatedAt.Format("2006-01-02"))
+		if a.DisplayPending {
+			fmt.Printf("    display change waiting: name %q -> %q, website %q -> %q, logo %q -> %q, description %q -> %q\n",
+				a.Name, a.ProposedName, a.Website, a.ProposedWebsite, a.LogoURL, a.ProposedLogoURL, a.Description, a.ProposedDescription)
+		}
 		fmt.Printf("    redirects: %s\n    scopes: %s\n", strings.Join(a.RedirectURIs, " "), strings.Join(a.Scopes, " "))
 		if a.Website != "" {
 			fmt.Printf("    website: %s\n", a.Website)

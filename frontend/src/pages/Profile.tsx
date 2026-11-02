@@ -294,6 +294,20 @@ export default function ProfilePage() {
                   <p className="text-sm text-slate-600">Change your password and see where you are logged in</p>
                 </div>
               </Link>
+
+              <Link to="/profile/apps" className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-orange-300 transition-colors">
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-900 mb-2">Connected apps</h3>
+                  <p className="text-sm text-slate-600">See the apps you let sign in with your account, and disconnect them</p>
+                </div>
+              </Link>
+
+              <Link to="/profile/my-apps" className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 hover:border-orange-300 transition-colors">
+                <div className="text-center">
+                  <h3 className="font-semibold text-slate-900 mb-2">Your apps</h3>
+                  <p className="text-sm text-slate-600">Register an app that signs in with this archive</p>
+                </div>
+              </Link>
             </div>
           </>
         ) : (

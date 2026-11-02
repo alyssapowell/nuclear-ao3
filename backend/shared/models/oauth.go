@@ -30,6 +30,7 @@ type OAuthClient struct {
 	Status          string     `json:"status" db:"status"`                       // pending, approved, rejected or suspended
 	CreatedAt       time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at" db:"updated_at"`
+	Revision        int        `json:"revision" db:"revision"` // goes up on every change; an admin's decision names the one they saw
 }
 
 // AuthorizationCode represents a short-lived authorization code

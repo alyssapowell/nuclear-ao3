@@ -34,7 +34,31 @@ func (as *AuthService) ProcessConsent(c *gin.Context) {
 	consentID := c.Param("consent_id")
 	approved := c.PostForm("approved") == "true"
 
-	as.processConsent(c, consentID, approved)
+	// The older form post answers with a redirect and shares email whenever
+	// the app asked for it and the person approved.
+	as.processConsent(c, consentID, approved, c.PostForm("pseud_id"), true)
+}
+
+// ProcessConsentJSON is POST /api/v1/oauth/consent/:consent_id, the
+// website's answer to the consent screen. The body is
+// {"approved": bool, "pseud_id": "...", "share_email": bool}; the answer is
+// {"redirect": "<the app's redirect_uri with code or error>"} for the website
+// to go to. share_email defaults to false: email is shared only on an
+// explicit yes.
+func (as *AuthService) ProcessConsentJSON(c *gin.Context) {
+	var body struct {
+		Approved   bool   `json:"approved"`
+		PseudID    string `json:"pseud_id"`
+		ShareEmail bool   `json:"share_email"`
+	}
+	dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 16<<10))
+	if err := dec.Decode(&body); err != nil {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "Invalid request data"))
+		return
+	}
+	c.Set("oauth_json", true)
+	c.Header("Cache-Control", "no-store")
+	as.processConsent(c, c.Param("consent_id"), body.Approved, body.PseudID, body.ShareEmail)
 }
 
 // User consent management
@@ -151,6 +175,13 @@ func (as *AuthService) revokeApplicationAccess(ctx context.Context, userID, clie
 	return tx.Commit()
 }
 
+// GetAuthorizedApplications lists every app the person is connected to: one
+// they have a live approval with, or that holds a live access or refresh
+// token for them (an app with only a refresh token can still sign in again,
+// so it must be listed and removable). Each entry shows what the app was
+// given: its scopes, the one pseud it sees, whether it sees the email
+// address, when that was granted and when it was last used. It carries no
+// account id or username.
 func (as *AuthService) GetAuthorizedApplications(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -158,46 +189,66 @@ func (as *AuthService) GetAuthorizedApplications(c *gin.Context) {
 		return
 	}
 
-	query := `
-		SELECT DISTINCT oc.client_id, oc.client_name, oc.description, oc.website, oc.logo_url,
-			COUNT(at.id) as active_tokens, MAX(at.last_used) as last_used
+	rows, err := as.db.QueryContext(c.Request.Context(), `
+		WITH tok AS (
+			SELECT client_id, scopes, last_used, created_at FROM oauth_access_tokens
+			WHERE user_id = $1 AND NOT is_revoked AND expires_at > now()
+			UNION ALL
+			SELECT client_id, scopes, last_used, created_at FROM oauth_refresh_tokens
+			WHERE user_id = $1 AND NOT is_revoked AND expires_at > now()
+		), agg AS (
+			SELECT client_id, max(last_used) AS last_used, min(created_at) AS first_at,
+				ARRAY(SELECT DISTINCT s FROM tok t2, unnest(t2.scopes) s WHERE t2.client_id = tok.client_id ORDER BY s) AS scopes
+			FROM tok GROUP BY client_id
+		)
+		SELECT oc.client_id, oc.client_name, COALESCE(oc.description, ''), COALESCE(oc.website, ''), COALESCE(oc.logo_url, ''),
+			COALESCE(uc.scopes, agg.scopes, '{}'), COALESCE(uc.granted_at, agg.first_at),
+			p.id, p.name, COALESCE(uc.share_email, false), agg.last_used
 		FROM oauth_clients oc
-		JOIN oauth_access_tokens at ON oc.client_id = at.client_id
-		WHERE at.user_id = $1 AND at.is_revoked = false AND at.expires_at > NOW()
-		GROUP BY oc.client_id, oc.client_name, oc.description, oc.website, oc.logo_url
-		ORDER BY last_used DESC NULLS LAST`
-
-	rows, err := as.db.Query(query, userID)
+		LEFT JOIN user_consents uc ON uc.client_id = oc.client_id AND uc.user_id = $1
+			AND NOT uc.is_revoked AND (uc.expires_at IS NULL OR uc.expires_at > now())
+		LEFT JOIN agg ON agg.client_id = oc.client_id
+		LEFT JOIN pseuds p ON p.id = uc.pseud_id AND p.user_id = uc.user_id
+		WHERE uc.id IS NOT NULL OR agg.client_id IS NOT NULL
+		ORDER BY agg.last_used DESC NULLS LAST, COALESCE(uc.granted_at, agg.first_at) DESC, oc.client_id`, userID)
 	if err != nil {
+		log.Printf("authorized applications: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch applications"})
 		return
 	}
 	defer rows.Close()
 
-	var applications []gin.H
+	applications := []gin.H{}
 	for rows.Next() {
 		var clientID uuid.UUID
-		var clientName, description, website, logoURL string
-		var activeTokens int
-		var lastUsed *time.Time
-
-		err := rows.Scan(&clientID, &clientName, &description, &website, &logoURL,
-			&activeTokens, &lastUsed)
-		if err != nil {
-			continue
+		var name, description, website, logoURL string
+		var scopes []string
+		var grantedAt, lastUsed *time.Time
+		var pseudID uuid.NullUUID
+		var pseudName sql.NullString
+		var shareEmail bool
+		if err := rows.Scan(&clientID, &name, &description, &website, &logoURL, pq.Array(&scopes),
+			&grantedAt, &pseudID, &pseudName, &shareEmail, &lastUsed); err != nil {
+			log.Printf("authorized applications: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch applications"})
+			return
 		}
-
+		var pseud any // the one pseud the app sees, or null
+		if pseudID.Valid && pseudName.Valid {
+			pseud = gin.H{"id": pseudID.UUID, "name": pseudName.String}
+		}
 		applications = append(applications, gin.H{
-			"client_id":     clientID,
-			"client_name":   clientName,
-			"description":   description,
-			"website":       website,
-			"logo_url":      logoURL,
-			"active_tokens": activeTokens,
-			"last_used":     lastUsed,
+			"client_id": clientID, "client_name": name, "description": description,
+			"website": website, "logo_url": logoURL, "scopes": scopes,
+			"pseud": pseud, "share_email": shareEmail,
+			"granted_at": grantedAt, "last_used": lastUsed,
 		})
 	}
-
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch applications"})
+		return
+	}
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{"applications": applications})
 }
 
@@ -257,13 +308,13 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 	// Every app is listed, switched off or not.
 	query := `
 		SELECT oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
-			oc.is_active, oc.status, oc.created_at, oc.updated_at,
+			oc.is_active, oc.status, oc.created_at, oc.updated_at, oc.revision,
 			COUNT(DISTINCT at.user_id) as unique_users,
 			COUNT(at.id) as total_tokens
 		FROM oauth_clients oc
 		LEFT JOIN oauth_access_tokens at ON oc.client_id = at.client_id
 		GROUP BY oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
-			oc.is_active, oc.status, oc.created_at, oc.updated_at
+			oc.is_active, oc.status, oc.created_at, oc.updated_at, oc.revision
 		ORDER BY oc.created_at DESC, oc.client_id
 		LIMIT $1 OFFSET $2`
 
@@ -282,10 +333,10 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 		var isPublic, isFirstParty, isActive bool
 		var status string
 		var createdAt, updatedAt time.Time
-		var uniqueUsers, totalTokens int
+		var uniqueUsers, totalTokens, revision int
 
 		err := rows.Scan(&clientID, &clientName, &description, &isPublic, &isFirstParty,
-			&isActive, &status, &createdAt, &updatedAt, &uniqueUsers, &totalTokens)
+			&isActive, &status, &createdAt, &updatedAt, &revision, &uniqueUsers, &totalTokens)
 		if err != nil {
 			continue
 		}
@@ -300,6 +351,7 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 			"status":         status,
 			"created_at":     createdAt,
 			"updated_at":     updatedAt,
+			"revision":       revision,
 			"unique_users":   uniqueUsers,
 			"total_tokens":   totalTokens,
 		})
@@ -356,6 +408,7 @@ func (as *AuthService) AdminGetClient(c *gin.Context) {
 		"status":            client.Status,
 		"created_at":        client.CreatedAt,
 		"updated_at":        client.UpdatedAt,
+		"revision":          client.Revision,
 	}
 
 	c.JSON(http.StatusOK, gin.H{"client": clientData})

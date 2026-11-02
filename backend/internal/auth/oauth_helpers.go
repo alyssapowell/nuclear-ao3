@@ -17,34 +17,6 @@ import (
 	"github.com/lib/pq"
 )
 
-// Authorization request handling
-
-func (as *AuthService) storeAuthorizationRequest(req models.AuthorizeRequest) string {
-	requestID := uuid.New().String()
-
-	// Kept for 10 minutes
-	reqJSON, _ := json.Marshal(req)
-	if err := as.putPending(context.Background(), "auth_req:"+requestID, reqJSON); err != nil {
-		log.Printf("oauth: store authorization request: %v", err)
-	}
-
-	return requestID
-}
-
-func (as *AuthService) getAuthorizationRequest(requestID string) (*models.AuthorizeRequest, error) {
-	reqJSON, err := as.getPending(context.Background(), "auth_req:"+requestID)
-	if err != nil {
-		return nil, err
-	}
-
-	var req models.AuthorizeRequest
-	if err := json.Unmarshal(reqJSON, &req); err != nil {
-		return nil, err
-	}
-
-	return &req, nil
-}
-
 func (as *AuthService) getAuthenticatedUser(c *gin.Context) *uuid.UUID {
 	// Check if user_id is already set by middleware
 	if userID, exists := c.Get("user_id"); exists {
@@ -156,10 +128,18 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 	// Built with the URL parser, so a hostile state value can't add
 	// parameters or change where it points.
 	view["cancel_url"] = errorRedirectURL(req.RedirectURI, req.State, "access_denied", "")
+	if jsonMode(c) {
+		c.JSON(http.StatusOK, gin.H{"consent": view})
+		return
+	}
 	c.JSON(http.StatusOK, view)
 }
 
-func (as *AuthService) processConsent(c *gin.Context, consentID string, approved bool) {
+// processConsent answers a consent screen. pseudRaw is the pseud to share
+// (empty: the default). shareEmail is the person's own choice about their
+// address: if the app asked for email and it is false, the app is allowed
+// without the email scope rather than refused.
+func (as *AuthService) processConsent(c *gin.Context, consentID string, approved bool, pseudRaw string, shareEmail bool) {
 	ctx := c.Request.Context()
 	consentData, err := as.readPendingConsent(ctx, consentID)
 	if err != nil {
@@ -181,7 +161,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 	// this is checked before the request is used up, so a mistake can be
 	// fixed. Left out, it is their default pseud.
 	var chosen *uuid.UUID
-	if raw := strings.TrimSpace(c.PostForm("pseud_id")); raw != "" && approved {
+	if raw := strings.TrimSpace(pseudRaw); raw != "" && approved {
 		id, perr := uuid.Parse(raw)
 		if perr != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pseud_id"})
@@ -225,6 +205,22 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		as.redirectWithError(c, req.RedirectURI, req.State, "access_denied", "User denied access")
 		return
 	}
+	// The person said no to sharing their email: the app gets everything
+	// else it asked for, and the code and the record carry no email scope.
+	if !shareEmail && contains(scopes, "email") {
+		kept := make([]string, 0, len(scopes))
+		for _, sc := range scopes {
+			if sc != "email" {
+				kept = append(kept, sc)
+			}
+		}
+		if len(kept) == 0 {
+			as.redirectWithError(c, req.RedirectURI, req.State, "access_denied", "User denied access")
+			return
+		}
+		scopes = kept
+		req.Scope = strings.Join(kept, " ")
+	}
 
 	// Store consent
 	if err := as.storeUserConsentWithPseud(ctx, *userID, client.ID, scopes, chosen); err != nil {
@@ -240,7 +236,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		return
 	}
 
-	c.Redirect(http.StatusFound, as.buildCallbackURL(req.RedirectURI, code, req.State))
+	sendRedirect(c, as.buildCallbackURL(req.RedirectURI, code, req.State))
 }
 
 // storeUserConsent records that the user allows an app these scopes, sharing

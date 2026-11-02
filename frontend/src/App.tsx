@@ -46,6 +46,10 @@ const Subscriptions = lazy(() => import('@/pages/Subscriptions'))
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const Profile = lazy(() => import('@/pages/Profile'))
 const ProfilePrivacy = lazy(() => import('@/pages/ProfilePrivacy'))
+const OAuthAuthorize = lazy(() => import('@/pages/OAuthAuthorize'))
+const ConnectedApps = lazy(() => import('@/pages/ConnectedApps'))
+const MyApps = lazy(() => import('@/pages/MyApps'))
+const AdminApps = lazy(() => import('@/pages/AdminApps'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function LoggedIn() {
@@ -79,6 +83,8 @@ export default function App() {
               <Route path="/auth/activate" element={<Activate />} />
               <Route path="/auth/forgot-password" element={<ForgotPassword />} />
               <Route path="/auth/reset-password" element={<ResetPassword />} />
+              {/* Handles its own login redirect, so it can come back to the same request */}
+              <Route path="/oauth/authorize" element={<OAuthAuthorize />} />
               <Route path="/search" element={<Search />} />
               <Route path="/works" element={<WorkList />} />
               <Route path="/works/:id" element={<WorkView />} />
@@ -100,6 +106,9 @@ export default function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/password" element={<ChangePassword />} />
                 <Route path="/profile/privacy" element={<ProfilePrivacy />} />
+                <Route path="/profile/apps" element={<ConnectedApps />} />
+                <Route path="/profile/my-apps" element={<MyApps />} />
+                <Route path="/admin/apps" element={<AdminApps />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

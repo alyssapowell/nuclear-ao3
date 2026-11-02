@@ -61,9 +61,6 @@ function LoginContent() {
           localStorage.setItem('user', JSON.stringify(result.user));
         }
         
-        // Also set as cookie for middleware
-        document.cookie = `auth_token=${result.token}; path=/; max-age=${14 * 24 * 60 * 60}; SameSite=Lax`;
-
         // Trigger auth state change event for navigation
         window.dispatchEvent(new Event('authChange'));
 

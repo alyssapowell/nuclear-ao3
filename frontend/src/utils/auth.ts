@@ -106,7 +106,7 @@ export async function logout(): Promise<void> {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
 
-  // Clear auth cookie
+  // Older versions also kept the token in a cookie the server never read; clear any leftover one
   document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
   // Trigger storage event for other tabs

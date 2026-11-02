@@ -295,6 +295,10 @@ func (c *Config) AppReviewed(to, username, appName, outcome, note string) (Messa
 		intro = fmt.Sprintf("Your app %q was not approved, so it cannot be used yet.", appName)
 	case "suspended":
 		intro = fmt.Sprintf("Your app %q has been suspended. It cannot sign anyone in, and every access it held has been ended.", appName)
+	case "display_approved":
+		intro = fmt.Sprintf("The changes you made to how your app %q is shown (its name, website, logo or description) have been approved. People now see the new details.", appName)
+	case "display_rejected":
+		intro = fmt.Sprintf("The changes you made to how your app %q is shown (its name, website, logo or description) were not approved. People still see the earlier details, and your app keeps working.", appName)
 	default:
 		return Message{}, fmt.Errorf("email: unknown app outcome %q", outcome)
 	}
@@ -302,5 +306,9 @@ func (c *Config) AppReviewed(to, username, appName, outcome, note string) (Messa
 	if note = strings.TrimSpace(note); note != "" {
 		outro = "Note from the reviewer: " + note
 	}
-	return c.linkMessage(to, username, "Your app was "+outcome, intro, "Open "+c.FromName, c.SiteURL, outro)
+	subject := "Your app was " + outcome
+	if strings.HasPrefix(outcome, "display_") {
+		subject = "Your app's display changes were " + strings.TrimPrefix(outcome, "display_")
+	}
+	return c.linkMessage(to, username, subject, intro, "Open "+c.FromName, c.SiteURL, outro)
 }

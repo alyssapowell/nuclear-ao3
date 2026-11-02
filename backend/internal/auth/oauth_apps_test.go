@@ -67,10 +67,25 @@ func (e *hEnv) selfApp(u *models.User, body map[string]any) app {
 	return app{id: b["client_id"].(string), secret: secret, public: body["is_public"] == true, redirect: uris[0]}
 }
 
+// revisionOf is the app's revision now: what an admin looking at it would send.
+func (e *hEnv) revisionOf(id string) int {
+	var r int
+	if err := e.db.QueryRow(`SELECT revision FROM oauth_clients WHERE client_id = $1`, id).Scan(&r); err != nil {
+		return 1 // an unknown id: the review answers 404 whatever the revision
+	}
+	return r
+}
+
+// review decides about the app as it is right now.
 func (e *hEnv) review(action, id string, note string) *httptest.ResponseRecorder {
-	var body any
+	return e.reviewRev(action, id, note, e.revisionOf(id))
+}
+
+// reviewRev decides about a specific revision.
+func (e *hEnv) reviewRev(action, id string, note string, revision int) *httptest.ResponseRecorder {
+	body := map[string]any{"revision": revision}
 	if note != "" {
-		body = map[string]string{"note": note}
+		body["note"] = note
 	}
 	return e.adminJSON("POST", "/api/v1/admin/apps/"+id+"/"+action, body)
 }

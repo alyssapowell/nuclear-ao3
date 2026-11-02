@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -287,6 +286,39 @@ func (as *AuthService) checkAuthorizeRequest(client *models.OAuthClient, req mod
 	return scopes, nil
 }
 
+// jsonMode says the caller is the website, which can't follow a redirect to
+// another site on its own: every answer is JSON, and where an HTTP redirect
+// would have gone the answer is {"redirect": "<address>"}.
+func jsonMode(c *gin.Context) bool { return c.GetBool("oauth_json") }
+
+// sendRedirect sends the person to target: an HTTP redirect, or in JSON mode
+// {"redirect": target} for the website to follow.
+func sendRedirect(c *gin.Context, target string) {
+	if jsonMode(c) {
+		c.Header("Cache-Control", "no-store")
+		c.JSON(http.StatusOK, gin.H{"redirect": target})
+		return
+	}
+	c.Redirect(http.StatusFound, target)
+}
+
+// AuthorizeJSON is GET /api/v1/oauth/authorize, the website's way into the
+// authorization flow. The browser can't send its login (a Bearer header) on
+// a redirect, so the app sends the person to the website's /oauth/authorize
+// page, and that page calls this with the same query and the header. It
+// checks everything Authorize does and answers JSON, one of:
+//
+//	{"redirect": "<the app's redirect_uri with code or error>"}
+//	{"consent": {...the consent screen...}}
+//	{"error": "...", "error_description": "..."}   (400: unknown app, bad
+//	    redirect_uri; shown on the page and never sent to the app)
+//	{"error": "login_required"}                    (401)
+func (as *AuthService) AuthorizeJSON(c *gin.Context) {
+	c.Set("oauth_json", true)
+	c.Header("Cache-Control", "no-store")
+	as.Authorize(c)
+}
+
 func (as *AuthService) Authorize(c *gin.Context) {
 	var req models.AuthorizeRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -328,10 +360,14 @@ func (as *AuthService) Authorize(c *gin.Context) {
 	// Check if user is authenticated
 	userID := as.getAuthenticatedUser(c)
 	if userID == nil {
-		// Store authorization request and redirect to login
-		authReqID := as.storeAuthorizationRequest(req)
-		loginURL := fmt.Sprintf("/login?auth_request=%s", url.QueryEscape(authReqID))
-		c.Redirect(http.StatusFound, loginURL)
+		if jsonMode(c) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "login_required"})
+			return
+		}
+		// A top-level redirect can't carry the website's login, so this
+		// entry point is always logged out. Send the person to the website's
+		// own authorize page with the same query; it handles login and consent.
+		c.Redirect(http.StatusFound, "/oauth/authorize?"+c.Request.URL.RawQuery)
 		return
 	}
 
@@ -364,7 +400,7 @@ func (as *AuthService) Authorize(c *gin.Context) {
 
 	// Redirect back to client
 	c.Header("Cache-Control", "no-store")
-	c.Redirect(http.StatusFound, as.buildCallbackURL(req.RedirectURI, code, req.State))
+	sendRedirect(c, as.buildCallbackURL(req.RedirectURI, code, req.State))
 }
 
 // Token endpoint
@@ -597,7 +633,7 @@ func (as *AuthService) revokeOwnToken(ctx context.Context, clientID uuid.UUID, t
 const clientColumns = `client_id, COALESCE(client_secret, ''), client_name, COALESCE(description, ''),
 	COALESCE(website, ''), COALESCE(logo_url, ''), redirect_uris, scopes, grant_types, response_types,
 	is_public, is_confidential, is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl,
-	status, created_at, updated_at`
+	status, created_at, updated_at, revision`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -608,7 +644,7 @@ func scanClient(row rowScanner) (*models.OAuthClient, error) {
 		pq.Array(&client.RedirectURIs), pq.Array(&client.Scopes), pq.Array(&client.GrantTypes),
 		pq.Array(&client.ResponseTypes), &client.IsPublic, &client.IsConfidential,
 		&client.IsTrusted, &client.IsFirstParty, &client.OwnerID, &client.AccessTokenTTL,
-		&client.RefreshTokenTTL, &client.Status, &client.CreatedAt, &client.UpdatedAt)
+		&client.RefreshTokenTTL, &client.Status, &client.CreatedAt, &client.UpdatedAt, &client.Revision)
 	if err != nil {
 		return nil, err
 	}
@@ -681,7 +717,7 @@ func (as *AuthService) redirectWithError(c *gin.Context, redirectURI, state, err
 		})
 		return
 	}
-	c.Redirect(http.StatusFound, target)
+	sendRedirect(c, target)
 }
 
 func (as *AuthService) buildCallbackURL(redirectURI, code, state string) string {
