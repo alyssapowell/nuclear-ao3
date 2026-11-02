@@ -5,14 +5,14 @@ import ResendActivation from '@/components/auth/ResendActivation';
 import { login as loginRequest } from '@/lib/api';
 
 interface LoginForm {
-  login: string;
+  email: string;
   password: string;
 }
 
 const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 function LoginContent() {
-  const [form, setForm] = useState<LoginForm>({ login: '', password: '' });
+  const [form, setForm] = useState<LoginForm>({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notActivated, setNotActivated] = useState(false);
@@ -34,7 +34,7 @@ function LoginContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.login.trim() || !form.password) {
+    if (!form.email.trim() || !form.password) {
       setError('Please fill in all fields');
       return;
     }
@@ -44,7 +44,7 @@ function LoginContent() {
       setError('');
       setNotActivated(false);
 
-      const result = await loginRequest(form.login.trim(), form.password);
+      const result = await loginRequest(form.email.trim(), form.password);
 
       if (result.error) {
         setError(result.error);
@@ -98,24 +98,24 @@ function LoginContent() {
 
       {notActivated && (
         <div className="mb-4">
-          <ResendActivation email={looksLikeEmail(form.login.trim()) ? form.login.trim() : undefined} />
+          <ResendActivation email={looksLikeEmail(form.email.trim()) ? form.email.trim() : undefined} />
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="login" className="block text-sm font-medium text-gray-700">
-            Username or email
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email
           </label>
           <input
-            type="text"
-            id="login"
-            data-testid="username"
+            type="email"
+            id="email"
+            data-testid="email"
             autoComplete="username"
-            value={form.login}
-            onChange={(e) => handleInputChange('login', e.target.value)}
+            value={form.email}
+            onChange={(e) => handleInputChange('email', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-            placeholder="Enter your username or email"
+            placeholder="Enter your email"
             disabled={loading}
             required
           />

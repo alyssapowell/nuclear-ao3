@@ -21,7 +21,7 @@ import (
 // Actor is who did something.
 type Actor struct {
 	UserID *uuid.UUID // nil for actions taken on the command line
-	Label  string     // the username, or "cli:<operating system user>"
+	Label  string     // the account's email address, or "cli:<operating system user>"
 }
 
 // CLIActor is the actor for commands run with the nuclear program on the
@@ -36,8 +36,8 @@ func CLIActor() Actor {
 }
 
 // UserActor is the actor for a logged-in administrator.
-func UserActor(id uuid.UUID, username string) Actor {
-	return Actor{UserID: &id, Label: username}
+func UserActor(id uuid.UUID, email string) Actor {
+	return Actor{UserID: &id, Label: email}
 }
 
 // Execer is what Record writes through. Pass the *sql.Tx of the change

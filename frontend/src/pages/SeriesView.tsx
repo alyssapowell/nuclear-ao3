@@ -26,7 +26,6 @@ interface Work {
   kudos: number;
   comments: number;
   bookmarks: number;
-  username?: string;
   position?: number;
 }
 

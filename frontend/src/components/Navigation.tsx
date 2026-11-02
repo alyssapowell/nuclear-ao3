@@ -6,8 +6,8 @@ import { NotificationBell } from './notifications';
 
 interface User {
   id: string;
-  username: string;
   email: string;
+  default_pseud?: { id: string; name: string };
 }
 
 interface NavDropdownProps {
@@ -289,7 +289,7 @@ export default function Navigation() {
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <User className="w-4 h-4 text-orange-700" aria-hidden="true" />
                     </div>
-                    <span className="hidden lg:block">{user.username}</span>
+                    <span className="hidden lg:block">{user.default_pseud?.name}</span>
                     <ChevronDown className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
@@ -482,7 +482,7 @@ export default function Navigation() {
                     <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                       <User className="w-4 h-4 text-orange-700" />
                     </div>
-                    <span className="text-base font-medium text-gray-900">{user.username}</span>
+                    <span className="text-base font-medium text-gray-900">{user.default_pseud?.name}</span>
                   </div>
                   <Link
                     to="/profile"

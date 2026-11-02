@@ -1546,7 +1546,7 @@ func TestAdminClientActionsAreAudited(t *testing.T) {
 	// Rows name the admin and the client, and never hold a secret.
 	var label, target, details string
 	require.NoError(t, e.db.QueryRow(`SELECT actor_label, target_id, COALESCE(details::text, '') FROM admin_actions WHERE action = 'oauth_client.reset_secret'`).Scan(&label, &target, &details))
-	assert.Equal(t, "client_admin", label)
+	assert.Equal(t, "client-admin@nuclear-ao3.test", label)
 	assert.Equal(t, a.id, target)
 	assert.NotContains(t, details, a.secret)
 	var withSecret int

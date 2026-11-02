@@ -8,6 +8,24 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-11-02: Accounts have no username
+
+**Decision:** An account has an email address, a password and pseuds. It has no username. The email address is the login. The public face of an account is only its pseuds, which are never linked to each other or to the account. Sign-up asks for an email, a password and a **pen name**, which becomes the account's first, default pseud. The pen name can be anything a pseud name can be, including what the person would once have used as a username.
+
+**Why:** A username was a second public name for the same person, kept next to the pseuds, and every place that showed a name had to remember not to show it. With no username there is nothing to leak, and one fewer name for a person to choose and remember.
+
+**How:**
+- Migration `051_accounts_have_no_username.sql` makes `users.username` nullable and drops its length and format checks. The column stays, and stays unique, only so that a future importer can keep the login an account had elsewhere. Nothing reads it for login and nothing returns it. The views and `get_work_authors` that returned it are recreated without it.
+- Login is by email only. The login guard counts failures per normalized (trimmed, lower case) email address, per account, and per IP address, with the same limits as before.
+- Sign-up never says whether an address already has an account. For a taken address it creates nothing, gives the same answer as a new sign-up, and emails the owner that someone tried (at most one a day per address).
+- Where the site said "logged in as <username>" it shows the default pseud's name. Emails greet the owner by that name.
+- Admin tools (`nuclear grant|suspend|ban|sessions revoke`, the admin log) name accounts by email address or account id. Admins can see an email; the admin log records it as the actor.
+- Because accounts have no username, nothing makes one pseud special any more: only the default pseud can't be deleted, and un-setting the default changes nothing (another pseud takes the role by being made the default).
+
+**Cost:** The CLI and `make` targets that took a username now take an email address or id. Anyone who had a script using `login` or `username` in the sign-up or login request has to change it. An imported account with a legacy username but no pseud still gets one named after it.
+
+---
+
 ## 2026-10-30: Blocks are account-wide in both directions, and the blocked person can still read
 
 **Decision:**
@@ -17,7 +35,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - **Notifications:** nobody is notified about anything done by an account they blocked, whichever pseud it used.
 - **Other interactions follow AO3:** a work can't be gifted to someone with a block against one of its creators (the gift is answered like any other but kept aside, never shown or announced; see "On works that hide their creator, a block is applied silently"); bookmarks and subscriptions are not affected (AO3 has no rule for them).
 - **Mutes are per pseud** (`POST /api/v1/mutes {pseud_id}`). A mute hides that pseud's works and comments from the muter only and never covers the account's other pseuds. It does not apply to a work or comment that hides its creator, since hiding it would tell the muter who wrote it.
-- **Lists show what the person picked**, as `{id, name}`. They never carry an account id, a username or another pseud. Blocking a second pseud of an account already blocked adds a second entry and answers like any other block, so it can't be used to learn that two pseuds belong together; removing a block matches only the pseud that was picked, for the same reason.
+- **Lists show what the person picked**, as `{id, name}`. They never carry an account id or another pseud. Blocking a second pseud of an account already blocked adds a second entry and answers like any other block, so it can't be used to learn that two pseuds belong together; removing a block matches only the pseud that was picked, for the same reason.
 - **AO3's @mentions don't exist**, so the rebuild's version (which resolved `@name` to an account) is gone. Comments keep their text as written. **Collections** name their organiser as a pseud `{id, name, role}`, chosen at creation (the default pseud if none), as AO3 records collection participants by pseud.
 
 **Why:** The owner wants a block to be a real safety tool: the other person can't comment on, reply to or leave kudos on the blocker's work under any name, and the blocker doesn't have to read them. Hiding the works from the blocked person would have been simpler, but then a work vanishing for one reader would show exactly which pseuds are linked to the blocked account. So the works stay readable and only comments close.
@@ -62,7 +80,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **Rules it has to meet before it's published:**
 - **No way to link people across apps.** An app gets a different, stable identifier for each person (a "pairwise" subject), so two apps can't compare notes to find out they have the same user. Pseud details go to an app only when the person chooses to share them.
-- **The pseud rules apply.** Apps see pseuds, never account ids, usernames or (without explicit consent) email addresses. An app must not be able to work out that two pseuds belong to the same person.
+- **The pseud rules apply.** Apps see pseuds, never account ids or (without explicit consent) email addresses. An app must not be able to work out that two pseuds belong to the same person.
 - **Apps get only what the person approved.** Each API route checks the token's scopes. Admin and moderation scopes can never be granted to an app.
 - **Apps are vetted.** Anyone can register an app, but it stays inactive until an admin approves it. Self-registered apps can't use the client-credentials grant, and public apps must use PKCE.
 - **Everything an app does can be undone:** people can see and revoke every app they've approved, and a password change or reset revokes all of them (done).
@@ -86,7 +104,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - **Kudos** are listed as the giver's default pseud (AO3 lists the giver's login, which is also the name of the default pseud at sign-up). Guests are only counted (`guest_count`).
 - **Author subscriptions** follow one pseud. `target_id` is a pseud id and `target_name` is the pseud's current name. AO3 subscribes to a user.
 - **Bookmarks** belong to a pseud, as in AO3 (`bookmarks.pseud_id`, migration 040). The account id stays in the table for privacy checks and is never shown.
-- **"Anonymous Creator" is reserved** as a pseud name (ignoring case and spaces; a username that would give that default pseud is refused at sign-up). The label marks a creator of a work that hides its creators, and the marker is now decided by the database query, never by comparing the name.
+- **"Anonymous Creator" is reserved** as a pseud name (ignoring case and spaces; a pen name that would give that default pseud is refused at sign-up). The label marks a creator of a work that hides its creators, and the marker is now decided by the database query, never by comparing the name.
 
 **Why:** The requirement is that the API reveals an author's pseud and nothing about the account behind it. AO3 itself publishes the username in page addresses and next to each pseud ("Pen Name (login)"), so a username-keyed page is the AO3 answer. It does not meet this requirement: one list of everything a person wrote under all their pseuds, reachable from a name, ties their pseuds together. The only front-end callers of the account pages were the signed-in user's own dashboard and series list, which already have `/my/...`. A page for a single pseud is also what the AO3 pseud pages are.
 - Subscriptions are per pseud for the same reason. A subscription to an account would tell its subscriber that a second pseud belongs to the same person, as would a "subscribed?" check that was true for both. Deleting a pseud ends subscriptions to it instead of moving them to the default pseud, for the same reason.
@@ -163,7 +181,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ## 2026-10-30: Accounts work the way AO3's do, and logins can be revoked
 
-**Decision:** Build real account security, following AO3: activation by email before the first login, log in by username or email, 6-to-40-character passwords, and password reset by an emailed link. Every login is a session stored in the database that can be ended.
+**Decision:** Build real account security, following AO3: activation by email before the first login, log in by email (this later dropped usernames, see 2026-11-02), 6-to-40-character passwords, and password reset by an emailed link. Every login is a session stored in the database that can be ended.
 
 **Why:** Almost all of it was placeholder code that reported success. A stolen login token couldn't be cancelled, and someone who changed their password after a compromise was told they were safe when nothing had changed.
 
@@ -193,7 +211,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - **Merging:** rows of `user_pseudonyms` that match a pseud (same user, same name ignoring case) become that pseud; the others become new pseuds and keep their ids. Comments and comment kudos follow. If a user's two tables disagreed about the default, the pseud authorship used wins.
 - **Name characters in the app, not the database:** Postgres's idea of a letter depends on how the database was created, so the database checks length and blanks, and `ValidatePseudName` checks the characters. The importer must call it, or accept names AO3 would have refused.
 - **The database makes the default pseud:** a trigger on `users` does it, so every way of creating an account gets one and a failed registration leaves nothing behind. Imports that bring their own pseuds must disable `create_default_pseud_trigger`.
-- **Deleting a pseud** moves its works, comments and gifts to the default pseud, and the default (and the pseud named after the username) can't be deleted, as in AO3.
+- **Deleting a pseud** moves its works, comments and gifts to the default pseud, and the default can't be deleted, as in AO3 (the pseud named after the username is no longer special, since accounts have no username).
 - **Creators stay hidden:** the API names a creator or commenter as `{id, name}` only. A work that is anonymous, in an anonymous collection, or in an unrevealed collection names no one, is left out of the creator's page, series lists and profile totals, and the creator's comments on it read "Anonymous Creator". (Migration `038`.)
 
 **Cost:** Two views that nothing used (`comments_with_details`, `user_profiles`) were dropped. The comment column is still called `pseudonym_id` (AO3: `pseud_id`). Icon files can't be uploaded yet; only their address is stored. Responses that used `username`, `user_id` and `pseud_name` for authors changed to `{id, name}`, and the frontend comment and gift components follow.
@@ -217,7 +235,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 **How search was done (2026-10-30):** The audit found that nothing ever reached Elasticsearch: the code that sent works to it had no callers, so search was empty. The website used only two endpoints, work search and suggestions.
 - `backend/internal/search` is now about 500 lines instead of about 5,300. It queries the works table directly. A `search_vector` column, which Postgres keeps current by itself (migration 028), weights matches in the title first, then tags, then the summary. Chapter text isn't searched; AO3 doesn't do that either.
 - Visibility goes through the same `can_user_view_work` function as the work page, so search can't show a draft or a work restricted to logged-in users. (A block no longer hides works: a blocked reader still finds them; see the entry on blocks.) Searching by creator never matches anonymous works.
-- Results name creators by pseud only (id and name), never by account or username.
+- Results name creators by pseud only (id and name), never by account.
 - Filters follow AO3: words, title, creator, the four tag types, excluded tags, rating, warnings, categories, language, word count, kudos and comment minimums, complete or in progress, crossovers, single chapter, and updated within. The website's "Relationship focus", "Relationship scope", "Hide gen fic", "Exclude poorly tagged" and "Quality score" options were dropped. AO3 has none of them and the server never applied them.
 - Removed endpoints: tag, user, collection and series search; "advanced" and "smart" search; facets; quality analysis; popular and trending terms; search history; saved searches and alerts; search analytics; index management. Nothing on the website used them, and AO3 has none of them except tag and people search, which can come back as plain queries when the website needs them.
 - Filter counts are exact, computed over every matching work. Paging stops at result 10,000. At AO3's size (millions of works), broad searches will need measuring: if counting gets slow, count over the top few thousand results instead.
@@ -227,7 +245,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - A failed job is retried after 30 seconds, then 1, 2, 4 minutes and so on, for 10 tries (about four hours). Then it's marked failed and kept, with its error, until someone retries it.
 - Any number of copies of the app can run jobs at once without doing one twice (`FOR UPDATE SKIP LOCKED`). A job whose worker died is picked up again after 10 minutes, so a job must be safe to run twice.
 - `nuclear jobs` shows what's waiting, running and failed, and why. `nuclear jobs retry [id]` sends failed jobs again.
-- Email is the first kind of job. `shared/email` sends it: a 30-second limit per email, TLS whenever the mail server offers it, a password only over TLS, and headers built so nothing in a title or username can add headers. Notification emails are plain text, because they quote titles and names anyone can write.
+- Email is the first kind of job. `shared/email` sends it: a 30-second limit per email, TLS whenever the mail server offers it, a password only over TLS, and headers built so nothing in a title or pen name can add headers. Notification emails are plain text, because they quote titles and names anyone can write.
 - Removed: `shared/messaging`, about 4,900 lines for channels, templates, telemetry and rate limits. Nothing was registered with it, so it delivered nothing, and no notification email was ever sent.
 - Still to move onto the queue: exports (still a stub) and notification batching, which keeps waiting notifications in memory and loses them on restart.
 

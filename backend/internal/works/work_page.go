@@ -157,7 +157,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID, vi
 			w.id, w.legacy_id, w.title, 
 			COALESCE(w.summary, '') as summary, 
 			COALESCE(w.notes, '') as notes, 
-			w.user_id, u.username, w.language, w.rating, 
+			w.user_id, w.language, w.rating, 
 			COALESCE(w.word_count, 0) as word_count, 
 			COALESCE(w.chapter_count, 1) as chapter_count, 
 			w.max_chapters,
@@ -185,7 +185,7 @@ func (ws *WorkService) fetchWorkFromDB(ctx context.Context, workID uuid.UUID, vi
 		WHERE w.id = $1
 	`, workID, viewer).Scan(
 		&work.ID, &legacyID, &work.Title, &work.Summary, &work.Notes,
-		&work.UserID, &work.Username, &work.Language, &work.Rating,
+		&work.UserID, &work.Language, &work.Rating,
 		&work.WordCount, &work.ChapterCount, &maxChapters, &work.Status,
 		&work.RestrictedToUsers, &work.RestrictedToAdults, &work.CommentPolicy,
 		&work.ModerateComments, &work.DisableComments, &work.InAnonCollection,
@@ -248,7 +248,7 @@ func (ws *WorkService) fetchWorkAuthors(ctx context.Context, workID uuid.UUID, u
 	authors := []models.WorkAuthor{}
 	for rows.Next() {
 		var author models.WorkAuthor
-		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
+		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.IsAnonymous)
 		if err != nil {
 			log.Printf("fetch authors of work %s: scan: %v", workID, err)
 			return nil, err

@@ -165,7 +165,7 @@ func (ws *WorkService) GetWork(c *gin.Context) {
 		authors := []models.WorkAuthor{}
 		for authorsRows.Next() {
 			var author models.WorkAuthor
-			err := authorsRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
+			err := authorsRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.IsAnonymous)
 			if err != nil {
 				log.Printf("get work %s: scan author: %v", workID, err)
 				continue
@@ -684,7 +684,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	// Build SQL query - only show published works, not drafts
 	// Note: Remove the empty array columns, we'll load tags separately from work_tags table
 	selectClause := `
-		SELECT w.id, w.title, w.summary, w.user_id, u.username, w.language, w.rating,
+		SELECT w.id, w.title, w.summary, w.user_id, w.language, w.rating,
 			w.category, w.archive_warning,
 			w.word_count, w.chapter_count, w.expected_chapters, w.is_complete, 
 			CASE WHEN w.is_draft THEN 'draft' WHEN w.is_complete THEN 'complete' ELSE 'in_progress' END as status,
@@ -847,7 +847,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 		var summaryStr sql.NullString
 
 		err := rows.Scan(
-			&work.ID, &work.Title, &summaryStr, &work.UserID, &work.Username,
+			&work.ID, &work.Title, &summaryStr, &work.UserID,
 			&work.Language, &work.Rating, &categoryStr, &warningsStr,
 			&work.WordCount, &work.ChapterCount, &work.MaxChapters,
 			&work.IsComplete, &work.Status, &work.PublishedAt, &work.UpdatedAt, &work.CreatedAt,
@@ -896,7 +896,7 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 
 func (ws *WorkService) getWorkByID(workID uuid.UUID) (*models.Work, error) {
 	query := `
-		SELECT w.id, w.title, w.summary, w.notes, w.user_id, u.username,
+		SELECT w.id, w.title, w.summary, w.notes, w.user_id,
 			w.language, w.rating, w.category, w.warnings, w.fandoms, w.characters, 
 			w.relationships, w.freeform_tags, w.word_count, w.chapter_count, w.max_chapters,
 			w.is_complete, w.status, w.published_at, w.updated_at, w.created_at,
@@ -911,7 +911,7 @@ func (ws *WorkService) getWorkByID(workID uuid.UUID) (*models.Work, error) {
 	var categoryArray, warningsArray, fandomsArray, charactersArray, relationshipsArray, freeformArray pq.StringArray
 
 	err := ws.db.QueryRow(query, workID).Scan(
-		&work.ID, &work.Title, &work.Summary, &work.Notes, &work.UserID, &work.Username,
+		&work.ID, &work.Title, &work.Summary, &work.Notes, &work.UserID,
 		&work.Language, &work.Rating, &categoryArray,
 		&warningsArray, &fandomsArray, &charactersArray,
 		&relationshipsArray, &freeformArray, &work.WordCount,
@@ -4053,7 +4053,7 @@ func (ws *WorkService) GetMyBookmarks(c *gin.Context) {
 			defer authorRows.Close()
 			for authorRows.Next() {
 				var author models.WorkAuthor
-				if err := authorRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous); err == nil {
+				if err := authorRows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.IsAnonymous); err == nil {
 					authors = append(authors, author)
 				}
 			}
@@ -5151,7 +5151,7 @@ func (ws *WorkService) GetWorkAuthors(c *gin.Context) {
 	var authors []models.WorkAuthor
 	for rows.Next() {
 		var author models.WorkAuthor
-		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.Username, &author.IsAnonymous)
+		err := rows.Scan(&author.PseudID, &author.PseudName, &author.UserID, &author.IsAnonymous)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan author"})
 			return
@@ -5577,7 +5577,7 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 	baseQuery := `
 		SELECT c.id, c.work_id, c.chapter_id, c.user_id, c.parent_comment_id, c.content,
 			c.status, c.is_anonymous, c.created_at, c.updated_at,
-			w.title as work_title, u.username, u.email,
+			w.title as work_title, u.email,
 			COALESCE(reporter_count.count, 0) as report_count
 		FROM comments c
 		JOIN works w ON c.work_id = w.id
@@ -5638,14 +5638,15 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 	comments := []gin.H{}
 	for rows.Next() {
 		var comment models.WorkComment
-		var workTitle, username, email string
+		var workTitle string
+		var email sql.NullString
 		var reportCount int
 		var chapterID, parentID sql.NullString
 
 		err := rows.Scan(
 			&comment.ID, &comment.WorkID, &chapterID, &comment.UserID, &parentID,
 			&comment.Content, &comment.Status, &comment.IsAnonymous,
-			&comment.CreatedAt, &comment.UpdatedAt, &workTitle, &username, &email, &reportCount)
+			&comment.CreatedAt, &comment.UpdatedAt, &workTitle, &email, &reportCount)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan comment"})
@@ -5668,7 +5669,7 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 		var reports []gin.H
 		if reportCount > 0 {
 			reportRows, reportErr := ws.db.Query(`
-				SELECT r.id, r.reporter_id, r.reason, r.description, r.created_at, u.username as reporter_username
+				SELECT r.id, r.reporter_id, r.reason, r.description, r.created_at, u.email as reporter_email
 				FROM reports r
 				LEFT JOIN users u ON r.reporter_id = u.id
 				WHERE r.target_type = 'comment' AND r.target_id = $1 AND r.status = 'pending'
@@ -5680,13 +5681,14 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 				for reportRows.Next() {
 					var report gin.H = gin.H{}
 					var reportID, reporterID uuid.UUID
-					var reason, description, reporterUsername string
+					var reason, description string
+					var reporterEmail sql.NullString
 					var reportCreatedAt time.Time
 
-					reportRows.Scan(&reportID, &reporterID, &reason, &description, &reportCreatedAt, &reporterUsername)
+					reportRows.Scan(&reportID, &reporterID, &reason, &description, &reportCreatedAt, &reporterEmail)
 					report["id"] = reportID
 					report["reporter_id"] = reporterID
-					report["reporter_username"] = reporterUsername
+					report["reporter_email"] = reporterEmail.String
 					report["reason"] = reason
 					report["description"] = description
 					report["created_at"] = reportCreatedAt
@@ -5699,8 +5701,7 @@ func (ws *WorkService) AdminListComments(c *gin.Context) {
 		commentData := gin.H{
 			"comment":      comment,
 			"work_title":   workTitle,
-			"username":     username,
-			"user_email":   email,
+			"user_email":   email.String,
 			"report_count": reportCount,
 			"reports":      reports,
 		}
@@ -6207,8 +6208,8 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 	baseQuery := `
 		SELECT r.id, r.target_type, r.target_id, r.reporter_id, r.reason, r.description,
 			r.status, r.created_at, r.resolved_at, r.resolved_by, r.resolution,
-			reporter.username as reporter_username, reporter.email as reporter_email,
-			resolver.username as resolver_username
+			reporter.email as reporter_email,
+			resolver.email as resolver_email
 		FROM reports r
 		LEFT JOIN users reporter ON r.reporter_id = reporter.id
 		LEFT JOIN users resolver ON r.resolved_by = resolver.id
@@ -6264,12 +6265,12 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 		var resolvedAt sql.NullTime
 		var resolvedBy sql.NullString
 		var resolution sql.NullString
-		var reporterUsername, reporterEmail, resolverUsername sql.NullString
+		var reporterEmail, resolverEmail sql.NullString
 
 		err := rows.Scan(
 			&reportID, &targetType, &targetID, &reporterID, &reason, &description,
 			&reportStatus, &createdAt, &resolvedAt, &resolvedBy, &resolution,
-			&reporterUsername, &reporterEmail, &resolverUsername)
+			&reporterEmail, &resolverEmail)
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan report"})
@@ -6285,9 +6286,6 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 		report["status"] = reportStatus
 		report["created_at"] = createdAt
 
-		if reporterUsername.Valid {
-			report["reporter_username"] = reporterUsername.String
-		}
 		if reporterEmail.Valid {
 			report["reporter_email"] = reporterEmail.String
 		}
@@ -6302,8 +6300,8 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 		if resolution.Valid {
 			report["resolution"] = resolution.String
 		}
-		if resolverUsername.Valid {
-			report["resolver_username"] = resolverUsername.String
+		if resolverEmail.Valid {
+			report["resolver_email"] = resolverEmail.String
 		}
 
 		// Get target content details based on type
@@ -6336,12 +6334,12 @@ func (ws *WorkService) AdminGetReports(c *gin.Context) {
 			}
 
 		case "user":
-			var username, userStatus string
+			var userEmail, userStatus string
 			err = ws.db.QueryRow(`
-				SELECT username, COALESCE(status, 'active') FROM users WHERE id = $1`, targetID).Scan(
-				&username, &userStatus)
+				SELECT email, COALESCE(status, 'active') FROM users WHERE id = $1`, targetID).Scan(
+				&userEmail, &userStatus)
 			if err == nil {
-				targetDetails["username"] = username
+				targetDetails["email"] = userEmail
 				targetDetails["status"] = userStatus
 			}
 		}
@@ -6661,7 +6659,7 @@ func (ws *WorkService) CreateSubscription(c *gin.Context) {
 	}
 
 	// An author is subscribed to by pseud: target_id is a pseud id and the
-	// name shown is the pseud's name. An account id or username is never
+	// name shown is the pseud's name. An account id is never
 	// taken or returned.
 	if req.Type == "author" {
 		var pseudName string
@@ -6993,7 +6991,7 @@ func (ws *WorkService) triggerWorkNotification(ctx context.Context, workID uuid.
 		Description: description,
 		ActionURL:   fmt.Sprintf("/works/%s", workID),
 		ActorID:     nil, // TODO: Get user ID from context
-		ActorName:   "",  // TODO: Get username from context
+		ActorName:   "",
 		ExtraData:   make(map[string]interface{}),
 	}
 

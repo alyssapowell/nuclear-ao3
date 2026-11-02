@@ -41,8 +41,8 @@ export interface WorkSearchParams {
 
 export interface User {
   id: string;
-  username: string;
   email: string;
+  default_pseud?: { id: string; name: string };
   created_at: string;
   updated_at: string;
 }

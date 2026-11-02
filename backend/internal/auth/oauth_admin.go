@@ -181,7 +181,7 @@ func (as *AuthService) revokeApplicationAccess(ctx context.Context, userID, clie
 // so it must be listed and removable). Each entry shows what the app was
 // given: its scopes, the one pseud it sees, whether it sees the email
 // address, when that was granted and when it was last used. It carries no
-// account id or username.
+// account id or email address.
 func (as *AuthService) GetAuthorizedApplications(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -754,7 +754,7 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 	userID := c.Query("user_id")
 
 	query := `
-		SELECT at.id, at.user_id, u.username, at.client_id, oc.client_name,
+		SELECT at.id, at.user_id, u.email, at.client_id, oc.client_name,
 			at.scopes, at.expires_at, at.is_revoked, at.last_used, at.created_at
 		FROM oauth_access_tokens at
 		JOIN users u ON at.user_id = u.id
@@ -799,14 +799,14 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 	tokens := []gin.H{}
 	for rows.Next() {
 		var tokenID, tokenUserID, tokenClientID uuid.UUID
-		var username, clientName string
+		var email, clientName string
 		var scopes []string
 		var expiresAt time.Time
 		var isRevoked bool
 		var lastUsed *time.Time
 		var createdAt time.Time
 
-		err := rows.Scan(&tokenID, &tokenUserID, &username, &tokenClientID, &clientName,
+		err := rows.Scan(&tokenID, &tokenUserID, &email, &tokenClientID, &clientName,
 			pq.Array(&scopes), &expiresAt, &isRevoked, &lastUsed, &createdAt)
 		if err != nil {
 			continue
@@ -815,7 +815,7 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 		tokens = append(tokens, gin.H{
 			"id":          tokenID,
 			"user_id":     tokenUserID,
-			"username":    username,
+			"email":       email,
 			"client_id":   tokenClientID,
 			"client_name": clientName,
 			"scopes":      scopes,

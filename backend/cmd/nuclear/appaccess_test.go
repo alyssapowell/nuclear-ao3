@@ -173,15 +173,12 @@ func (e *appEnv) mustExec(q string, args ...any) {
 
 func (e *appEnv) user(name string) (uuid.UUID, uuid.UUID) {
 	id := uuid.New()
-	e.mustExec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
-		VALUES ($1, $2, $3, 'x', true, true)`, id, name, name+"@example.org")
-	var pseud uuid.UUID
-	if err := e.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, id).Scan(&pseud); err != nil {
-		e.t.Fatal(err)
-	}
-	// Pseud names differ from usernames so a username in an answer is
-	// not mistaken for a pseud name.
-	e.mustExec(`UPDATE pseuds SET name = $2 WHERE id = $1`, pseud, "Pen of "+name[:3])
+	e.mustExec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+		VALUES ($1, $2, 'x', true, true)`, id, name+"@example.org")
+	// The pen name differs from the name in the email address, so an email
+	// address in an answer is not mistaken for a pseud name.
+	pseud := uuid.New()
+	e.mustExec(`INSERT INTO pseuds (id, user_id, name, is_default) VALUES ($1, $2, $3, true)`, pseud, id, "Pen of "+name[:3])
 	return id, pseud
 }
 
@@ -251,7 +248,7 @@ func newAppEnv(t *testing.T, limit int) *appEnv {
 	r.Use(d.AppAccess)
 	mountRoutes(r, d, services{
 		auth: authSvc, works: worksSvc, tags: tags.New(db), search: search.New(db),
-		notify: &notify.NotificationService{}, export: &export.ExportService{},
+		notify: notify.New(db, nil), export: export.New(db),
 	})
 	e.r = r
 
@@ -487,7 +484,7 @@ func TestAppTokenLastUsed(t *testing.T) {
 	}
 }
 
-// Nothing an app can read may carry an account id, username or email.
+// Nothing an app can read may carry an account id or email address.
 func TestAppAnswersHaveNoAccountDetails(t *testing.T) {
 	e := newAppEnv(t, 1000)
 	tok := e.token(e.alice, e.client, "read comments:write bookmarks:manage subscriptions:manage", "1 hour")

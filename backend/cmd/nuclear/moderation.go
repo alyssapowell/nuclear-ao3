@@ -124,18 +124,18 @@ func hideCmd(ctx context.Context, s *moderation.Service, args []string, hide boo
 	return 0
 }
 
-// suspendCmd is "nuclear suspend <username> --until 2026-12-01 --reason ...".
+// suspendCmd is "nuclear suspend <email or id> --until 2026-12-01 --reason ...".
 func suspendCmd(ctx context.Context, s *moderation.Service, args []string) int {
 	plain, opts, err := parseFlags(args, "until", "reason")
 	if err != nil || len(plain) != 1 || opts["until"] == "" {
-		return usage(`nuclear suspend <username> --until 2026-12-01 --reason "..."`)
+		return usage(`nuclear suspend <email or id> --until 2026-12-01 --reason "..."`)
 	}
 	until, err := moderation.ParseUntil(opts["until"])
 	if err != nil {
 		log.Printf("suspend: %v", err)
 		return 2
 	}
-	id, err := s.UserByName(ctx, plain[0])
+	id, err := s.UserByRef(ctx, plain[0])
 	if err != nil {
 		log.Printf("suspend: %v", err)
 		return 1
@@ -150,9 +150,9 @@ func suspendCmd(ctx context.Context, s *moderation.Service, args []string) int {
 func unsuspendCmd(ctx context.Context, s *moderation.Service, args []string) int {
 	plain, opts, err := parseFlags(args, "reason")
 	if err != nil || len(plain) != 1 {
-		return usage(`nuclear unsuspend <username> [--reason "..."]`)
+		return usage(`nuclear unsuspend <email or id> [--reason "..."]`)
 	}
-	id, err := s.UserByName(ctx, plain[0])
+	id, err := s.UserByRef(ctx, plain[0])
 	if err != nil {
 		log.Printf("unsuspend: %v", err)
 		return 1
@@ -167,9 +167,9 @@ func unsuspendCmd(ctx context.Context, s *moderation.Service, args []string) int
 func banCmd(ctx context.Context, s *moderation.Service, args []string) int {
 	plain, opts, err := parseFlags(args, "reason")
 	if err != nil || len(plain) != 1 {
-		return usage(`nuclear ban <username> --reason "..."`)
+		return usage(`nuclear ban <email or id> --reason "..."`)
 	}
-	id, err := s.UserByName(ctx, plain[0])
+	id, err := s.UserByRef(ctx, plain[0])
 	if err != nil {
 		log.Printf("ban: %v", err)
 		return 1
@@ -184,9 +184,9 @@ func banCmd(ctx context.Context, s *moderation.Service, args []string) int {
 func unbanCmd(ctx context.Context, s *moderation.Service, args []string) int {
 	plain, opts, err := parseFlags(args, "reason")
 	if err != nil || len(plain) != 1 {
-		return usage(`nuclear unban <username> [--reason "..."]`)
+		return usage(`nuclear unban <email or id> [--reason "..."]`)
 	}
-	id, err := s.UserByName(ctx, plain[0])
+	id, err := s.UserByRef(ctx, plain[0])
 	if err != nil {
 		log.Printf("unban: %v", err)
 		return 1
@@ -206,12 +206,12 @@ func rolesCmd(ctx context.Context, s *moderation.Service) int {
 		return 1
 	}
 	if len(holders) == 0 {
-		fmt.Println("nobody holds a role; give the first admin with: nuclear grant <username> admin")
+		fmt.Println("nobody holds a role; give the first admin with: nuclear grant <email or id> admin")
 		return 0
 	}
-	fmt.Printf("%-24s %-14s %s\n", "USERNAME", "ROLE", "GRANTED")
+	fmt.Printf("%-36s %-14s %s\n", "EMAIL", "ROLE", "GRANTED")
 	for _, h := range holders {
-		fmt.Printf("%-24s %-14s %s\n", h.Username, h.Role, h.GrantedAt.UTC().Format("2006-01-02 15:04 UTC"))
+		fmt.Printf("%-36s %-14s %s\n", h.Email, h.Role, h.GrantedAt.UTC().Format("2006-01-02 15:04 UTC"))
 	}
 	return 0
 }

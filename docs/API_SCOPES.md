@@ -57,7 +57,7 @@ Anything else that is not in the first table is refused the same way (default de
 
 ## What apps see
 
-- Answers name people by pseud only (`{id, name}`); account ids, usernames and emails are not in any answer an app can reach. `TestAppAnswersHaveNoAccountDetails` fetches 21 of these routes and the answers to the writes, and fails if the person's or an author's account id, username or email appears.
+- Answers name people by pseud only (`{id, name}`); account ids and emails are not in any answer an app can reach (accounts have no username at all). `TestAppAnswersHaveNoAccountDetails` fetches 21 of these routes and the answers to the writes, and fails if the person's or an author's account id or email appears.
 - **Posting pseud.** An app posts under the one pseud the person chose for it at consent. If the person chose none (no `profile` scope), it posts under their default pseud, and the person agreed to this by approving a write scope. If the app names a different `pseudonym_id` or `pseud_id` it gets one "that pseud isn't yours" answer whether the pseud is the person's or not, so asking cannot reveal which pseuds are theirs.
 
 ## Rate limits

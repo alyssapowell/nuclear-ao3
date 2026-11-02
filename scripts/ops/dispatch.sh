@@ -12,7 +12,7 @@
 #   upgrade <git-ref>
 #   restore <backup-file> --i-understand-this-replaces-the-database
 #   logout-everyone
-#   logout-user <username>
+#   logout-user <email or account id>
 #
 # For tests, OPS_RUN=<command> makes this run that command with the argv it
 # would have run, instead of running the real script.
@@ -28,7 +28,7 @@ cmd="${SSH_ORIGINAL_COMMAND:-}"
 # Only plain characters. This already rules out ; & | $ ` ( ) < > quotes,
 # backslashes, tabs and newlines.
 case "$cmd" in *$'\n'* | *$'\r'* | *$'\t'*) deny ;; esac
-re='^[A-Za-z0-9._/ -]+$'
+re='^[A-Za-z0-9._/@+ -]+$'
 [[ "$cmd" =~ $re ]] || deny
 
 IFS=' ' read -r -a words <<<"$cmd"
@@ -62,7 +62,7 @@ restore)
 	;;
 logout-user)
 	[ "$nargs" -eq 1 ] || deny
-	valid_username "${words[1]}" || deny
+	valid_account "${words[1]}" || deny
 	argv=("$HERE/logout-user.sh" "${words[1]}")
 	;;
 *) deny ;;

@@ -6,8 +6,8 @@ name: ops-logout-user
 on:
   workflow_dispatch:
     inputs:
-      username:
-        description: 'Username of the account to log out'
+      account:
+        description: 'Email address (or id) of the account to log out'
         type: string
         required: true
 
@@ -32,11 +32,11 @@ jobs:
           OPS_HOST: ${{ secrets.OPS_HOST }}
           OPS_USER: ${{ secrets.OPS_USER }}
           OPS_KNOWN_HOSTS: ${{ secrets.OPS_KNOWN_HOSTS }}
-          INPUT_USER: ${{ inputs.username }}
+          INPUT_USER: ${{ inputs.account }}
         run: |
           set -euo pipefail
-          if ! printf '%s' "$INPUT_USER" | grep -Eq '^[A-Za-z0-9_]{3,40}$'; then
-            echo "That is not a valid username." >&2; exit 1
+          if ! printf '%s' "$INPUT_USER" | grep -Eq '^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9.-]{1,200}\.[A-Za-z]{2,}$|^[0-9a-fA-F-]{36}$'; then
+            echo "That is not a valid email address or account id." >&2; exit 1
           fi
           cmd="logout-user $INPUT_USER"
 

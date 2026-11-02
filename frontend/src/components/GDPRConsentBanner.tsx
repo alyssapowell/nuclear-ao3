@@ -194,7 +194,7 @@ export default function GDPRConsentBanner({ onConsentUpdate, className = '' }: G
                   </div>
                 </div>
                 <p className="text-sm text-slate-600">
-                  <strong>What we collect:</strong> Your email address (for login only), your chosen username/pseuds, 
+                  <strong>What we collect:</strong> Your email address (for login only), your pen names (pseuds), 
                   works and comments you publish, and basic account settings.
                 </p>
                 <p className="text-sm text-slate-600 mt-1">

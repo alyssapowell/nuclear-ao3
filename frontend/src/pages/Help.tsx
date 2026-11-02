@@ -13,7 +13,7 @@ export default function HelpPage() {
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">How do I create an account?</h3>
                 <p className="text-gray-700">
-                  Click the "Register" button in the top navigation. You'll need to provide a username, email, and password. 
+                  Click the "Register" button in the top navigation. You'll need to provide an email address, a password, and a pen name (the name shown on your works and comments). 
                   All accounts are manually approved to maintain community quality.
                 </p>
               </div>

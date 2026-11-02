@@ -23,7 +23,7 @@ export class TestUserManager {
     const uniqueId = `w${workerId}_${workerCounter}_${timestamp}_${random}`;
     
     const testUser = {
-      username: `testuser_${uniqueId}`,
+      pen_name: `testuser_${uniqueId}`,
       email: `test_${uniqueId}@example.com`,
       password: 'testpassword123'
     };
@@ -39,35 +39,35 @@ export class TestUserManager {
         });
         
         if (registerResponse.ok()) {
-          console.log(`✅ Registered user: ${testUser.username}`);
+          console.log(`✅ Registered user: ${testUser.email}`);
           
           // Login immediately after successful registration
           const loginResponse = await page.request.post('http://localhost:8080/api/v1/auth/login', {
             data: {
-              username: testUser.username,
+              email: testUser.email,
               password: testUser.password
             }
           });
           
           if (loginResponse.ok()) {
             const loginData = await loginResponse.json();
-            console.log(`✅ Login successful for: ${testUser.username}`);
+            console.log(`✅ Login successful for: ${testUser.email}`);
             authToken = loginData.access_token || loginData.token;
             userId = loginData.user.id;
             break;
           } else {
             const loginError = await loginResponse.text();
-            console.log(`❌ Login failed for ${testUser.username}: ${loginError}`);
+            console.log(`❌ Login failed for ${testUser.email}: ${loginError}`);
           }
         } else {
           const registerError = await registerResponse.text();
-          console.log(`❌ Registration failed for ${testUser.username}: ${registerError}`);
+          console.log(`❌ Registration failed for ${testUser.email}: ${registerError}`);
         }
         
-        // If registration failed, try with different username
+        // If registration failed, try with a different pen name and email
         if (attempt < 2) {
           const retryId = `${uniqueId}_retry${attempt}`;
-          testUser.username = `testuser_${retryId}`;
+          testUser.pen_name = `testuser_${retryId}`;
           testUser.email = `test_${retryId}@example.com`;
         }
       } catch (error) {
@@ -76,7 +76,7 @@ export class TestUserManager {
     }
     
     if (!authToken || !userId) {
-      throw new Error(`Failed to create test user after 3 attempts. Last attempted: ${testUser.username}`);
+      throw new Error(`Failed to create test user after 3 attempts. Last attempted: ${testUser.email}`);
     }
     
     return {

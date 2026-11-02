@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/utils/auth';
+import { useAuth, penNameOf } from '@/utils/auth';
 import { getMyWorks, getMyBookmarks, getUserSubscriptions, deleteWork } from '@/lib/api';
 
 interface Work {
@@ -174,7 +174,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-slate-600 mt-2">Welcome back, {user?.username}!</p>
+          <p className="text-slate-600 mt-2">Welcome back, {penNameOf(user)}!</p>
         </div>
 
         {error && (

@@ -28,8 +28,8 @@ func TestModerationCommands(t *testing.T) {
 	db := testdb.New(t)
 	user := func(name string) uuid.UUID {
 		id := uuid.New()
-		if _, err := db.Exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
-			VALUES ($1, $2, $3, 'x', true, true)`, id, name, name+"@example.org"); err != nil {
+		if _, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+			VALUES ($1, $2, 'x', true, true)`, id, name+"@example.org"); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -70,9 +70,9 @@ func TestModerationCommands(t *testing.T) {
 		t.Fatalf("unhide: hidden=%v rows=%d", hidden(), rows())
 	}
 
-	run(2, "suspend", "target", "--reason", "x") // no --until
-	run(1, "suspend", "nobody", "--until", "2099-01-01", "--reason", "x")
-	run(0, "suspend", "target", "--until", "2099-01-01", "--reason", "cooling off")
+	run(2, "suspend", "target@example.org", "--reason", "x") // no --until
+	run(1, "suspend", "nobody@example.org", "--until", "2099-01-01", "--reason", "x")
+	run(0, "suspend", "target@example.org", "--until", "2099-01-01", "--reason", "cooling off")
 	var susp bool
 	var live int
 	db.QueryRow(`SELECT suspended FROM users WHERE id = $1`, target).Scan(&susp)
@@ -80,15 +80,15 @@ func TestModerationCommands(t *testing.T) {
 	if !susp || live != 0 {
 		t.Errorf("suspend: suspended=%v live sessions=%d", susp, live)
 	}
-	run(0, "unsuspend", "target")
-	run(1, "ban", "target") // reason required
-	run(0, "ban", "target", "--reason", "harassment")
+	run(0, "unsuspend", "target@example.org")
+	run(1, "ban", "target@example.org") // reason required
+	run(0, "ban", "target@example.org", "--reason", "harassment")
 	var banned bool
 	db.QueryRow(`SELECT banned FROM users WHERE id = $1`, target).Scan(&banned)
 	if !banned {
 		t.Error("ban did not ban")
 	}
-	run(0, "unban", "target")
+	run(0, "unban", "target@example.org")
 	db.QueryRow(`SELECT banned FROM users WHERE id = $1`, target).Scan(&banned)
 	if banned {
 		t.Error("unban did not unban")
@@ -96,15 +96,15 @@ func TestModerationCommands(t *testing.T) {
 
 	// grant is audited; granting twice is not.
 	before := rows()
-	run(0, "grant", "owner", "admin")
-	run(0, "grant", "owner", "admin")
-	run(1, "grant", "owner", "emperor")
+	run(0, "grant", "owner@example.org", "admin")
+	run(0, "grant", "owner@example.org", "admin")
+	run(1, "grant", "owner@example.org", "emperor")
 	if rows() != before+1 {
 		t.Errorf("grant wrote %d rows, want 1", rows()-before)
 	}
 
 	out := capture(t, func() { run(0, "roles") })
-	if !strings.Contains(out, "owner") || !strings.Contains(out, "admin") || strings.Contains(out, "target") {
+	if !strings.Contains(out, "owner@example.org") || !strings.Contains(out, "admin") || strings.Contains(out, "target") {
 		t.Errorf("roles output:\n%s", out)
 	}
 

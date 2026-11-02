@@ -93,7 +93,7 @@ Notes on the partial ones:
 **`users`.** Columns and where they go:
 
 - `id` -> UUID, `legacy_id` (new).
-- `login` -> `username`. AO3 allows `\A[A-Za-z0-9]\w*[A-Za-z0-9]\Z`, 3 to 40 characters (`app/models/user.rb:195-200`, `config/config.yml:119-120`). Ruby `\w` is ASCII, so this fits the rebuild's `^[A-Za-z0-9_-]+$` and 3 to 50 check. Dry run must still report any older row that does not.
+- `login` -> `username`. Accounts no longer have a username (migration 051): the column is nullable, free-form and unique, kept only so an importer can store the AO3 login. Nothing reads it for login and nothing shows it. The account's default pseud is the AO3 default pseud; a legacy account that has a username and no pseud still gets a pseud named after it, from a trigger.
 - `email` -> `email`. The rebuild adds a regex check (`001:27`) that AO3 does not apply to stored rows. Report violations; relax the check if any exist.
 - `encrypted_password` -> `password_hash`. Hash scheme in section 3.4. `password_salt` has no column (needed for a fraction of old accounts).
 - `confirmed_at` -> `is_verified` (boolean only; the timestamp is lost). `confirmation_token`, `confirmation_sent_at`, `unconfirmed_email`: no home. Rebuild uses `email_verification_tokens` with hashed tokens; AO3 tokens are not worth carrying, but `unconfirmed_email` (pending email change) is.

@@ -142,7 +142,7 @@ func (ws *WorkService) GetUserPseuds(c *gin.Context) {
 // UpdatePseud renames or describes one of the signed-in user's pseuds, or
 // makes it the default. As in AO3, the old default is demoted when another
 // pseud becomes the default; asking for the default to stop being the
-// default hands the role to the pseud named after the username.
+// default changes nothing, since there must always be one.
 func (ws *WorkService) UpdatePseud(c *gin.Context) {
 	userID := ws.getUserIDFromContext(c)
 	if userID == nil {
@@ -219,29 +219,9 @@ func (ws *WorkService) UpdatePseud(c *gin.Context) {
 			return
 		}
 	case !isDefault && cur.IsDefault:
-		// The pseud named after the username takes over; if this is it, or
-		// there isn't one, the default stays where it is.
-		var heir uuid.UUID
-		err := tx.QueryRow(`SELECT p.id FROM pseuds p JOIN users u ON u.id = p.user_id
-			WHERE p.user_id = $1 AND p.id <> $2 AND lower(p.name) = lower(u.username::text)`,
-			*userID, id).Scan(&heir)
-		if err != nil && err != sql.ErrNoRows {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pseud"})
-			return
-		}
-		if err == sql.ErrNoRows {
-			isDefault = true
-			break
-		}
-		// One default at a time: this pseud steps down before the heir steps up.
-		if _, err := tx.Exec(`UPDATE pseuds SET is_default = false, updated_at = now() WHERE id = $1`, id); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pseud"})
-			return
-		}
-		if _, err := tx.Exec(`UPDATE pseuds SET is_default = true, updated_at = now() WHERE id = $1`, heir); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pseud"})
-			return
-		}
+		// There is always a default; another pseud takes the role by being
+		// made the default itself.
+		isDefault = true
 	}
 
 	p, err := scanPseud(tx.QueryRow(`
@@ -266,7 +246,7 @@ func (ws *WorkService) UpdatePseud(c *gin.Context) {
 }
 
 // DeletePseud deletes one of the signed-in user's pseuds. AO3 refuses to
-// delete the default pseud or the one named after the username. Everything
+// delete the default pseud. Everything
 // the pseud was credited on moves to the default pseud first (Pseud#
 // replace_me_with_default): works and series it created, comments it wrote,
 // and gifts it received.
@@ -288,10 +268,9 @@ func (ws *WorkService) DeletePseud(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	var isDefault, matchesUsername bool
-	err = tx.QueryRow(`SELECT p.is_default, lower(p.name) = lower(u.username::text)
-		FROM pseuds p JOIN users u ON u.id = p.user_id
-		WHERE p.id = $1 AND p.user_id = $2 FOR UPDATE OF p`, id, *userID).Scan(&isDefault, &matchesUsername)
+	var isDefault bool
+	err = tx.QueryRow(`SELECT is_default FROM pseuds
+		WHERE id = $1 AND user_id = $2 FOR UPDATE`, id, *userID).Scan(&isDefault)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Pseud not found"})
 		return
@@ -302,10 +281,6 @@ func (ws *WorkService) DeletePseud(c *gin.Context) {
 	}
 	if isDefault {
 		c.JSON(http.StatusConflict, gin.H{"error": "You cannot delete your default pseudonym, sorry!"})
-		return
-	}
-	if matchesUsername {
-		c.JSON(http.StatusConflict, gin.H{"error": "You cannot delete the pseud that matches your username, sorry!"})
 		return
 	}
 	var def uuid.UUID

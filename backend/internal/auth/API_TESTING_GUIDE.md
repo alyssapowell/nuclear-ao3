@@ -194,10 +194,9 @@ curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
 curl -X POST http://localhost:8081/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "testuser",
     "email": "test@example.com",
     "password": "SecurePassword123!",
-    "display_name": "Test User"
+    "pen_name": "Test Writer"
   }' | jq
 ```
 
@@ -248,7 +247,7 @@ curl "http://localhost:8081/auth/authorize?response_type=code&client_id=YOUR_CLI
 | Scope | Description |
 |-------|-------------|
 | `openid` | OIDC authentication (required for ID tokens) |
-| `profile` | Basic profile information (username, display name) |
+| `profile` | The name of the one pseud the person shares with the app |
 | `email` | Email address access |
 | `read` | Read access to user's content |
 | `write` | Write access to create content |

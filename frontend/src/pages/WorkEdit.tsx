@@ -38,7 +38,6 @@ interface WorkData {
     pseud_id: string;
     pseud_name: string;
     user_id: string;
-    username: string;
     is_anonymous: boolean;
   }>;
 }
@@ -647,7 +646,7 @@ export default function EditWorkPage() {
                   />
                   <div>
                     <span className="text-sm font-medium text-slate-700">Post Anonymously</span>
-                    <p className="text-sm text-slate-500">Hide your username from readers</p>
+                    <p className="text-sm text-slate-500">Hide your pen name from readers</p>
                   </div>
                 </label>
               </div>

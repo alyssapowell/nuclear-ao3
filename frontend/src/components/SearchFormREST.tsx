@@ -84,7 +84,7 @@ export default function SearchFormREST({ onResults, onRecommendations }: SearchF
       const transformedResults = results.map((work: Record<string, unknown>) => ({
         id: work.id,
         title: work.title,
-        author: work.username || work.author,
+        author: work.author,
         summary: work.summary,
         word_count: work.word_count,
         chapter_count: work.chapter_count,

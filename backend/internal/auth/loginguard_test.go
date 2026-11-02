@@ -18,7 +18,7 @@ import (
 // different address per call keeps the per-IP limit out of the way of tests
 // about the per-account lock.
 func (e *sessionEnv) loginFrom(addr, login, password string) *httptest.ResponseRecorder {
-	return e.postFrom(addr, "/login", map[string]string{"login": login, "password": password})
+	return e.postFrom(addr, "/login", map[string]string{"email": emailOf(login), "password": password})
 }
 
 func (e *sessionEnv) postFrom(addr, path string, body any) *httptest.ResponseRecorder {
@@ -50,7 +50,7 @@ const otherAddr = "198.51.100.7:1000"
 func (e *sessionEnv) attempts(name string) (n int, locked bool) {
 	e.t.Helper()
 	e.as.guard.pending.Wait()
-	err := e.as.db.QueryRow(`SELECT failed_login_attempts, COALESCE(locked_until > now(), false) FROM users WHERE username = $1`, name).Scan(&n, &locked)
+	err := e.as.db.QueryRow(`SELECT failed_login_attempts, COALESCE(locked_until > now(), false) FROM users WHERE email = $1`, emailOf(name)).Scan(&n, &locked)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -70,8 +70,8 @@ func TestLoginLocksAfterTooManyFailures(t *testing.T) {
 	if _, locked := e.attempts("alice"); !locked {
 		t.Fatal("account should be locked")
 	}
-	// The right password no longer works, by username or by email.
-	for _, login := range []string{"alice", "alice@example.org"} {
+	// The right password no longer works, by any capitalisation of the email address.
+	for _, login := range []string{"alice@example.org", " Alice@Example.org "} {
 		w := e.loginFrom(otherAddr, login, "secret1")
 		if w.Code != http.StatusUnauthorized || w.Body.String() != `{"error":"invalid_credentials"}` {
 			t.Errorf("locked login by %s: %d %s", login, w.Code, w.Body)
@@ -86,7 +86,7 @@ func TestLockExpires(t *testing.T) {
 	if w := e.loginFrom(otherAddr, "alice", "secret1"); w.Code != http.StatusUnauthorized {
 		t.Fatalf("should be locked: %d", w.Code)
 	}
-	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE username = 'alice'`)
+	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE email = 'alice@example.org'`)
 	if w := e.loginFrom(otherAddr, "alice", "secret1"); w.Code != http.StatusOK {
 		t.Fatalf("after the lock ran out: %d %s", w.Code, w.Body)
 	}
@@ -95,7 +95,7 @@ func TestLockExpires(t *testing.T) {
 	}
 
 	// After a lock runs out, a wrong password starts counting from zero.
-	e.mustExec(`UPDATE users SET failed_login_attempts = $1, locked_until = now() - interval '1 second' WHERE username = 'alice'`, maxFailedLogins)
+	e.mustExec(`UPDATE users SET failed_login_attempts = $1, locked_until = now() - interval '1 second' WHERE email = 'alice@example.org'`, maxFailedLogins)
 	e.guess("alice", 1)
 	if n, locked := e.attempts("alice"); n != 1 || locked {
 		t.Errorf("after an expired lock: %d attempts, locked %v", n, locked)
@@ -233,7 +233,7 @@ func TestLockEmailQueuedOnce(t *testing.T) {
 	}
 	// A second lock the same day sends no second email, so repeated locking
 	// can't flood the owner's inbox.
-	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE username = 'alice'`)
+	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE email = 'alice@example.org'`)
 	e.guess("alice", maxFailedLogins)
 	if _, locked := e.attempts("alice"); !locked {
 		t.Fatal("the second round of guesses should lock the account again")
@@ -243,7 +243,7 @@ func TestLockEmailQueuedOnce(t *testing.T) {
 	}
 	// A day later, a new lock sends one again.
 	e.mustExec(`UPDATE jobs SET created_at = now() - interval '25 hours' WHERE kind = 'email'`)
-	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE username = 'alice'`)
+	e.mustExec(`UPDATE users SET locked_until = now() - interval '1 second' WHERE email = 'alice@example.org'`)
 	e.guess("alice", maxFailedLogins)
 	if got := len(e.queued("alice@example.org")); got != 2 {
 		t.Errorf("%d emails after a lock the next day, want 2", got)
@@ -261,7 +261,7 @@ func TestFailureCountingIsNotOnTheRequestPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(`SELECT 1 FROM users WHERE username = 'timed' FOR UPDATE`); err != nil {
+	if _, err := tx.Exec(`SELECT 1 FROM users WHERE email = 'timed@example.org' FOR UPDATE`); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan int, 1)
@@ -283,7 +283,7 @@ func TestFailureCountingIsNotOnTheRequestPath(t *testing.T) {
 func TestLockEmailQueuedOnceUnderConcurrentGuesses(t *testing.T) {
 	e := newPasswordEnv(t)
 	e.addUser("alice", "alice@example.org", "secret1")
-	e.mustExec(`UPDATE users SET failed_login_attempts = $1 WHERE username = 'alice'`, maxFailedLogins-1)
+	e.mustExec(`UPDATE users SET failed_login_attempts = $1 WHERE email = 'alice@example.org'`, maxFailedLogins-1)
 	done := make(chan struct{})
 	for i := 0; i < 8; i++ {
 		go func(i int) {
@@ -399,5 +399,52 @@ func TestAttemptLimitPerName(t *testing.T) {
 	now = now.Add(nameWindow + time.Second)
 	if w := e.loginFrom("203.0.113.11", "target", "right-password"); w.Code != 200 {
 		t.Errorf("after the window: %d, want 200", w.Code)
+	}
+}
+
+// The guard counts per email address, ignoring case and surrounding spaces,
+// so writing the address differently doesn't get a fresh set of tries.
+func TestLoginGuardKeysOnNormalizedEmail(t *testing.T) {
+	var as AuthService // the guard's zero value is ready to use
+	variants := []string{"alice@example.org", "Alice@Example.org", " ALICE@EXAMPLE.ORG", "alice@example.org\t", "alice@EXAMPLE.org"}
+	if len(variants) != attemptsPerName {
+		t.Fatalf("test needs %d variants", attemptsPerName)
+	}
+	for i, v := range variants {
+		if ok, _ := as.allowNameAttempt(v); !ok {
+			t.Fatalf("try %d (%q) refused early", i+1, v)
+		}
+	}
+	if ok, wait := as.allowNameAttempt("aLiCe@example.org  "); ok || wait < 1 {
+		t.Errorf("one more try at the same address: allowed %v, wait %d", ok, wait)
+	}
+	if ok, _ := as.allowNameAttempt("bob@example.org"); !ok {
+		t.Error("another address shares alice's count")
+	}
+	// A pen name, which is not an address, has no count of its own to share.
+	if guardKey("Alice") == guardKey("alice@example.org") {
+		t.Error("a pen name and an email address share a key")
+	}
+
+	// Failures at an address that has no account are counted under the same
+	// key, however it is written.
+	before := testutil.ToFloat64(loginLockouts)
+	for i := 0; i < maxFailedLogins; i++ {
+		as.noteUnknownFailure(variants[i%len(variants)])
+	}
+	if got := testutil.ToFloat64(loginLockouts) - before; got != 1 {
+		t.Errorf("%d lockouts after %d failures spelled differently, want 1", int(got), maxFailedLogins)
+	}
+}
+
+// The count in the database is kept per account found by email address,
+// whatever the capitalisation used to log in.
+func TestFailuresCountOnTheAccountWhateverTheCase(t *testing.T) {
+	e := newSessionEnv(t)
+	e.addUser("alice", "Alice@Example.org", "secret1")
+	e.guess("ALICE@example.ORG", 2)
+	e.guess(" alice@example.org ", 1)
+	if n, _ := e.attempts("alice@example.org"); n != 3 {
+		t.Errorf("%d failures counted, want 3", n)
 	}
 }

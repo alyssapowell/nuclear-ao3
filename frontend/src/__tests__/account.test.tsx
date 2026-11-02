@@ -48,25 +48,26 @@ beforeEach(() => {
 })
 
 describe('Login', () => {
-  it('sends the username-or-email field as `login`', async () => {
+  it('logs in by email only: the field is `email`, and there is no username', async () => {
     mockApi({ 'POST /login': { status: 401, body: { error: 'invalid_credentials' } } })
     render(<Login />)
-    await userEvent.type(screen.getByLabelText('Username or email'), 'alice')
+    expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Email'), 'alice@example.com')
     await userEvent.type(screen.getByLabelText('Password'), 'secret1')
     await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/incorrect/i)
-    expect(bodyOf(0)).toEqual({ login: 'alice', password: 'secret1' })
+    expect(bodyOf(0)).toEqual({ email: 'alice@example.com', password: 'secret1' })
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/auth/forgot-password')
   })
 
   describe('on success', () => {
     const loggedIn = {
       status: 200,
-      body: { access_token: 'token-12345', user: { id: 'u1', username: 'alice' } },
+      body: { access_token: 'token-12345', user: { id: 'u1', email: 'alice@example.com', default_pseud: { id: 'p1', name: 'Alice Pen' } } },
     }
     const logInAs = async () => {
       render(<Login />)
-      await userEvent.type(screen.getByLabelText('Username or email'), 'alice')
+      await userEvent.type(screen.getByLabelText('Email'), 'alice@example.com')
       await userEvent.type(screen.getByLabelText('Password'), 'secret1')
       await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
     }
@@ -108,29 +109,13 @@ describe('Login', () => {
     })
   })
 
-  it('offers to resend the activation email when not activated (username asks for an email)', async () => {
+  it('resends straight to the entered email when the account is not activated', async () => {
     mockApi({
       'POST /login': { status: 403, body: { error: 'not_activated' } },
       'POST /resend-verification': { status: 202, body: {} },
     })
     render(<Login />)
-    await userEvent.type(screen.getByLabelText('Username or email'), 'alice')
-    await userEvent.type(screen.getByLabelText('Password'), 'secret1')
-    await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/hasn't been activated/i)
-    await userEvent.type(screen.getByLabelText('Email address'), 'a@example.com')
-    await userEvent.click(screen.getByRole('button', { name: 'Resend activation email' }))
-    expect(await screen.findByRole('status')).toHaveTextContent(/sent a new activation email/i)
-    expect(bodyOf(1)).toEqual({ email: 'a@example.com' })
-  })
-
-  it('resends straight to the entered email when the login is an email', async () => {
-    mockApi({
-      'POST /login': { status: 403, body: { error: 'not_activated' } },
-      'POST /resend-verification': { status: 202, body: {} },
-    })
-    render(<Login />)
-    await userEvent.type(screen.getByLabelText('Username or email'), 'a@example.com')
+    await userEvent.type(screen.getByLabelText('Email'), 'a@example.com')
     await userEvent.type(screen.getByLabelText('Password'), 'secret1')
     await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
     await screen.findByRole('button', { name: 'Resend activation email' })
@@ -143,7 +128,7 @@ describe('Login', () => {
 
 describe('Register', () => {
   async function fill(password = 'secret1') {
-    await userEvent.type(screen.getByLabelText('Username'), 'alice')
+    await userEvent.type(screen.getByLabelText('Pen name'), 'Alice Pen')
     await userEvent.type(screen.getByLabelText('Email'), 'a@example.com')
     await userEvent.type(screen.getByLabelText('Password'), password)
     await userEvent.type(screen.getByLabelText('Confirm Password'), password)
@@ -160,25 +145,34 @@ describe('Register', () => {
     expect(localStorage.setItem).not.toHaveBeenCalled()
   })
 
+  it('asks for a pen name, not a username, and sends email, password and pen_name', async () => {
+    mockApi({ 'POST /register': { status: 201, body: { message: 'ok' } } })
+    render(<Register />)
+    expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+    await fill()
+    await screen.findByText('Check your email to activate your account')
+    expect(bodyOf(0)).toEqual({ pen_name: 'Alice Pen', email: 'a@example.com', password: 'secret1' })
+  })
+
+  it('shows the server message when the pen name is not allowed', async () => {
+    mockApi({ 'POST /register': { status: 400, body: { error: 'invalid_pen_name', message: 'Pen name: Name is reserved.' } } })
+    render(<Register />)
+    await fill()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Pen name: Name is reserved.')
+  })
+
   it('rejects passwords over 40 characters without calling the server', async () => {
     mockApi({})
     render(<Register />)
     // The input's maxLength stops typing past 40, so set the values directly.
     const long = 'x'.repeat(41)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.change(screen.getByLabelText('Pen name'), { target: { value: 'Alice Pen' } })
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: long } })
     fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: long } })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
     expect(await screen.findByRole('alert')).toHaveTextContent(/6 to 40/)
     expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('shows the server user_exists message', async () => {
-    mockApi({ 'POST /register': { status: 409, body: { error: 'user_exists' } } })
-    render(<Register />)
-    await fill()
-    expect(await screen.findByRole('alert')).toHaveTextContent(/already in use/i)
   })
 })
 

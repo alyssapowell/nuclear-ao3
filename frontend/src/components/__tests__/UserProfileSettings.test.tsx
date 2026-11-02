@@ -29,7 +29,6 @@ const renderUserProfileWithAct = async (props: any) => {
 describe('UserProfileSettings', () => {
   const mockUser = {
     user_id: 'user-1',
-    username: 'testuser',
     display_name: 'Test User',
     bio: 'Test bio',
     location: 'Test City',
@@ -90,7 +89,6 @@ describe('UserProfileSettings', () => {
     await renderUserProfileWithAct({ authToken: "test-token" });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('testuser')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Test bio')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Test City')).toBeInTheDocument();
@@ -316,14 +314,13 @@ describe('UserProfileSettings', () => {
     });
   });
 
-  it('shows disabled username field', async () => {
+  it('has no username field: accounts are known by email and shown by pseud', async () => {
     await renderUserProfileWithAct({ authToken: "test-token" });
 
     await waitFor(() => {
-      const usernameInput = screen.getByDisplayValue('testuser');
-      expect(usernameInput).toBeDisabled();
-      expect(screen.getByText('Username cannot be changed')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Test User')).toBeInTheDocument();
     });
+    expect(screen.queryByText(/username/i)).not.toBeInTheDocument();
   });
 
   it('renders without auth token gracefully', async () => {

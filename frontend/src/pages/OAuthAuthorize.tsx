@@ -68,7 +68,7 @@ function ConsentCard({ screen }: { screen: ConsentScreen }) {
         ))}
       </ul>
       <p className="mb-4 text-sm text-gray-700">
-        It will never see your password. It will not be told your username or account, and it gets a different
+        It will never see your password. It will not be told your email address or account, and it gets a different
         sign-in id from every other app. You can disconnect it at any time in your profile settings under
         &quot;Connected apps&quot;.
       </p>

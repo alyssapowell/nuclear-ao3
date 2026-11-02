@@ -134,7 +134,6 @@ type CommentStats struct {
 // UserCommentActivity represents user activity in comments
 type UserCommentActivity struct {
 	UserID        uuid.UUID `json:"user_id" db:"user_id"`
-	Username      string    `json:"username" db:"username"`
 	DisplayName   *string   `json:"display_name" db:"display_name"`
 	CommentCount  int       `json:"comment_count" db:"comment_count"`
 	KudosReceived int       `json:"kudos_received" db:"kudos_received"`

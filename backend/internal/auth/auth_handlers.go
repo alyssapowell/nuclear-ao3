@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"nuclear-ao3/internal/moderation"
@@ -22,18 +21,15 @@ import (
 // login takes about as long as a wrong password.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("not a real password"), bcrypt.DefaultCost)
 
-// Login handles user authentication. The login may be a username or an
-// email address, in either case.
+// Login handles user authentication. The login is the account's email
+// address, in either case; accounts have no username.
 func (as *AuthService) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
-	login := strings.TrimSpace(req.Login)
-	if login == "" {
-		login = strings.TrimSpace(req.Email)
-	}
+	login := normalizeEmail(req.Email)
 	if login == "" || req.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
@@ -51,11 +47,11 @@ func (as *AuthService) Login(c *gin.Context) {
 	var passwordHash string
 	var locked bool
 	err := as.db.QueryRowContext(c.Request.Context(), `
-		SELECT id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at,
+		SELECT id, email, password_hash, COALESCE(display_name, ''), is_active, is_verified, created_at, updated_at,
 		       locked_until IS NOT NULL AND locked_until > now()
-		FROM users WHERE CASE WHEN strpos($1, '@') > 0 THEN lower(email) = lower($1) ELSE lower(username) = lower($1) END
+		FROM users WHERE lower(email) = $1
 		LIMIT 1`, login).Scan(
-		&user.ID, &user.Username, &user.Email, &passwordHash, &user.DisplayName,
+		&user.ID, &user.Email, &passwordHash, &user.DisplayName,
 		&user.IsActive, &user.IsVerified, &user.CreatedAt, &user.UpdatedAt, &locked)
 	if err == sql.ErrNoRows {
 		bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
@@ -78,7 +74,7 @@ func (as *AuthService) Login(c *gin.Context) {
 	case locked:
 		loginFailures.Inc()
 	case !passwordRight:
-		as.recordFailedLogin(c, user.ID, user.Username, user.Email)
+		as.recordFailedLogin(c, user.ID, user.Email)
 	case !user.IsActive:
 		loginFailures.Inc()
 	}
@@ -100,6 +96,7 @@ func (as *AuthService) Login(c *gin.Context) {
 		return
 	}
 
+	user.DefaultPseud = defaultPseud(c.Request.Context(), as.db, user.ID)
 	c.JSON(http.StatusOK, models.AuthResponse{
 		User:        &user,
 		AccessToken: accessToken,
@@ -122,16 +119,16 @@ func (as *AuthService) GetProfile(c *gin.Context) {
 		return
 	}
 	var u struct {
-		ID          uuid.UUID `json:"id"`
-		Username    string    `json:"username"`
-		Email       string    `json:"email"`
-		DisplayName string    `json:"display_name"`
-		IsVerified  bool      `json:"is_verified"`
-		CreatedAt   time.Time `json:"created_at"`
+		ID           uuid.UUID          `json:"id"`
+		Email        string             `json:"email"`
+		DisplayName  string             `json:"display_name"`
+		IsVerified   bool               `json:"is_verified"`
+		CreatedAt    time.Time          `json:"created_at"`
+		DefaultPseud *models.PseudClaim `json:"default_pseud,omitempty"`
 	}
 	err := as.db.QueryRowContext(c, `
-		SELECT id, username, email, COALESCE(display_name, ''), is_verified, created_at
-		FROM users WHERE id = $1`, userID).Scan(&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.IsVerified, &u.CreatedAt)
+		SELECT id, email, COALESCE(display_name, ''), is_verified, created_at
+		FROM users WHERE id = $1`, userID).Scan(&u.ID, &u.Email, &u.DisplayName, &u.IsVerified, &u.CreatedAt)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not_found"})
 		return
@@ -141,6 +138,7 @@ func (as *AuthService) GetProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
+	u.DefaultPseud = defaultPseud(c.Request.Context(), as.db, userID)
 	c.JSON(http.StatusOK, u)
 }
 

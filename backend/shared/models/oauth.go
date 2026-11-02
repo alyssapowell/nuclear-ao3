@@ -208,7 +208,7 @@ type PseudClaim struct {
 }
 
 // UserInfoResponse is everything an app can learn about a person. There is
-// deliberately nothing else: no account id, username, other pseuds, roles,
+// deliberately nothing else: no account id, email address, other pseuds, roles,
 // counts or dates. Sub is different for every app (see oauth_subjects).
 type UserInfoResponse struct {
 	Subject       string      `json:"sub"`

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,13 +48,26 @@ func newSessionEnv(t *testing.T) *sessionEnv {
 	return &sessionEnv{t: t, as: as, router: setupRouter(as)}
 }
 
-func (e *sessionEnv) addUser(username, email, password string) uuid.UUID {
+// emailOf lets the tests say "alice" for alice@example.org. Login is by
+// email address only; an argument that already has an "@" is left alone.
+func emailOf(handle string) string {
+	if strings.Contains(handle, "@") {
+		return handle
+	}
+	return handle + "@example.org"
+}
+
+// addUser adds an activated account whose default pseud is called penName.
+func (e *sessionEnv) addUser(penName, email, password string) uuid.UUID {
 	e.t.Helper()
 	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	id := uuid.New()
-	_, err := e.as.db.Exec(`INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified)
-		VALUES ($1, $2, $3, $4, $5, true, true)`, id, username, email, string(hash), username)
+	_, err := e.as.db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+		VALUES ($1, $2, $3, true, true)`, id, email, string(hash))
 	if err != nil {
+		e.t.Fatal(err)
+	}
+	if _, err := e.as.db.Exec(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`, id, penName); err != nil {
 		e.t.Fatal(err)
 	}
 	return id
@@ -77,7 +91,7 @@ func (e *sessionEnv) do(method, path, token string, body any) *httptest.Response
 
 func (e *sessionEnv) login(login, password string) string {
 	e.t.Helper()
-	w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"login": login, "password": password})
+	w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"email": emailOf(login), "password": password})
 	if w.Code != http.StatusOK {
 		e.t.Fatalf("login %q: status %d: %s", login, w.Code, w.Body)
 	}
@@ -96,24 +110,43 @@ func (e *sessionEnv) valid(token string) bool {
 	return err == nil
 }
 
-func TestLoginByUsernameAndEmail(t *testing.T) {
+func TestLoginByEmailOnly(t *testing.T) {
 	e := newSessionEnv(t)
 	id := e.addUser("Alice", "Alice@example.org", "secret1")
 
-	for _, login := range []string{"Alice", "alice", "ALICE@example.org", "alice@example.org"} {
+	for _, login := range []string{"ALICE@example.org", "alice@example.org", "  alice@example.org "} {
 		tok := e.login(login, "secret1")
 		got, err := e.as.ValidateUserToken(tok)
 		if err != nil || got != id {
 			t.Errorf("login %q: token gave %v, %v", login, got, err)
 		}
 	}
-	// The old "email" field still works as an alias.
+	// A pen name is not a login.
+	if w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"email": "Alice", "password": "secret1"}); w.Code != http.StatusUnauthorized {
+		t.Errorf("login by pen name: status %d", w.Code)
+	}
+	// The old "login" field is gone: it counts as no email at all.
+	if w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"login": "alice@example.org", "password": "secret1"}); w.Code != http.StatusBadRequest {
+		t.Errorf("old login field: status %d", w.Code)
+	}
 	w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"email": "alice@example.org", "password": "secret1"})
 	if w.Code != http.StatusOK {
-		t.Errorf("email alias: status %d", w.Code)
+		t.Fatalf("login: status %d", w.Code)
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte("refresh_token")) {
 		t.Error("response still has refresh_token")
+	}
+	// The account is shown to its owner by its default pseud.
+	var resp struct {
+		User struct {
+			DefaultPseud struct{ Name string } `json:"default_pseud"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.User.DefaultPseud.Name != "Alice" {
+		t.Errorf("default pseud in login response: %v, %s", err, w.Body)
+	}
+	if bytes.Contains(w.Body.Bytes(), []byte("username")) {
+		t.Errorf("login response has a username: %s", w.Body)
 	}
 }
 
@@ -122,7 +155,7 @@ func TestLoginWrongCredentials(t *testing.T) {
 	e.addUser("alice", "alice@example.org", "secret1")
 	var bodies []string
 	for _, login := range []string{"alice", "nobody"} {
-		w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"login": login, "password": "wrong!"})
+		w := e.do("POST", "/api/v1/auth/login", "", map[string]string{"email": emailOf(login), "password": "wrong!"})
 		if w.Code != http.StatusUnauthorized {
 			t.Errorf("%s: status %d", login, w.Code)
 		}

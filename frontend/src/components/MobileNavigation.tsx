@@ -25,7 +25,7 @@ import OfflineReadingManager from './OfflineReadingManager';
 interface MobileNavigationProps {
   user?: {
     id: string;
-    username: string;
+    default_pseud?: { id: string; name: string };
     avatar?: string;
   };
 }
@@ -198,7 +198,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
               <div>
                 <h2 className="text-lg font-semibold">Menu</h2>
                 {user && (
-                  <p className="text-sm text-gray-700">Welcome, {user.username}</p>
+                  <p className="text-sm text-gray-700">Welcome, {user.default_pseud?.name}</p>
                 )}
               </div>
               <button
@@ -278,7 +278,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                   {user.avatar ? (
                     <img 
                       src={user.avatar} 
-                      alt={user.username}
+                      alt={user.default_pseud?.name ?? ''}
                       className="w-10 h-10 rounded-full"
                     />
                   ) : (
@@ -287,7 +287,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
                     </div>
                   )}
                   <div>
-                    <div className="font-medium">{user.username}</div>
+                    <div className="font-medium">{user.default_pseud?.name}</div>
                     <div className="text-sm text-gray-700">Author & Reader</div>
                   </div>
                 </div>

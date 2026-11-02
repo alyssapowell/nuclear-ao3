@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { register as registerRequest, PASSWORD_MIN, PASSWORD_MAX } from '@/lib/api';
 
 interface RegisterForm {
-  username: string;
+  penName: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -12,7 +12,7 @@ interface RegisterForm {
 
 function RegisterContent() {
   const [form, setForm] = useState<RegisterForm>({ 
-    username: '', 
+    penName: '', 
     email: '', 
     password: '', 
     confirmPassword: '' 
@@ -38,7 +38,7 @@ function RegisterContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.username || !form.email || !form.password || !form.confirmPassword) {
+    if (!form.penName.trim() || !form.email || !form.password || !form.confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
@@ -57,7 +57,7 @@ function RegisterContent() {
       setLoading(true);
       setError('');
 
-      const result = await registerRequest(form.username, form.email.trim(), form.password);
+      const result = await registerRequest(form.penName.trim(), form.email.trim(), form.password);
 
       if (!result.ok) {
         setError(result.error || 'Registration failed. Please try again.');
@@ -111,20 +111,24 @@ function RegisterContent() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-            Username
+          <label htmlFor="penName" className="block text-sm font-medium text-gray-700">
+            Pen name
           </label>
           <input
             type="text"
-            id="username"
-            data-testid="username"
-            value={form.username}
-            onChange={(e) => handleInputChange('username', e.target.value)}
+            id="penName"
+            data-testid="pen-name"
+            value={form.penName}
+            maxLength={40}
+            onChange={(e) => handleInputChange('penName', e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-            placeholder="Choose a username"
+            placeholder="Choose a pen name"
             disabled={loading}
             required
           />
+          <p className="mt-1 text-xs text-gray-600">
+            The name on your works and comments; it can be anything you like. You log in with your email address, and you can add more pen names later.
+          </p>
         </div>
         
         <div>

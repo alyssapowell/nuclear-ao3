@@ -72,9 +72,12 @@ valid_ref() {
 	case "$1" in -* | /* | */ | *..*) return 1 ;; esac
 	return 0
 }
-valid_username() {
-	local re='^[A-Za-z0-9_]{3,40}$'
-	[[ "${1:-}" =~ $re ]]
+# An account is named by its email address, or by its id. Only characters
+# that mean nothing to a shell are allowed.
+valid_account() {
+	local email='^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9.-]{1,200}\.[A-Za-z]{2,}$'
+	local id='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+	[[ "${1:-}" =~ $email || "${1:-}" =~ $id ]]
 }
 valid_backup_name() {
 	local re='^nuclear-[0-9]{8}-[0-9]{6}\.sql\.gz$'

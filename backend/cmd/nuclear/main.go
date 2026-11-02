@@ -42,9 +42,9 @@
 //	nuclear sessions revoke-all
 //	                          end every login session and revoke every OAuth
 //	                          token, unused code and app consent, so everyone has to log in again
-//	nuclear sessions revoke <username>
+//	nuclear sessions revoke <email or id>
 //	                          the same for one account
-//	nuclear grant <username> <role>
+//	nuclear grant <email or id> <role>
 //	                          give an existing account a role: admin,
 //	                          moderator or tag_wrangler. This is how a new
 //	                          archive gets its first admin: register normally,
@@ -53,14 +53,14 @@
 //	nuclear hide|unhide work|chapter|series|bookmark|comment <id> [--reason "..."]
 //	                          take something out of public view, or put it back.
 //	                          A reason is required to hide.
-//	nuclear suspend <username> --until 2026-12-01 --reason "..."
+//	nuclear suspend <email or id> --until 2026-12-01 --reason "..."
 //	                          suspend an account until that date and log it out.
 //	                          A suspended account can read but not post.
-//	nuclear unsuspend <username>
-//	nuclear ban <username> --reason "..."
+//	nuclear unsuspend <email or id>
+//	nuclear ban <email or id> --reason "..."
 //	                          ban an account (it can read but not post) and log
 //	                          it out
-//	nuclear unban <username>
+//	nuclear unban <email or id>
 //	nuclear apps [--status pending]
 //	                          list apps other people registered (default: the
 //	                          ones waiting for review; "--status all" lists
@@ -349,7 +349,7 @@ func runCommand(db *sql.DB, args []string) int {
 	if handled, code := moderationCommand(ctx, db, args); handled {
 		return code
 	}
-	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <username> | grant <username> <role> | roles | apps [approve|reject|suspend <id>] | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <username> | audit | keys generate|show]\n", strings.Join(args, " "))
+	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <email or id> | grant <email or id> <role> | roles | apps [approve|reject|suspend <id>] | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <email or id> | audit | keys generate|show]\n", strings.Join(args, " "))
 	return 2
 }
 
@@ -397,20 +397,21 @@ func firstLine(s string) string {
 }
 
 // revokeSessions ends login sessions and revokes OAuth tokens: for every
-// account when username is empty, otherwise for that one account. It does
-// all of it or none of it, and prints how many of each it ended.
-func revokeSessions(ctx context.Context, db *sql.DB, username string) int {
-	n, err := RevokeSessions(ctx, db, username)
+// account when who is empty, otherwise for the one account with that email
+// address or id. It does all of it or none of it, and prints how many of
+// each it ended.
+func revokeSessions(ctx context.Context, db *sql.DB, who string) int {
+	n, err := RevokeSessions(ctx, db, who)
 	if err != nil {
 		log.Printf("sessions: %v", err)
 		return 1
 	}
-	who := "every account"
-	if username != "" {
-		who = username
+	target := "every account"
+	if who != "" {
+		target = who
 	}
 	fmt.Printf("revoked %d login session(s), %d access token(s), %d refresh token(s), %d unused authorization code(s) and %d app consent(s) for %s\n",
-		n.Sessions, n.AccessTokens, n.RefreshTokens, n.Codes, n.Consents, who)
+		n.Sessions, n.AccessTokens, n.RefreshTokens, n.Codes, n.Consents, target)
 	return 0
 }
 
@@ -420,13 +421,24 @@ type Revoked struct{ Sessions, AccessTokens, RefreshTokens, Codes, Consents int6
 // RevokeSessions does the work of "nuclear sessions revoke[-all]". Only
 // sessions and tokens that were still live are counted. The same code ends
 // a user's sessions when they are banned or suspended.
-func RevokeSessions(ctx context.Context, db *sql.DB, username string) (Revoked, error) {
+func RevokeSessions(ctx context.Context, db *sql.DB, who string) (Revoked, error) {
+	var id *uuid.UUID
+	if who != "" {
+		found, err := moderation.New(db).UserByRef(ctx, who)
+		if errors.Is(err, moderation.ErrNotFound) {
+			return Revoked{}, fmt.Errorf("no account %q; give its email address or id", who)
+		}
+		if err != nil {
+			return Revoked{}, err
+		}
+		id = &found
+	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return Revoked{}, err
 	}
 	defer tx.Rollback()
-	r, err := moderation.RevokeSessions(ctx, tx, username)
+	r, err := moderation.RevokeSessions(ctx, tx, id)
 	if err != nil {
 		return Revoked(r), err
 	}
@@ -436,14 +448,14 @@ func RevokeSessions(ctx context.Context, db *sql.DB, username string) (Revoked, 
 // grantRole gives an existing user a role, or restores it if it was revoked,
 // and records it in the audit log. It reports false if the user already had
 // the role.
-func grantRole(ctx context.Context, db *sql.DB, username, role string) (bool, error) {
+func grantRole(ctx context.Context, db *sql.DB, who, role string) (bool, error) {
 	if _, err := migrations.Up(ctx, db); err != nil {
 		return false, err
 	}
 	svc := moderation.New(db)
-	id, err := svc.UserByName(ctx, username)
+	id, err := svc.UserByRef(ctx, who)
 	if errors.Is(err, moderation.ErrNotFound) {
-		return false, fmt.Errorf("no account named %q; register it on the site first", username)
+		return false, fmt.Errorf("no account %q; register it on the site first, then give its email address or id", who)
 	}
 	if err != nil {
 		return false, err

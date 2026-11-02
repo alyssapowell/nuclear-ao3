@@ -135,12 +135,12 @@ func TestExactlyOneDefaultPseud(t *testing.T) {
 	if name != "Second" {
 		t.Errorf("the default is %q, want Second", name)
 	}
-	// Asking for the default to stop being one hands it back to the pseud
-	// named after the username (AO3: check_default_pseud).
+	// Accounts have no username to hand the role back to, so asking for the
+	// default to stop being one changes nothing: there is always a default.
 	e.expect(200, "PUT", "/api/v1/pseuds/"+made.Pseud.ID, tok, map[string]any{"is_default": false})
 	e.db.QueryRow(`SELECT name FROM pseuds WHERE user_id = $1 AND is_default`, writer).Scan(&name)
-	if name != "writer" || defaults() != 1 {
-		t.Errorf("after un-defaulting, default is %q (%d defaults), want writer", name, defaults())
+	if name != "Second" || defaults() != 1 {
+		t.Errorf("after un-defaulting, default is %q (%d defaults), want Second", name, defaults())
 	}
 	// Making another pseud the default through PUT demotes the old one.
 	e.expect(200, "PUT", "/api/v1/pseuds/"+made.Pseud.ID, tok, map[string]any{"is_default": true})
@@ -170,7 +170,7 @@ func TestDeletingAPseudMovesEverythingToTheDefault(t *testing.T) {
 	e.exec(`INSERT INTO comments (id, work_id, user_id, pseudonym_id, content) VALUES ($1, $2, $3, $4, 'hello')`, comment, only, writer, old)
 	e.exec(`INSERT INTO gifts (work_id, pseud_id, recipient_name) VALUES ($1, $2, 'x')`, both, old)
 
-	// The default and the pseud named after the username can't be deleted.
+	// The default pseud can't be deleted.
 	e.expect(409, "DELETE", "/api/v1/pseuds/"+def.String(), tok, nil)
 	e.expect(200, "PUT", "/api/v1/pseuds/"+old.String(), tok, map[string]any{"is_default": true})
 	e.expect(409, "DELETE", "/api/v1/pseuds/"+old.String(), tok, nil) // now the default

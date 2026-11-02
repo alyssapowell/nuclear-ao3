@@ -170,12 +170,13 @@ func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.
 	res := &ReviewResult{ClientID: id, Name: name, From: from, To: rule.to}
 	selfAction := owner != nil && actor.UserID != nil && *owner == *actor.UserID
 	if rule.emailsOwner && mail != nil && owner != nil && !selfAction {
-		var to, username string
-		err = tx.QueryRowContext(ctx, `SELECT email, username FROM users WHERE id = $1`, *owner).Scan(&to, &username)
+		var to string
+		err = tx.QueryRowContext(ctx, `SELECT email FROM users WHERE id = $1`, *owner).Scan(&to)
 		if err != nil && err != sql.ErrNoRows {
 			return nil, err
 		}
 		if err == nil {
+			greeting := defaultPseudName(ctx, tx, *owner)
 			outcome := rule.to
 			switch action {
 			case "approve_display":
@@ -183,7 +184,7 @@ func ReviewApp(ctx context.Context, db *sql.DB, mail *email.Config, actor audit.
 			case "reject_display":
 				outcome = "display_rejected"
 			}
-			msg, merr := mail.AppReviewed(to, username, name, outcome, note)
+			msg, merr := mail.AppReviewed(to, greeting, name, outcome, note)
 			if merr != nil {
 				return nil, merr
 			}
@@ -247,7 +248,7 @@ type AppSummary struct {
 	ProposedName, ProposedDescription string
 	ProposedWebsite, ProposedLogoURL  string
 	// The owner is shown as their default pseud only: no account id and no
-	// username. Zero when the account is gone.
+	// email address. Zero when the account is gone.
 	OwnerPseudID   *uuid.UUID
 	OwnerPseudName string
 }

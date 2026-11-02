@@ -77,7 +77,7 @@ func Actor(c *gin.Context, db *sql.DB) (audit.Actor, bool) {
 		return audit.Actor{}, false
 	}
 	var name string
-	if err := db.QueryRowContext(c.Request.Context(), `SELECT username FROM users WHERE id = $1`, id).Scan(&name); err != nil {
+	if err := db.QueryRowContext(c.Request.Context(), `SELECT email FROM users WHERE id = $1`, id).Scan(&name); err != nil {
 		return audit.Actor{}, false
 	}
 	return audit.UserActor(id, name), true

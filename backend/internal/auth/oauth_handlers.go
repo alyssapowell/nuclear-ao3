@@ -120,7 +120,7 @@ func (as *AuthService) adminActor(c *gin.Context) (audit.Actor, bool) {
 		return audit.Actor{}, false
 	}
 	var name string
-	if err := as.db.QueryRowContext(c.Request.Context(), `SELECT username FROM users WHERE id = $1`, id).Scan(&name); err != nil {
+	if err := as.db.QueryRowContext(c.Request.Context(), `SELECT email FROM users WHERE id = $1`, id).Scan(&name); err != nil {
 		return audit.Actor{}, false
 	}
 	return audit.UserActor(id, name), true
