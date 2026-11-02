@@ -31,7 +31,10 @@ func edgeServer(t *testing.T) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	website := serveFrontend(dir)
 	r := gin.New()
-	r.Use(platform.PublicCache(), websitePaths(website))
+	r.Use(platform.PublicCache(), func(c *gin.Context) {
+		c.Header("X-RateLimit-Remaining", "41") // as the rate limiter does
+		c.Next()
+	}, websitePaths(website))
 	ok := func(c *gin.Context) { c.String(http.StatusOK, "app") }
 	r.GET("/auth/authorize", ok)
 	r.POST("/auth/token", ok)
@@ -90,6 +93,9 @@ func TestWebsiteFilesAreCachedLikeCaddyDoes(t *testing.T) {
 		}
 		if got := w.Header().Get("Cache-Control"); got != want {
 			t.Errorf("%s: Cache-Control %q, want %q", path, got, want)
+		}
+		if got := w.Header().Get("X-RateLimit-Remaining"); got != "" {
+			t.Errorf("%s: a shared file carries one visitor's rate limit (%q)", path, got)
 		}
 	}
 	// API answers keep the API's own rules.

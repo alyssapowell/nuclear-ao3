@@ -120,8 +120,12 @@ func (w *cacheWriter) decide() {
 		w.Status() == http.StatusOK &&
 		len(h.Values("Set-Cookie")) == 0
 	// The website's own files carry their rules from serveFrontend: they
-	// are the same for everyone and hold no account data.
-	if w.c.GetBool(WebsiteFileKey) && h.Get("Cache-Control") != "" && w.Status() == http.StatusOK {
+	// are the same for everyone and hold no account data. They still go
+	// through the cleanup below, like any shared answer.
+	websiteFile := w.c.GetBool(WebsiteFileKey) && h.Get("Cache-Control") != "" &&
+		w.Status() == http.StatusOK && len(h.Values("Set-Cookie")) == 0
+	if websiteFile {
+		stripPerVisitorHeaders(h)
 		return
 	}
 	if !canCache {
@@ -134,7 +138,12 @@ func (w *cacheWriter) decide() {
 		return
 	}
 	h.Set("Cache-Control", publicCacheControl)
-	// Rate-limit headers describe one visitor's IP; they must not be shared.
+	stripPerVisitorHeaders(h)
+}
+
+// stripPerVisitorHeaders removes headers that describe one visitor from an
+// answer that may be shared. Rate-limit headers describe one visitor's IP.
+func stripPerVisitorHeaders(h http.Header) {
 	for name := range h {
 		if strings.HasPrefix(strings.ToLower(name), "x-ratelimit-") {
 			h.Del(name)
