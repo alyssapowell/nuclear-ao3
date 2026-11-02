@@ -8,7 +8,9 @@
 //	PORT               where the API listens (default 8080)
 //	METRICS_ADDR       where Prometheus metrics are served (default :9091);
 //	                   keep this port private
-//	STATIC_DIR         optional folder of built frontend files to serve
+//	STATIC_DIR         optional folder of built frontend files to serve, so
+//	                   the app is the whole site with no Caddy in front (the
+//	                   single-image Dockerfile at the top of the repo sets it)
 //	SITE_URL           the archive's public address, for links in emails
 //	SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USERNAME, SMTP_PASSWORD
 //	                   the mail server emails are sent through
@@ -20,6 +22,9 @@
 //	OIDC_SIGNING_KEY_FILE
 //	                   optional separate key for the ID tokens given to other
 //	                   apps (recommended; without it the login key is used)
+//	SIGNING_KEY, SIGNING_KEY_PREVIOUS, OIDC_SIGNING_KEY
+//	                   the same keys as PEM text instead of files, for
+//	                   hosting platforms with secret settings but no files
 //	JOB_WORKERS        how many background jobs run at once (default 2)
 //	MIGRATE_ON_START   set to "false" to skip applying database migrations
 //	                   at startup (then run "nuclear migrate" yourself)
@@ -89,7 +94,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -117,6 +121,9 @@ import (
 
 func main() {
 	_ = godotenv.Load() // a local .env file is optional
+	if err := keysFromEnv(); err != nil {
+		log.Fatalf("startup: %v", err)
+	}
 
 	// Key commands work without a database.
 	if len(os.Args) > 1 && os.Args[1] == "keys" {
@@ -192,8 +199,12 @@ func main() {
 		log.Fatalf("startup: TRUSTED_PROXIES: %v", err)
 	}
 	platform.RegisterDBMetrics(db)
+	website := gin.HandlerFunc(notFound)
+	if dir := os.Getenv("STATIC_DIR"); dir != "" {
+		website = serveFrontend(dir)
+	}
 	r.Use(platform.Metrics(), gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
-		platform.PublicCache(), authSvc.RateLimitMiddleware(), deps.AppAccess)
+		platform.PublicCache(), websitePaths(website), authSvc.RateLimitMiddleware(), deps.AppAccess)
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
 		works:  worksSvc,
@@ -203,8 +214,8 @@ func main() {
 		search: searchSvc,
 	})
 
-	if dir := os.Getenv("STATIC_DIR"); dir != "" {
-		r.NoRoute(serveFrontend(dir))
+	if os.Getenv("STATIC_DIR") != "" {
+		r.NoRoute(website)
 	}
 
 	go serveMetrics(platform.Env("METRICS_ADDR", ":9091"))
@@ -487,23 +498,5 @@ func serveMetrics(addr string) {
 	log.Printf("Metrics on %s/metrics", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Printf("metrics server stopped: %v", err)
-	}
-}
-
-// serveFrontend serves the built single-page app from dir. Unknown paths get
-// index.html so the browser-side router can handle them; unknown /api paths
-// get a JSON 404.
-func serveFrontend(dir string) gin.HandlerFunc {
-	fs := http.FileServer(http.Dir(dir))
-	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
-			return
-		}
-		if _, err := os.Stat(filepath.Join(dir, filepath.Clean(c.Request.URL.Path))); err != nil {
-			c.File(filepath.Join(dir, "index.html"))
-			return
-		}
-		fs.ServeHTTP(c.Writer, c.Request)
 	}
 }

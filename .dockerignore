@@ -1,0 +1,14 @@
+# Only frontend/ and backend/ go into the image build (see Dockerfile).
+*
+!frontend
+!backend
+frontend/node_modules
+frontend/dist
+frontend/.env*
+frontend/playwright-report
+frontend/test-results
+frontend/coverage
+backend/.env*
+backend/nuclear
+**/*.log
+**/*_test.go

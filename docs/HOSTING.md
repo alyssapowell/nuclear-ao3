@@ -44,6 +44,52 @@ Even the smallest archive needs all of the following. Without them, problems are
 7. **Someone who hears about problems.** Alerts only show in Grafana until notifications are set up (docs/MONITORING.md). Also add a free external uptime check on `https://your.archive/health`, so you hear about it even when the whole server is down, including its monitoring.
 8. **HTTPS.** Caddy handles it. The app refuses to start if `SITE_URL` isn't `https://`.
 
+## On a hosting platform
+
+Some platforms run one container from your git repository, give it an HTTPS address, and offer a managed Postgres (Shebaka is one; there are many). The `Dockerfile` at the top of the repository is for them: it builds the website and the backend into one image, and the app serves both, so no Caddy is needed. The app answers only the same addresses Caddy would send it, and the website's files get the same cache rules.
+
+This is the quickest way to try the archive out. It isn't the smallest safe setup above: the platform's own backups and monitoring replace the ones in `docker-compose.yml`, and the ops workflows (which reach the server over SSH) don't apply.
+
+### Settings
+
+Set these in the platform's settings for the app. Put the keys in its secret settings if it has them.
+
+| Setting | Value |
+|---|---|
+| `DATABASE_URL` | the connection address of the platform's managed Postgres. Add `?sslmode=require` if it doesn't already say. |
+| `SITE_URL` | the app's HTTPS address, such as `https://your-app.apps.example.com` |
+| `SIGNING_KEY` | the text of a key made with `nuclear keys generate` (below) |
+| `OIDC_SIGNING_KEY` | the text of a second key, made the same way |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | a real mail service. The app refuses to start without one, because nobody could confirm their account. |
+
+The app listens on port 8080. If the platform checks a port, set it to 8080.
+
+### The keys
+
+Make them on your own computer, not on the platform, so you have the copy:
+
+```sh
+cd backend
+go run ./cmd/nuclear keys generate login-key.pem
+go run ./cmd/nuclear keys generate oidc-key.pem
+```
+
+Paste the whole of each file, including the `-----BEGIN` and `-----END` lines, into `SIGNING_KEY` and `OIDC_SIGNING_KEY`. Save both files in your password manager, then delete them from the computer. A key given as a setting works exactly like one given as a file (`SIGNING_KEY_FILE`); setting both is refused. To change keys later, put the old key's text in `SIGNING_KEY_PREVIOUS` for 14 days, as in docs/RUNBOOK.md.
+
+### Check after the first deploy
+
+- `https://YOUR-ADDRESS/health` answers.
+- Register an account and confirm it from the email.
+- The visitor's address reaches the app. Rate limits and the login guard count per visitor, so the app must see each visitor's own address, not the platform's. The app believes `X-Forwarded-For` only from private network addresses (`TRUSTED_PROXIES`), which is where most platforms' proxies are. If every visitor gets rate-limited together, the platform's proxy is somewhere else: ask the platform which addresses its proxy uses and set `TRUSTED_PROXIES` to them.
+
+### What the platform must provide instead
+
+- **Backups of the database, kept off the database's own machine**, and a restore you have tried. Find out how far back a restore goes (some platforms take one full copy a day, so up to a day of changes can be lost).
+- **Somewhere to see the app's logs.**
+- **An uptime check** on `/health`, from outside the platform.
+
+Background jobs (emails, exports) run inside the app, so nothing else needs to be set up for them.
+
 ## When to grow
 
 Watch the Archive overview dashboard. Grow when one of these stays true for a week, not after one busy evening:

@@ -80,6 +80,10 @@ func buildPublicRoutes() map[string]bool {
 // The decision is made at the moment the status line is about to be sent,
 // because only then are the final status and the headers set by the handler
 // known.
+// WebsiteFileKey marks a response as one of the website's built files (set
+// by the file server), whose Cache-Control the file server decides.
+const WebsiteFileKey = "platform.websiteFile"
+
 func PublicCache() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := &cacheWriter{ResponseWriter: c.Writer, c: c}
@@ -115,6 +119,11 @@ func (w *cacheWriter) decide() {
 		publicRoutes[w.c.FullPath()] &&
 		w.Status() == http.StatusOK &&
 		len(h.Values("Set-Cookie")) == 0
+	// The website's own files carry their rules from serveFrontend: they
+	// are the same for everyone and hold no account data.
+	if w.c.GetBool(WebsiteFileKey) && h.Get("Cache-Control") != "" && w.Status() == http.StatusOK {
+		return
+	}
 	if !canCache {
 		h.Set("Cache-Control", privateCacheControl)
 		return
