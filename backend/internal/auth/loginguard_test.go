@@ -301,6 +301,11 @@ func TestLockEmailQueuedOnceUnderConcurrentGuesses(t *testing.T) {
 
 func TestAttemptLimitPerIP(t *testing.T) {
 	e := newSessionEnv(t)
+	// Hold the clock still: the window is aligned to the wall clock, so a
+	// slow run that crossed a 5-minute boundary would reset it midway.
+	e.as.guard.init()
+	frozen := time.Now()
+	e.as.guard.byIP.now = func() time.Time { return frozen }
 	ip := "203.0.113.9:4000"
 	for i := 0; i < attemptsPerIP; i++ {
 		w := e.loginFrom(ip, fmt.Sprintf("user%d", i), "wrong!")
@@ -329,6 +334,11 @@ func TestAttemptLimitPerIP(t *testing.T) {
 
 func TestAttemptLimitPerIPv6Network(t *testing.T) {
 	e := newSessionEnv(t)
+	// Hold the clock still: the window is aligned to the wall clock, so a
+	// slow run that crossed a 5-minute boundary would reset it midway.
+	e.as.guard.init()
+	frozen := time.Now()
+	e.as.guard.byIP.now = func() time.Time { return frozen }
 	// Twenty different addresses inside one /64 use up one allowance.
 	for i := 0; i < attemptsPerIP; i++ {
 		w := e.loginFrom(fmt.Sprintf("[2001:db8:1:2::%x]:4000", i+1), "nobody", "wrong!")
