@@ -226,6 +226,47 @@ func IsApp(c *gin.Context) bool {
 	return k == "app"
 }
 
+// ReaderViewer is the one place a read handler learns who is looking and in
+// what role. Every handler an app can reach uses it.
+//
+//   - A guest: (nil, false).
+//   - A person at their own browser (login token): (their id, false). They get
+//     the creator, owner and staff views the site gives them.
+//   - An app acting for a person: (their id, true). The id is there so
+//     members-only works show and the person's own blocks and mutes apply,
+//     but asReader tells the handler to use the "as a reader" form of the
+//     visibility functions (migration 050), and to pass nobody to anything
+//     that only a creator or owner may see (see CreatorOnly). Otherwise the
+//     difference would tell the app which hidden works the person wrote.
+func ReaderViewer(c *gin.Context) (viewer *uuid.UUID, asReader bool) {
+	if v, ok := c.Get("user_uuid"); ok {
+		if id, ok := v.(uuid.UUID); ok {
+			viewer = &id
+		}
+	}
+	return viewer, viewer != nil && IsApp(c)
+}
+
+// CreatorOnly is the viewer to hand to a creator-only or owner-only check
+// (is_work_creator, own_shadowed_kudos, blocked_silently and the like): the
+// person themself for the site, nobody for an app.
+func CreatorOnly(viewer *uuid.UUID, asReader bool) *uuid.UUID {
+	if asReader {
+		return nil
+	}
+	return viewer
+}
+
+// OwnerArg is CreatorOnly for use inside a SQL text: it gives the SQL for a
+// value that is NULL when the query's as-reader parameter is true, and the
+// viewer parameter otherwise. viewerN and readerN are the numbers of the $N
+// placeholders that hold the viewer (uuid) and asReader (boolean). Use it
+// wherever a query passes the viewer to a creator-only or owner-only
+// function and also needs the viewer for the reader's own checks.
+func OwnerArg(viewerN, readerN int) string {
+	return fmt.Sprintf("(CASE WHEN $%d::boolean THEN NULL ELSE $%d::uuid END)", readerN, viewerN)
+}
+
 // AppPseud returns the pseud the person shared with the calling app, if any.
 func AppPseud(c *gin.Context) (uuid.UUID, bool) {
 	v, ok := c.Get(CtxAppPseud)

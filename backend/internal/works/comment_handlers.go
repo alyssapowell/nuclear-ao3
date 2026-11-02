@@ -84,17 +84,24 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 		req.WorkID = &chapterWork
 	}
 
+	// An app comments as a plain logged-in reader: it is checked as one
+	// (asReader), and nothing here looks at whether the person is a creator
+	// of the work. Otherwise a 404 or a different answer would tell the app
+	// which hidden works the person wrote.
+	asReader := platform.IsApp(c)
+	creatorView := platform.CreatorOnly(userID, asReader)
+
 	// You can only comment on a work you're allowed to see (not a draft, not
 	// restricted when logged out).
 	var canView bool
-	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", req.WorkID, userID).Scan(&canView); err != nil || !canView {
+	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2, $3)", req.WorkID, userID, asReader).Scan(&canView); err != nil || !canView {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
 	// ...and a chapter you're allowed to see (not another draft chapter).
 	if req.ChapterID != nil {
 		var canViewChapter bool
-		if err := ws.db.QueryRow("SELECT can_user_view_chapter($1, $2)", req.ChapterID, userID).Scan(&canViewChapter); err != nil || !canViewChapter {
+		if err := ws.db.QueryRow("SELECT can_user_view_chapter($1, $2, $3)", req.ChapterID, userID, asReader).Scan(&canViewChapter); err != nil || !canViewChapter {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Chapter not found"})
 			return
 		}
@@ -108,6 +115,11 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	// "blocked" would tell the commenter who wrote it. The comment is saved
 	// as shadowed instead (silent below): the commenter and moderators can
 	// see it, and nobody else is told about it.
+	//
+	// This one keeps the real viewer even for an app: it enforces the block,
+	// and passing nobody would let a blocked person's comment appear for
+	// everyone. (The app sees the answer any reader gets; the shadowed
+	// comment is simply not in its later lists. See docs/API_SCOPES.md.)
 	silent, err := ws.blockedSilently(c, *req.WorkID, userID)
 	if err != nil {
 		log.Printf("create comment: blocked_silently: %v", err)
@@ -146,10 +158,10 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	// see, and that can still take replies (AO3 comments_controller.rb:144-165).
 	if req.ParentCommentID != nil {
 		var exists, visible, iced, unreviewed, spam, hidden bool
-		err := ws.db.QueryRow(`SELECT true, can_user_view_comment(c.id, $3), c.iced, c.unreviewed, c.is_spam, c.hidden_by_admin
+		err := ws.db.QueryRow(`SELECT true, can_user_view_comment(c.id, $3, $4), c.iced, c.unreviewed, c.is_spam, c.hidden_by_admin
 			FROM comments c LEFT JOIN chapters ch ON ch.id = c.chapter_id
 			WHERE c.id = $1 AND COALESCE(c.work_id, ch.work_id) = $2`,
-			req.ParentCommentID, req.WorkID, userID).Scan(&exists, &visible, &iced, &unreviewed, &spam, &hidden)
+			req.ParentCommentID, req.WorkID, userID, asReader).Scan(&exists, &visible, &iced, &unreviewed, &spam, &hidden)
 		if err != nil || !exists || !visible {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Parent comment not found"})
 			return
@@ -198,7 +210,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	// approve it, unless a creator wrote it (AO3 comment.rb:403-409).
 	var unreviewed bool
 	if err := ws.db.QueryRow(`SELECT COALESCE(w.moderate_comments, false) AND NOT is_work_creator(w.id, $2) FROM works w WHERE w.id = $1`,
-		req.WorkID, userID).Scan(&unreviewed); err != nil {
+		req.WorkID, creatorView).Scan(&unreviewed); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create comment"})
 		return
 	}
@@ -236,7 +248,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	}
 
 	// Retrieve the created comment with details
-	comment, err := ws.getCommentByID(commentID, userID)
+	comment, err := ws.getCommentByID(commentID, creatorView)
 	if err != nil {
 		// Log error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Comment created but failed to retrieve details"})

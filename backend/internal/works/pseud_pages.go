@@ -26,7 +26,11 @@ type pseudPage struct {
 	Name    string
 	OwnerID uuid.UUID
 	Default bool
-	Owned   bool // the viewer is the person behind this pseud
+	Owned   bool // the viewer is the person behind this pseud, at their own browser
+	// AsReader is true for an app. The person behind the pseud is then just a
+	// logged-in reader: Owned is false and the creator-only parts of the
+	// queries are given nobody (platform.ReaderViewer).
+	AsReader bool
 }
 
 func (p pseudPage) summary() models.PseudSummary {
@@ -53,14 +57,13 @@ func (ws *WorkService) loadPseudPage(c *gin.Context) (pseudPage, *uuid.UUID, boo
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load pseud"})
 		return p, nil, false
 	}
-	viewer := ws.getUserIDFromContext(c)
-	p.Owned = viewer != nil && *viewer == p.OwnerID
 	// A page shows its owner extra (drafts, works that hide their creator).
-	// An app gets the page as any other reader would see it, or the
-	// difference would tell the app which pseuds belong to the person.
-	if p.Owned && platform.IsApp(c) {
-		viewer, p.Owned = nil, false
-	}
+	// An app gets the page as any other logged-in reader would see it, or
+	// the difference would tell the app which pseuds belong to the person.
+	// This is the same mechanism every other app route uses.
+	viewer, asReader := platform.ReaderViewer(c)
+	p.AsReader = asReader
+	p.Owned = viewer != nil && !asReader && *viewer == p.OwnerID
 	return p, viewer, true
 }
 
@@ -94,8 +97,8 @@ func (ws *WorkService) GetPseudWorks(c *gin.Context) {
 	where := ` WHERE cr.pseud_id = $1 AND cr.approved = true`
 	args := []interface{}{pseud.ID}
 	if !pseud.Owned {
-		where += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid)" + hidesNoCreator
-		args = append(args, viewer)
+		where += " AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid, $3::boolean)" + hidesNoCreator
+		args = append(args, viewer, pseud.AsReader)
 	}
 	from := ` FROM works w JOIN creatorships cr ON w.id = cr.creation_id AND cr.creation_type = 'Work'`
 
@@ -107,6 +110,7 @@ func (ws *WorkService) GetPseudWorks(c *gin.Context) {
 	}
 
 	n := len(args)
+	// Last, the viewer for the count of the viewer's own shadowed posts: nobody for an app.
 	rows, err := ws.db.QueryContext(c.Request.Context(), `
 		SELECT w.id, w.title, w.summary, w.language, w.rating,
 			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
@@ -117,7 +121,7 @@ func (ws *WorkService) GetPseudWorks(c *gin.Context) {
 			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $`+strconv.Itoa(n+3)+`::uuid),
 			COALESCE(w.bookmark_count, 0)`+from+where+
 		` ORDER BY w.updated_at DESC LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2),
-		append(args, limit, offset, viewer)...)
+		append(args, limit, offset, platform.CreatorOnly(viewer, pseud.AsReader))...)
 	if err != nil {
 		log.Printf("pseud works: list for pseud %s: %v", pseud.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pseud works"})
@@ -177,14 +181,15 @@ func (ws *WorkService) GetPseudWorks(c *gin.Context) {
 // the pseud is credited on (and may be shown on), and an empty series made by
 // the person behind the pseud, which goes under their default pseud. $1 is the
 // pseud, $2 the viewer, $3 the owner's account, $4 whether the pseud is the
-// owner's default and $5 whether the viewer owns the pseud.
+// owner's default, $5 whether the viewer owns the pseud and $6 whether the
+// viewer is an app (a plain reader).
 const pseudSeriesWhere = `
-	WHERE can_user_view_series(s.id, $2::uuid)
-	  AND series_shows_creator(s.id, $2::uuid)
+	WHERE can_user_view_series(s.id, $2::uuid, $6::boolean)
+	  AND series_shows_creator(s.id, $2::uuid, $6::boolean)
 	  AND (EXISTS (SELECT 1 FROM series_works sw
 	               JOIN creatorships cr ON cr.creation_id = sw.work_id AND cr.creation_type = 'Work' AND cr.approved
 	               WHERE sw.series_id = s.id AND cr.pseud_id = $1
-	                 AND can_user_view_work(sw.work_id, $2::uuid)
+	                 AND can_user_view_work(sw.work_id, $2::uuid, $6::boolean)
 	                 AND (NOT work_hides_creator(sw.work_id) OR $5::bool))
 	       OR ($4::bool AND s.user_id = $3 AND NOT EXISTS (SELECT 1 FROM series_works sw WHERE sw.series_id = s.id)))`
 
@@ -196,7 +201,7 @@ func (ws *WorkService) GetPseudSeries(c *gin.Context) {
 	}
 	page, limit, offset := pageParams(c)
 	ctx := c.Request.Context()
-	args := []interface{}{pseud.ID, viewer, pseud.OwnerID, pseud.Default, pseud.Owned}
+	args := []interface{}{pseud.ID, viewer, pseud.OwnerID, pseud.Default, pseud.Owned, pseud.AsReader}
 
 	var total int
 	if err := ws.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM series s`+pseudSeriesWhere, args...).Scan(&total); err != nil {
@@ -207,10 +212,10 @@ func (ws *WorkService) GetPseudSeries(c *gin.Context) {
 	rows, err := ws.db.QueryContext(ctx, `
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid)
-			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $2::uuid))),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid, $6::boolean)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, `+ownerArg(2, 6)+`))),
 			s.created_at, s.updated_at
-		FROM series s`+pseudSeriesWhere+` ORDER BY s.updated_at DESC LIMIT $6 OFFSET $7`,
+		FROM series s`+pseudSeriesWhere+` ORDER BY s.updated_at DESC LIMIT $7 OFFSET $8`,
 		append(args, limit, offset)...)
 	if err != nil {
 		log.Printf("pseud series: list for pseud %s: %v", pseud.ID, err)
@@ -235,8 +240,8 @@ func (ws *WorkService) GetPseudSeries(c *gin.Context) {
 	for i := range series {
 		ptrs[i] = &series[i]
 	}
-	ws.fillSeriesWordCounts(ctx, ptrs, viewer)
-	ws.attachSeriesAuthors(ctx, ptrs, viewer)
+	ws.fillSeriesWordCounts(ctx, ptrs, viewer, pseud.AsReader)
+	ws.attachSeriesAuthors(ctx, ptrs, viewer, pseud.AsReader)
 
 	c.JSON(http.StatusOK, gin.H{
 		"pseud":      pseud.summary(),
@@ -259,11 +264,12 @@ func (ws *WorkService) GetPseudBookmarks(c *gin.Context) {
 	// go through can_user_view_bookmark. A creator's bookmark of their own work
 	// that hides its creator would tie the pseud to the work, so strangers
 	// don't see it.
-	const where = ` WHERE b.pseud_id = $1 AND can_user_view_bookmark(b.id, $2::uuid)
-		AND (b.user_id = $2::uuid OR NOT work_hides_creator(b.work_id) OR NOT is_work_creator(b.work_id, b.user_id))`
+	// For an app the "own bookmark" exception is off, like the others.
+	where := ` WHERE b.pseud_id = $1 AND can_user_view_bookmark(b.id, $2::uuid, $3::boolean)
+		AND (b.user_id = ` + ownerArg(2, 3) + ` OR NOT work_hides_creator(b.work_id) OR NOT is_work_creator(b.work_id, b.user_id))`
 
 	var total int
-	if err := ws.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks b`+where, pseud.ID, viewer).Scan(&total); err != nil {
+	if err := ws.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookmarks b`+where, pseud.ID, viewer, pseud.AsReader).Scan(&total); err != nil {
 		log.Printf("pseud bookmarks: count for pseud %s: %v", pseud.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bookmarks"})
 		return
@@ -274,11 +280,11 @@ func (ws *WorkService) GetPseudBookmarks(c *gin.Context) {
 			w.freeform_tags, w.word_count, w.chapter_count, w.is_complete, w.status,
 			w.published_at, w.updated_at,
 			COALESCE(w.hit_count, 0),
-			COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid),
-			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid),
+			COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, `+ownerArg(2, 3)+`),
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, `+ownerArg(2, 3)+`),
 			COALESCE(w.bookmark_count, 0)
 		FROM bookmarks b JOIN works w ON w.id = b.work_id`+where+
-		` ORDER BY b.created_at DESC LIMIT $3 OFFSET $4`, pseud.ID, viewer, limit, offset)
+		` ORDER BY b.created_at DESC LIMIT $4 OFFSET $5`, pseud.ID, viewer, pseud.AsReader, limit, offset)
 	if err != nil {
 		log.Printf("pseud bookmarks: list for pseud %s: %v", pseud.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bookmarks"})
@@ -353,13 +359,13 @@ func (ws *WorkService) GetPseudBookmarks(c *gin.Context) {
 
 // fillSeriesWordCounts sets each series' word count from the works the viewer
 // may see, leaving out a hidden creator's work unless the viewer wrote it.
-func (ws *WorkService) fillSeriesWordCounts(ctx context.Context, series []*models.Series, viewer *uuid.UUID) {
+func (ws *WorkService) fillSeriesWordCounts(ctx context.Context, series []*models.Series, viewer *uuid.UUID, asReader bool) {
 	for _, s := range series {
 		if err := ws.db.QueryRowContext(ctx, `
 			SELECT COALESCE(SUM(w.word_count), 0)
 			FROM works w JOIN series_works sw ON w.id = sw.work_id
-			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
-			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, s.ID, viewer).Scan(&s.WordCount); err != nil {
+			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid, $3::boolean)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, `+ownerArg(2, 3)+`))`, s.ID, viewer, asReader).Scan(&s.WordCount); err != nil {
 			s.WordCount = 0
 		}
 	}
@@ -370,7 +376,7 @@ func (ws *WorkService) fillSeriesWordCounts(ctx context.Context, series []*model
 // A pseud is included only for works the viewer may see, and a work that hides
 // its creator adds nobody unless the pseud is the viewer's own. A series with
 // no works yet is credited to its owner's default pseud.
-func (ws *WorkService) attachSeriesAuthors(ctx context.Context, series []*models.Series, viewer *uuid.UUID) {
+func (ws *WorkService) attachSeriesAuthors(ctx context.Context, series []*models.Series, viewer *uuid.UUID, asReader bool) {
 	if len(series) == 0 {
 		return
 	}
@@ -387,14 +393,14 @@ func (ws *WorkService) attachSeriesAuthors(ctx context.Context, series []*models
 		JOIN creatorships cr ON cr.creation_id = sw.work_id AND cr.creation_type = 'Work' AND cr.approved
 		JOIN pseuds p ON p.id = cr.pseud_id
 		WHERE sw.series_id = ANY($1::uuid[])
-		  AND can_user_view_work(sw.work_id, $2::uuid)
-		  AND (NOT work_hides_creator(sw.work_id) OR p.user_id = $2::uuid)
+		  AND can_user_view_work(sw.work_id, $2::uuid, $3::boolean)
+		  AND (NOT work_hides_creator(sw.work_id) OR p.user_id = `+ownerArg(2, 3)+`)
 		GROUP BY sw.series_id, p.id, p.name
 		UNION ALL
 		SELECT s.id, p.id, p.name
 		FROM series s JOIN pseuds p ON p.user_id = s.user_id AND p.is_default
 		WHERE s.id = ANY($1::uuid[]) AND NOT EXISTS (SELECT 1 FROM series_works sw WHERE sw.series_id = s.id)
-		ORDER BY 3`, pq.Array(ids), viewer)
+		ORDER BY 3`, pq.Array(ids), viewer, asReader)
 	if err != nil {
 		log.Printf("series authors: %v", err)
 		return

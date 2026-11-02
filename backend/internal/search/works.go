@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+
+	"nuclear-ao3/internal/platform"
 )
 
 // The deepest result a search can page to. Past this, Postgres has to skip
@@ -22,6 +24,12 @@ const maxResultDepth = 10000
 
 // WorkQuery is one work search: free text plus AO3's filters.
 type WorkQuery struct {
+	// AsReader is true when an app asks for a person: they are then a plain
+	// logged-in reader, with no creator, owner or staff exceptions and no
+	// count of their own shadowed posts (platform.ReaderViewer). Set by the
+	// handler, never read from the request.
+	AsReader bool
+
 	Text    string // anything: title, tags, summary
 	Title   string // words that must appear in the title
 	Creator string // a pseud name; anonymous works never match
@@ -197,7 +205,8 @@ func (q WorkQuery) build(viewer *uuid.UUID) (b sqlBuilder, textArg string) {
 	// blocks and mutes are all decided by can_user_view_work.
 	b.add("w.status <> 'draft' AND w.is_draft = false")
 	b.add("NOT coalesce(w.in_unrevealed_collection, false)")
-	b.add(fmt.Sprintf("can_user_view_work(w.id, %s)", b.arg(viewer)))
+	viewerArg := b.arg(viewer)
+	b.add(fmt.Sprintf("can_user_view_work(w.id, %s, %s::boolean)", viewerArg, b.arg(q.AsReader)))
 
 	if q.Text != "" {
 		textArg = b.arg(q.Text)
@@ -392,13 +401,13 @@ UNION ALL (SELECT 'freeform_tags', t, count(*) FROM m, unnest(m.freeform_tags) t
 
 	// The counts shown include the viewer's own shadowed kudos and comments.
 	// (The sort above and the filters in build() keep the public counts.)
-	viewerArg := b.arg(viewer)
+	viewerArg := ownerExpr(b.arg(viewer), b.arg(q.AsReader))
 	pageSQL := fmt.Sprintf(`SELECT w.id, w.title, coalesce(w.summary, ''), w.rating,
   %s, %s, w.language,
   coalesce(w.fandoms, '{}'), coalesce(w.characters, '{}'), coalesce(w.relationships, '{}'), coalesce(w.freeform_tags, '{}'),
   w.word_count, w.chapter_count, coalesce(w.max_chapters, w.expected_chapters), coalesce(w.is_complete, false),
-  w.kudos_count + own_shadowed_kudos(w.id, %[7]s::uuid), w.hit_count,
-  w.comment_count + own_shadowed_comments(w.id, %[7]s::uuid), w.bookmark_count, w.published_at, w.updated_at,
+  w.kudos_count + own_shadowed_kudos(w.id, %[7]s), w.hit_count,
+  w.comment_count + own_shadowed_comments(w.id, %[7]s), w.bookmark_count, w.published_at, w.updated_at,
   coalesce(w.is_anonymous, false) OR coalesce(w.in_anon_collection, false) AS anonymous,
   CASE WHEN coalesce(w.is_anonymous, false) OR coalesce(w.in_anon_collection, false) THEN '[]'::json
   ELSE (SELECT coalesce(json_agg(json_build_object('id', p.id, 'name', p.name) ORDER BY p.name), '[]'::json)
@@ -446,15 +455,6 @@ LIMIT %[5]d OFFSET %[6]d`,
 	return out, nil
 }
 
-func viewerFrom(c *gin.Context) *uuid.UUID {
-	if v, ok := c.Get("user_uuid"); ok {
-		if id, ok := v.(uuid.UUID); ok {
-			return &id
-		}
-	}
-	return nil
-}
-
 // SearchWorks handles GET /api/v1/search/works.
 func (s *Service) SearchWorks(c *gin.Context) {
 	q, err := ParseWorkQuery(c)
@@ -462,7 +462,9 @@ func (s *Service) SearchWorks(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	res, err := s.Search(q, viewerFrom(c))
+	viewer, asReader := platform.ReaderViewer(c)
+	q.AsReader = asReader
+	res, err := s.Search(q, viewer)
 	if err != nil {
 		log.Printf("search: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Search failed"})
@@ -523,13 +525,14 @@ func (s *Service) Suggestions(c *gin.Context) {
 	b := sqlBuilder{}
 	b.add("w.status <> 'draft' AND w.is_draft = false")
 	b.add("NOT coalesce(w.in_unrevealed_collection, false)")
-	viewer := viewerFrom(c)
+	viewer, asReader := platform.ReaderViewer(c)
 	viewerArg := b.arg(viewer)
-	b.add(fmt.Sprintf("can_user_view_work(w.id, %s)", viewerArg))
+	readerArg := b.arg(asReader)
+	b.add(fmt.Sprintf("can_user_view_work(w.id, %s, %s::boolean)", viewerArg, readerArg))
 	b.add(fmt.Sprintf("w.search_vector @@ to_tsquery('english', %s)", b.arg(tsq)))
 	// The count shown includes the viewer's own shadowed kudos; the order
 	// uses the public count.
-	rows, err := s.db.Query(`SELECT w.id, w.title, w.kudos_count + own_shadowed_kudos(w.id, `+viewerArg+`::uuid)
+	rows, err := s.db.Query(`SELECT w.id, w.title, w.kudos_count + own_shadowed_kudos(w.id, `+ownerExpr(viewerArg, readerArg)+`)
 		FROM works w WHERE `+
 		strings.Join(b.where, " AND ")+` ORDER BY w.kudos_count DESC, w.id LIMIT 5`, b.args...)
 	if err != nil {
@@ -580,4 +583,11 @@ func (s *Service) Suggestions(c *gin.Context) {
 		out.Authors = append(out.Authors, a)
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+// ownerExpr is the SQL for the viewer as a creator or owner would count: NULL
+// when the as-reader placeholder is true (an app), the viewer otherwise. The
+// arguments are placeholders such as "$3".
+func ownerExpr(viewerArg, readerArg string) string {
+	return "(CASE WHEN " + readerArg + "::boolean THEN NULL ELSE " + viewerArg + "::uuid END)"
 }

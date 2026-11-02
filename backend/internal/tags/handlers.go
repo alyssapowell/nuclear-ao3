@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"nuclear-ao3/internal/html"
+	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 )
 
@@ -563,21 +564,22 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 	query := fmt.Sprintf(`
 		SELECT 
 			w.id, w.title, w.summary, w.word_count, w.chapter_count,
-			w.kudos_count + own_shadowed_kudos(w.id, $4::uuid),
+			w.kudos_count + own_shadowed_kudos(w.id, %s),
 			w.created_at, w.updated_at, wt.prominence, wt.prominence_score
 		FROM works w
 		JOIN work_tags wt ON w.id = wt.work_id
 		WHERE wt.tag_id = $1
 		AND w.status <> 'draft' AND w.is_draft = false
-		AND can_user_view_work(w.id, $4::uuid)
+		AND can_user_view_work(w.id, $4::uuid, $5::boolean)
 		ORDER BY %s DESC
 		LIMIT $2 OFFSET $3
-	`, sortBy)
+	`, platform.OwnerArg(4, 5), sortBy)
 
 	// Hidden and spam works, drafts and works the viewer can't read are not
 	// listed or counted under a tag.
-	viewer := viewerFrom(c)
-	rows, err := ts.db.Query(query, tagID, limit, offset, viewer)
+	// An app is a plain logged-in reader (platform.ReaderViewer).
+	viewer, asReader := platform.ReaderViewer(c)
+	rows, err := ts.db.Query(query, tagID, limit, offset, viewer, asReader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -616,7 +618,7 @@ func (ts *TagService) GetTagWorks(c *gin.Context) {
 	var total int
 	err = ts.db.QueryRow(`SELECT COUNT(*) FROM work_tags wt JOIN works w ON w.id = wt.work_id
 		WHERE wt.tag_id = $1 AND w.status <> 'draft' AND w.is_draft = false
-		AND can_user_view_work(w.id, $2::uuid)`, tagID, viewer).Scan(&total)
+		AND can_user_view_work(w.id, $2::uuid, $3::boolean)`, tagID, viewer, asReader).Scan(&total)
 	if err != nil {
 		total = 0
 	}
@@ -1593,14 +1595,4 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
-}
-
-// viewerFrom is the logged-in reader's id, or nil for a guest.
-func viewerFrom(c *gin.Context) *uuid.UUID {
-	if v, ok := c.Get("user_uuid"); ok {
-		if id, ok := v.(uuid.UUID); ok {
-			return &id
-		}
-	}
-	return nil
 }

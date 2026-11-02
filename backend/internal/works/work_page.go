@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 )
 
@@ -37,8 +38,10 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 		return
 	}
 
-	userID := ws.getUserIDFromContext(c)
-	work, err := ws.fetchWorkFromDB(ctx, workID, userID)
+	// An app sees the work as any logged-in reader would (see
+	// platform.ReaderViewer): creator-only exceptions stay off.
+	userID, asReader := platform.ReaderViewer(c)
+	work, err := ws.fetchWorkFromDB(ctx, workID, platform.CreatorOnly(userID, asReader))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
@@ -49,7 +52,7 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 	}
 
 	// Apply privacy filters
-	if !ws.canViewWork(ctx, workID, userID) {
+	if !ws.canViewWork(ctx, workID, userID, asReader) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
@@ -92,13 +95,13 @@ func (ws *WorkService) GetWorkStats(c *gin.Context) {
 		return
 	}
 
-	viewer := ws.getUserIDFromContext(c)
-	if !ws.canViewWork(ctx, workID, viewer) {
+	viewer, asReader := platform.ReaderViewer(c)
+	if !ws.canViewWork(ctx, workID, viewer, asReader) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
 
-	stats, err := ws.fetchWorkStatsFromDB(ctx, workID, viewer)
+	stats, err := ws.fetchWorkStatsFromDB(ctx, workID, platform.CreatorOnly(viewer, asReader))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve work stats"})
 		return
@@ -303,12 +306,16 @@ func (ws *WorkService) getUserIDFromContext(c *gin.Context) *uuid.UUID {
 }
 
 // canViewWork asks the database, which knows about drafts, co-authors,
-// restricted works, blocks and mutes.
-func (ws *WorkService) canViewWork(ctx context.Context, workID uuid.UUID, userID *uuid.UUID) bool {
+// restricted works, blocks and mutes. asReader is true for an app: then the
+// creator and staff exceptions are off (migration 050).
+func (ws *WorkService) canViewWork(ctx context.Context, workID uuid.UUID, userID *uuid.UUID, asReader bool) bool {
 	var ok bool
-	if err := ws.db.QueryRowContext(ctx, "SELECT can_user_view_work($1, $2)", workID, userID).Scan(&ok); err != nil {
+	if err := ws.db.QueryRowContext(ctx, "SELECT can_user_view_work($1, $2, $3)", workID, userID, asReader).Scan(&ok); err != nil {
 		log.Printf("can_user_view_work(%s): %v", workID, err)
 		return false
 	}
 	return ok
 }
+
+// ownerArg is platform.OwnerArg, shortened for the queries in this package.
+func ownerArg(viewerN, readerN int) string { return platform.OwnerArg(viewerN, readerN) }

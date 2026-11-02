@@ -16,6 +16,7 @@ import (
 
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/html"
+	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -676,8 +677,9 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
-	// Who is looking decides what is listed.
-	viewer := ws.getUserIDFromContext(c)
+	// Who is looking decides what is listed. An app is a logged-in reader
+	// (asReader), and the creator-only count of its own shadowed posts is off.
+	viewer, asReader := platform.ReaderViewer(c)
 
 	// Build SQL query - only show published works, not drafts
 	// Note: Remove the empty array columns, we'll load tags separately from work_tags table
@@ -687,8 +689,8 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 			w.word_count, w.chapter_count, w.expected_chapters, w.is_complete, 
 			CASE WHEN w.is_draft THEN 'draft' WHEN w.is_complete THEN 'complete' ELSE 'in_progress' END as status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $1::uuid) as kudos,
-			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $1::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks`
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, ` + ownerArg(1, 2) + `) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, ` + ownerArg(1, 2) + `) as comments, COALESCE(w.bookmark_count, 0) as bookmarks`
 	// The rows and the total are counted from the same FROM and WHERE, so the
 	// total is every matching work, not just this page.
 	fromWhere := `
@@ -699,9 +701,9 @@ func (ws *WorkService) SearchWorks(c *gin.Context) {
 	// Drafts, works restricted to users, hidden and spam works, blocks and
 	// mutes are all decided by can_user_view_work, the same rule the work
 	// page uses.
-	args := []interface{}{viewer}
-	argIndex := 2
-	fromWhere += " AND can_user_view_work(w.id, $1::uuid)"
+	args := []interface{}{viewer, asReader}
+	argIndex := 3
+	fromWhere += " AND can_user_view_work(w.id, $1::uuid, $2::boolean)"
 
 	conditions := []string{}
 
@@ -959,13 +961,9 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 	}
 
 	// Only people allowed to see the work may read its chapters.
-	var userUUID *uuid.UUID
-	if id, ok := c.Get("user_uuid"); ok {
-		v := id.(uuid.UUID)
-		userUUID = &v
-	}
+	userUUID, asReader := platform.ReaderViewer(c)
 	var canView bool
-	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2)", workID, userUUID).Scan(&canView); err != nil || !canView {
+	if err := ws.db.QueryRow("SELECT can_user_view_work($1, $2, $3)", workID, userUUID, asReader).Scan(&canView); err != nil || !canView {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
 		return
 	}
@@ -982,8 +980,8 @@ func (ws *WorkService) GetChapters(c *gin.Context) {
 			published_at, created_at, updated_at
 		FROM chapters 
 		WHERE work_id = $1
-			AND can_user_view_chapter(chapters.id, $2)
-		ORDER BY chapter_number`, workID, userUUID)
+			AND can_user_view_chapter(chapters.id, $2, $3)
+		ORDER BY chapter_number`, workID, userUUID, asReader)
 	if err != nil {
 		log.Printf("Failed to fetch chapters for work %s: %v", workID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch chapters"})
@@ -1026,18 +1024,11 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 		return
 	}
 
-	// Check if user can view this work
-	userID, hasUser := c.Get("user_id")
-	var userUUID *uuid.UUID
-	if hasUser {
-		userIDStr := userID.(string)
-		if userVal, err := uuid.Parse(userIDStr); err == nil {
-			userUUID = &userVal
-		}
-	}
+	// Check if user can view this work (an app as a plain reader)
+	userUUID, asReader := platform.ReaderViewer(c)
 
 	var canView bool
-	err = ws.db.QueryRow("SELECT can_user_view_work($1, $2)", workID, userUUID).Scan(&canView)
+	err = ws.db.QueryRow("SELECT can_user_view_work($1, $2, $3)", workID, userUUID, asReader).Scan(&canView)
 	if err != nil || !canView {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
 		return
@@ -1052,7 +1043,7 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 			published_at, created_at, updated_at
 		FROM chapters 
 		WHERE work_id = $1 AND chapter_number = $2
-			AND can_user_view_chapter(chapters.id, $3)`, workID, chapterNumber, userUUID).Scan(
+			AND can_user_view_chapter(chapters.id, $3, $4)`, workID, chapterNumber, userUUID, asReader).Scan(
 		&chapter.ID, &chapter.WorkID, &chapter.Number, &chapter.Title, &chapter.Summary,
 		&chapter.Notes, &chapter.EndNotes, &chapter.Content, &chapter.WordCount,
 		&chapter.Status, &publishedAt, &chapter.CreatedAt, &chapter.UpdatedAt)
@@ -1557,18 +1548,19 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 		return
 	}
 
-	userUUID := ws.getUserIDFromContext(c)
+	userUUID, asReader := platform.ReaderViewer(c)
 
 	// Check if user can view this work
-	if !ws.canViewWork(c.Request.Context(), workID, userUUID) {
+	if !ws.canViewWork(c.Request.Context(), workID, userUUID, asReader) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot view this work"})
 		return
 	}
 
 	// The work's creators and admins can act on comments, so they see more.
+	// An app is neither: it is asked as nobody.
 	var isCreator, isMod bool
 	if err := ws.db.QueryRowContext(c.Request.Context(),
-		"SELECT is_work_creator($1, $2), is_site_moderator($2)", workID, userUUID).Scan(&isCreator, &isMod); err != nil {
+		"SELECT is_work_creator($1, $2), is_site_moderator($2)", workID, platform.CreatorOnly(userUUID, asReader)).Scan(&isCreator, &isMod); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get work info"})
 		return
 	}
@@ -1595,7 +1587,7 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 		LEFT JOIN works w ON w.id = COALESCE(c.work_id, ch.work_id)
 		LEFT JOIN pseuds up ON up.id = c.pseudonym_id
 		WHERE COALESCE(c.work_id, ch.work_id) = $1
-		  AND can_user_view_comment(c.id, $2)
+		  AND can_user_view_comment(c.id, $2, $5)
 		  AND (NOT c.unreviewed OR $4 OR $3)`
 
 	// Authors can see all comments, others only see published ones
@@ -1605,7 +1597,7 @@ func (ws *WorkService) GetComments(c *gin.Context) {
 
 	baseQuery += " ORDER BY c.created_at ASC"
 
-	rows, err := ws.db.Query(baseQuery, workID, userUUID, isMod, isCreator)
+	rows, err := ws.db.Query(baseQuery, workID, userUUID, isMod, isCreator, asReader)
 	if err != nil {
 		log.Printf("get comments: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch comments"})
@@ -1664,7 +1656,7 @@ func (ws *WorkService) GetKudos(c *gin.Context) {
 		}
 	}
 
-	if !ws.canViewWork(c.Request.Context(), workID, userUUID) {
+	if !ws.canViewWork(c.Request.Context(), workID, userUUID, platform.IsApp(c)) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Work not found"})
 		return
 	}
@@ -2110,21 +2102,21 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 	// Search series by title and summary
 	// Hidden series are left out, and a series counts only the works the
 	// viewer can see.
-	viewer := ws.getUserIDFromContext(c)
+	viewer, asReader := platform.ReaderViewer(c)
 	searchQuery := `
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid)
-			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $4::uuid))),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $4::uuid, $5::boolean)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, ` + ownerArg(4, 5) + `))),
 			s.created_at, s.updated_at
 		FROM series s
 		WHERE (s.title ILIKE $1 OR s.description ILIKE $1)
-		AND can_user_view_series(s.id, $4::uuid)
-		AND series_shows_creator(s.id, $4::uuid)
+		AND can_user_view_series(s.id, $4::uuid, $5::boolean)
+		AND series_shows_creator(s.id, $4::uuid, $5::boolean)
 		ORDER BY s.updated_at DESC
 		LIMIT $2 OFFSET $3`
 
-	rows, err := ws.db.Query(searchQuery, query, limit, offset, viewer)
+	rows, err := ws.db.Query(searchQuery, query, limit, offset, viewer, asReader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search series"})
 		return
@@ -2147,8 +2139,8 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 			SELECT COALESCE(SUM(w.word_count), 0) 
 			FROM works w 
 			JOIN series_works sw ON w.id = sw.work_id
-			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
-			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, s.ID, viewer).Scan(&s.WordCount)
+			WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid, $3::boolean)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, `+ownerArg(2, 3)+`))`, s.ID, viewer, asReader).Scan(&s.WordCount)
 
 		series = append(series, s)
 	}
@@ -2157,7 +2149,7 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 	for i := range series {
 		attach[i] = &series[i]
 	}
-	ws.attachSeriesAuthors(c.Request.Context(), attach, viewer)
+	ws.attachSeriesAuthors(c.Request.Context(), attach, viewer, asReader)
 
 	// Get total count for pagination
 	var total int
@@ -2165,9 +2157,9 @@ func (ws *WorkService) SearchSeries(c *gin.Context) {
 		SELECT COUNT(*) 
 		FROM series s
 		WHERE (s.title ILIKE $1 OR s.description ILIKE $1)
-		AND can_user_view_series(s.id, $2::uuid)
-		AND series_shows_creator(s.id, $2::uuid)`
-	err = ws.db.QueryRow(countQuery, query, viewer).Scan(&total)
+		AND can_user_view_series(s.id, $2::uuid, $3::boolean)
+		AND series_shows_creator(s.id, $2::uuid, $3::boolean)`
+	err = ws.db.QueryRow(countQuery, query, viewer, asReader).Scan(&total)
 	if err != nil {
 		total = len(series) // Fallback
 	}
@@ -2190,16 +2182,16 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 		return
 	}
 
-	viewer := ws.getUserIDFromContext(c)
+	viewer, asReader := platform.ReaderViewer(c)
 	var series models.Series
 	err = ws.db.QueryRow(`
 		SELECT s.id, s.title, COALESCE(s.description, ''), COALESCE(s.notes, ''), s.user_id, s.is_complete,
 			(SELECT COUNT(*) FROM series_works sw JOIN works vw ON vw.id = sw.work_id
-			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid)
-			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, $2::uuid))),
+			 WHERE sw.series_id = s.id AND can_user_view_work(vw.id, $2::uuid, $3::boolean)
+			   AND (NOT work_hides_creator(vw.id) OR is_work_creator(vw.id, `+ownerArg(2, 3)+`))),
 			s.created_at, s.updated_at
 		FROM series s
-		WHERE s.id = $1 AND can_user_view_series(s.id, $2::uuid) AND series_shows_creator(s.id, $2::uuid)`, seriesID, viewer).Scan(
+		WHERE s.id = $1 AND can_user_view_series(s.id, $2::uuid, $3::boolean) AND series_shows_creator(s.id, $2::uuid, $3::boolean)`, seriesID, viewer, asReader).Scan(
 		&series.ID, &series.Title, &series.Summary, &series.Notes, &series.UserID,
 		&series.IsComplete, &series.WorkCount, &series.CreatedAt, &series.UpdatedAt)
 
@@ -2217,14 +2209,14 @@ func (ws *WorkService) GetSeries(c *gin.Context) {
 		SELECT COALESCE(SUM(w.word_count), 0)
 		FROM works w
 		JOIN series_works sw ON w.id = sw.work_id
-		WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid)
-			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`, seriesID, viewer).Scan(&series.WordCount)
+		WHERE sw.series_id = $1 AND w.status != 'draft' AND can_user_view_work(w.id, $2::uuid, $3::boolean)
+			  AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, `+ownerArg(2, 3)+`))`, seriesID, viewer, asReader).Scan(&series.WordCount)
 
 	if err != nil {
 		series.WordCount = 0 // Fallback
 	}
 
-	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, viewer)
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, viewer, asReader)
 	c.JSON(http.StatusOK, gin.H{"series": series})
 }
 
@@ -2235,31 +2227,25 @@ func (ws *WorkService) GetSeriesWorks(c *gin.Context) {
 		return
 	}
 
-	// Get user ID for privacy checks
-	userID, hasUser := c.Get("user_id")
-	var userUUID *uuid.UUID
-	if hasUser {
-		userIDStr := userID.(string)
-		if userVal, err := uuid.Parse(userIDStr); err == nil {
-			userUUID = &userVal
-		}
-	}
+	// Get user ID for privacy checks (an app is a plain logged-in reader)
+	userUUID, asReader := platform.ReaderViewer(c)
+	hasUser := userUUID != nil
 
 	baseQuery := `
 		SELECT w.id, w.title, w.summary, w.language, w.rating,
 			w.category, w.warnings, w.fandoms, w.characters, w.relationships, w.freeform_tags,
 			w.word_count, w.chapter_count, w.max_chapters, w.is_complete, w.status,
 			w.published_at, w.updated_at, w.created_at,
-			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, $2::uuid) as kudos,
-			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, $2::uuid) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
+			COALESCE(w.hit_count, 0) as hits, COALESCE(w.kudos_count, 0) + own_shadowed_kudos(w.id, ` + ownerArg(2, 3) + `) as kudos,
+			COALESCE(w.comment_count, 0) + own_shadowed_comments(w.id, ` + ownerArg(2, 3) + `) as comments, COALESCE(w.bookmark_count, 0) as bookmarks,
 			sw.position
 		FROM works w
 		JOIN series_works sw ON w.id = sw.work_id
 		WHERE sw.series_id = $1
-		AND can_user_view_series(sw.series_id, $2::uuid)
-		AND series_shows_creator(sw.series_id, $2::uuid)
-		AND can_user_view_work(w.id, $2::uuid)
-		AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, $2::uuid))`
+		AND can_user_view_series(sw.series_id, $2::uuid, $3::boolean)
+		AND series_shows_creator(sw.series_id, $2::uuid, $3::boolean)
+		AND can_user_view_work(w.id, $2::uuid, $3::boolean)
+		AND (NOT work_hides_creator(w.id) OR is_work_creator(w.id, ` + ownerArg(2, 3) + `))`
 
 	// If no user, only show non-draft, non-restricted works
 	if !hasUser {
@@ -2268,7 +2254,7 @@ func (ws *WorkService) GetSeriesWorks(c *gin.Context) {
 
 	baseQuery += " ORDER BY sw.position"
 
-	rows, err := ws.db.Query(baseQuery, seriesID, userUUID)
+	rows, err := ws.db.Query(baseQuery, seriesID, userUUID, asReader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch series works"})
 		return
@@ -2330,7 +2316,7 @@ func (ws *WorkService) GetSeriesWorks(c *gin.Context) {
 		// Check if user can view this specific work
 		if userUUID != nil {
 			var canView bool
-			err = ws.db.QueryRow("SELECT can_user_view_work($1, $2)", work.ID, *userUUID).Scan(&canView)
+			err = ws.db.QueryRow("SELECT can_user_view_work($1, $2, $3)", work.ID, *userUUID, asReader).Scan(&canView)
 			if err != nil || !canView {
 				continue // Skip this work
 			}
@@ -2453,7 +2439,7 @@ func (ws *WorkService) CreateSeries(c *gin.Context) {
 		return
 	}
 
-	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{series}, &userUUID)
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{series}, &userUUID, false)
 	c.JSON(http.StatusCreated, gin.H{"series": series})
 }
 
@@ -2527,7 +2513,7 @@ func (ws *WorkService) UpdateSeries(c *gin.Context) {
 		return
 	}
 
-	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, ws.getUserIDFromContext(c))
+	ws.attachSeriesAuthors(c.Request.Context(), []*models.Series{&series}, ws.getUserIDFromContext(c), false)
 	c.JSON(http.StatusOK, gin.H{"series": series})
 }
 
@@ -2856,7 +2842,7 @@ func (ws *WorkService) SearchCollections(c *gin.Context) {
 		SELECT c.id, c.name, c.title, c.description, c.user_id, c.is_open,
 			c.is_moderated, c.is_anonymous,
 			(SELECT COUNT(*) FROM collection_items ci JOIN works cw ON cw.id = ci.work_id
-			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $4::uuid)),
+			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $4::uuid, $5::boolean)),
 			c.created_at, c.updated_at,
 			op.id, op.name
 		FROM collections c
@@ -2866,7 +2852,8 @@ func (ws *WorkService) SearchCollections(c *gin.Context) {
 		LIMIT $2 OFFSET $3`
 
 	// A collection counts only the works the viewer can see.
-	rows, err := ws.db.Query(searchQuery, query, limit, offset, ws.getUserIDFromContext(c))
+	viewer, asReader := platform.ReaderViewer(c)
+	rows, err := ws.db.Query(searchQuery, query, limit, offset, viewer, asReader)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search collections"})
 		return
@@ -2922,18 +2909,19 @@ func (ws *WorkService) GetCollection(c *gin.Context) {
 		return
 	}
 
+	viewer, asReader := platform.ReaderViewer(c)
 	var collection models.Collection
 	var org organiserScan
 	err = ws.db.QueryRow(`
 		SELECT c.id, c.name, c.title, c.description, c.user_id, c.is_open, 
 			c.is_moderated, c.is_anonymous,
 			(SELECT COUNT(*) FROM collection_items ci JOIN works cw ON cw.id = ci.work_id
-			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $2::uuid)),
+			 WHERE ci.collection_id = c.id AND ci.is_approved AND can_user_view_work(cw.id, $2::uuid, $3::boolean)),
 			c.created_at, c.updated_at,
 			op.id, op.name
 		FROM collections c
 		`+collectionOrganiserJoin+`
-		WHERE c.id = $1`, collectionID, ws.getUserIDFromContext(c)).Scan(
+		WHERE c.id = $1`, collectionID, viewer, asReader).Scan(
 		&collection.ID, &collection.Name, &collection.Title, &collection.Description,
 		&collection.UserID, &collection.IsOpen, &collection.IsModerated, &collection.IsAnonymous,
 		&collection.WorkCount, &collection.CreatedAt, &collection.UpdatedAt, &org.id, &org.name)
@@ -3729,9 +3717,9 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 		return
 	}
 
-	// Check if user can view this work
+	// Check if user can view this work (an app as a plain logged-in reader)
 	var canView bool
-	err = ws.db.QueryRow("SELECT can_user_view_work($1, $2)", workID, userUUID).Scan(&canView)
+	err = ws.db.QueryRow("SELECT can_user_view_work($1, $2, $3)", workID, userUUID, platform.IsApp(c)).Scan(&canView)
 	if err != nil || !canView {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot bookmark this work"})
 		return
@@ -4283,7 +4271,7 @@ func (ws *WorkService) GetMySeries(c *gin.Context) {
 		attach[i] = &series[i]
 	}
 	if me, perr := uuid.Parse(userID.(string)); perr == nil {
-		ws.attachSeriesAuthors(c.Request.Context(), attach, &me)
+		ws.attachSeriesAuthors(c.Request.Context(), attach, &me, false)
 	}
 
 	// Get total count for pagination
@@ -6693,10 +6681,15 @@ func (ws *WorkService) CreateSubscription(c *gin.Context) {
 	// Get target name if not provided
 	if req.TargetName == "" {
 		switch req.Type {
+		// The name is the title the person is allowed to see: a draft or
+		// hidden work gives none, and an app is asked as a plain reader, so
+		// the answer never shows whether the person made it.
 		case "work":
-			ws.db.QueryRow("SELECT title FROM works WHERE id = $1", targetUUID).Scan(&req.TargetName)
+			ws.db.QueryRow("SELECT title FROM works WHERE id = $1 AND can_user_view_work(id, $2, $3)",
+				targetUUID, userID, platform.IsApp(c)).Scan(&req.TargetName)
 		case "series":
-			ws.db.QueryRow("SELECT title FROM series WHERE id = $1", targetUUID).Scan(&req.TargetName)
+			ws.db.QueryRow("SELECT title FROM series WHERE id = $1 AND can_user_view_series(id, $2, $3)",
+				targetUUID, userID, platform.IsApp(c)).Scan(&req.TargetName)
 		}
 	}
 

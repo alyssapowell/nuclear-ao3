@@ -14,7 +14,7 @@ walks every route that is really mounted and fails if the two disagree.
   3. **Default deny.** The route must be in the table below with a scope, and the token must hold that scope. Anything not listed is refused with `403 not_available_to_apps`, so a new route is safe until someone deliberately adds it here.
   4. A route that is listed but whose scope the person did not approve gets `403 insufficient_scope` and `WWW-Authenticate: Bearer error="insufficient_scope", scope="<needed scope>"` (RFC 6750).
 - A **hard denylist** is checked before the table (see below), so a scope added to one of those routes by mistake still does nothing.
-- Visibility still comes from the database (`can_user_view_*`) as that person: a members-only work shows to an app only because the person is logged in. Writes happen as the person, under one pseud (see "What apps see").
+- Visibility still comes from the database (`can_user_view_*`), but in **reader mode** (migration 050, `as_reader`): the person counts as a logged-in member, so members-only works show, and their own blocks and mutes apply; every creator, owner and staff exception is off. Every handler an app can reach gets its viewer from one helper, `platform.ReaderViewer`, and hands nobody to anything only a creator or owner may see. Writes happen as the person, under one pseud (see "What apps see").
 
 ## Allowed routes
 
@@ -24,7 +24,7 @@ walks every route that is really mounted and fails if the two disagree.
 | Comments | `GET /works/:id/comments`, `/work/:id/comments` | `read` | |
 | Series | `GET /series`, `/series/:id`, `/series/:id/works` | `read` | |
 | Collections | `GET /collections`, `/collections/:id` | `read` | `/collections/:id/works` is not open to apps: an organiser sees unapproved items there, so the answer would show which collections the person runs. |
-| Pseud pages | `GET /pseuds/:id/works`, `/series`, `/bookmarks` | `read` | An app sees the person's own pseud page as any stranger would (no drafts, no works that hide their creator). |
+| Pseud pages | `GET /pseuds/:id/works`, `/series`, `/bookmarks` | `read` | An app sees the person's own pseud page as any other logged-in reader would (no drafts, no private bookmarks, no works that hide their creator). |
 | Search | `GET /search/works`, `/search/suggestions` | `read` | |
 | Tags | `GET /tags`, `/tags/search`, `/tags/autocomplete`, `/tags/:id`, `/tags/:id/related`, `/tags/:id/works`, fandoms, characters, relationships, hierarchy, and `/stats/popular`, `/stats/trending`, `/stats/usage` | `read` | |
 | What the person follows | `GET /subscriptions`, `/subscription-status`, `/user/tags/followed` | `read` | Lists targets (other pseuds, works, tags), never the person's own pseuds. |
@@ -47,7 +47,7 @@ walks every route that is really mounted and fails if the two disagree.
 | `/api/v1/export...` | Personal downloads. |
 | `/api/v1/notification...` and `/ws` | Notifications, preferences, rules and live updates. They announce activity on all of a person's pseuds at once. |
 | `GET /works/:id/kudos`, `/work/:id/kudos`, `/works/:id/stats`, `/work/:id/stats`, `/works/:id/authors`, `/works/:id/gifts`, `/works/:id/bookmark-status` | The answer depends on whether the caller is the creator or has already acted ("have I given kudos", owner analytics). That difference would tell an app which works and pseuds belong to the person. |
-| Creating, editing and deleting works, chapters, series, collections; co-authors, gifts, orphaning; editing or deleting a comment or bookmark; kudos; reports; tag creation and merging | Not opened yet. Succeeding or failing on an id the app already knows would show whether the person made it (see "Known limits"). The `write`, `works:manage` and `collections:manage` scopes can still be requested, but open no route in this release. |
+| Creating, editing and deleting works, chapters, series, collections; co-authors, gifts, orphaning; editing or deleting a comment or bookmark; kudos; reports; tag creation and merging | Not opened yet. Succeeding or failing on an id the app already knows would show whether the person made it. The `write`, `works:manage` and `collections:manage` scopes can still be requested, but open no route in this release. |
 
 Anything else that is not in the first table is refused the same way (default deny).
 
@@ -76,7 +76,7 @@ Each request updates the token's `last_used`, at most once a minute (the same ru
 
 ## Known limits
 
-- **Creator-only views on single items.** `GET /works/:id` and chapters use `can_user_view_work` as the person. That function lets a work's creators (and only they, besides staff) see drafts and works hidden by moderators. If an app already knows the id of a hidden work, a 200 instead of a 404 would show that the person is one of its creators. Drafts' ids are not public, so this is limited to works hidden after they were seen. Closing it needs the visibility functions to take an "as a reader, not an author" flag; that is the follow-up before write scopes for works are opened.
-- **Co-authored works that hide their creators**, shown on another pseud's page, are listed to the person's token as to a creator.
+- Apps always get the reader's view; creator and staff views are only for the site itself. A test (`backend/cmd/nuclear/reader_mode_test.go`) asks every open read route as a person's app and as an ordinary reader, for a person who owns anonymous, unrevealed, draft and moderator-hidden works and a series made only of them, and fails if the answers differ.
+- **Posting is still checked as the person where a block is concerned.** If a hidden creator has silently blocked the person, a comment the app posts is stored as "shadowed" so it never shows to anyone else. The app gets the normal answer, but as a reader it never sees that comment in later lists, which is the one way left for it to notice the block.
 - Staff accounts can't use apps (above). A separate ordinary account can.
 - The `write`, `works:manage` and `collections:manage` scopes are grantable but open no route yet; their consent text still describes the intended future.
