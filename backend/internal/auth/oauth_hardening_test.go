@@ -1251,20 +1251,30 @@ func TestOAuthEndpointsAreRateLimited(t *testing.T) {
 	assert.NotEqual(t, http.StatusTooManyRequests, w.Code)
 }
 
+// The per-app limit counts only requests where the app proved who it is:
+// strangers naming a real app's (public) client_id can't lock it out.
 func TestOAuthEndpointsAreRateLimitedPerClientID(t *testing.T) {
 	e := newHEnv(t)
-	e.as.oauthRates = map[string]oauthRate{"token": {PerIP: 1 << 20, PerClient: 2}}
-	id := uuid.NewString()
-	send := func(ip string) int {
-		return e.do("POST", "/auth/token", url.Values{"grant_type": {"refresh_token"}, "client_id": {id}, "client_secret": {"x"}},
+	e.as.oauthRates = map[string]oauthRate{"introspect": {PerIP: 1 << 20, PerClient: 2}}
+	a := e.newApp(appOpts{})
+	introspect := func(ip, secret string) int {
+		return e.do("POST", "/auth/introspect", url.Values{"token": {"whatever"}, "client_id": {a.id}, "client_secret": {secret}},
 			func(r *http.Request) { r.RemoteAddr = ip + ":1" }).Code
 	}
-	assert.Equal(t, http.StatusUnauthorized, send("198.51.100.1"))
-	assert.Equal(t, http.StatusUnauthorized, send("198.51.100.2"))
-	assert.Equal(t, http.StatusTooManyRequests, send("198.51.100.3"), "the client id is counted across addresses")
-	// A different id is not affected.
-	w := e.do("POST", "/auth/token", url.Values{"grant_type": {"refresh_token"}, "client_id": {uuid.NewString()}}, nil)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	// A stranger with the id but not the secret, from many addresses.
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, http.StatusUnauthorized, introspect(fmt.Sprintf("198.51.100.%d", i+1), "wrong"))
+	}
+	// The real app is not locked out by that, and is limited on its own use.
+	assert.Equal(t, http.StatusOK, introspect("203.0.113.1", a.secret))
+	assert.Equal(t, http.StatusOK, introspect("203.0.113.2", a.secret))
+	assert.Equal(t, http.StatusTooManyRequests, introspect("203.0.113.3", a.secret), "the app is counted across addresses")
+	// Authorize has no per-app limit: it's the page people are sent to.
+	e.as.oauthRates = map[string]oauthRate{"authorize": {PerIP: 1 << 20, PerClient: 1}}
+	for i := 0; i < 3; i++ {
+		w := e.do("GET", a.authorizeURL("read", ""), nil, func(r *http.Request) { r.RemoteAddr = fmt.Sprintf("192.0.2.%d:1", i+1) })
+		assert.NotEqual(t, http.StatusTooManyRequests, w.Code)
+	}
 }
 
 func TestAuthorizeParameterSizeCapsAndPendingRows(t *testing.T) {

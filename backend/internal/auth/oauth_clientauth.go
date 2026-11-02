@@ -77,21 +77,6 @@ func basicCredentials(r *http.Request) (id, secret string, err error) {
 	return id, secret, nil
 }
 
-// presentedClientID is the client_id a request names, for rate limiting. It
-// is not checked: anyone can write anything here.
-func presentedClientID(c *gin.Context, fromQuery bool) string {
-	if hasBasicHeader(c.Request) {
-		if id, _, err := basicCredentials(c.Request); err == nil {
-			return id
-		}
-		return ""
-	}
-	if fromQuery {
-		return c.Query("client_id")
-	}
-	return c.PostForm("client_id")
-}
-
 // requestCredentials takes the client's id and secret from HTTP Basic if it
 // is there, and only otherwise from the POST body. The query string is never
 // read.
@@ -151,11 +136,20 @@ func (as *AuthService) authenticateClient(c *gin.Context, mode clientAuthMode) (
 	if bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(secret)) != nil {
 		return nil, errInvalidClient
 	}
+	if !as.allowAuthenticatedClient(c, client.ID.String()) {
+		return nil, errRateLimited
+	}
 	return client, nil
 }
 
+// errRateLimited means the 429 answer has already been written.
+var errRateLimited = errors.New("rate limited")
+
 // clientAuthFailed writes the answer for a failed authenticateClient.
 func clientAuthFailed(c *gin.Context, err error) {
+	if errors.Is(err, errRateLimited) {
+		return
+	}
 	if errors.Is(err, errInvalidRequest) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             "invalid_request",

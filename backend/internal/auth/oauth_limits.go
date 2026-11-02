@@ -13,10 +13,12 @@ import (
 // counter the login limits use. Each copy of the app counts on its own (see
 // docs/DECISIONS.md, "Redis removed").
 //
-// Every endpoint has a limit per client address, and a second one per
-// client_id when the request names one. The per-client limit is higher: a
-// real app's servers share one id, and anyone can type any id into a request,
-// so a low limit would let a stranger lock a real app out.
+// Every endpoint has a limit per client address. The token, introspection and
+// revocation endpoints also have a limit per app, counted only once the app
+// has proved who it is with its secret: a client_id is public, so counting
+// requests that merely name it would let a stranger lock a real app out. The
+// authorize step has no per-app limit for the same reason; it's the page
+// people are sent to.
 
 const oauthLimitWindow = time.Minute
 
@@ -59,27 +61,37 @@ func (as *AuthService) oauthLimit(endpoint string) gin.HandlerFunc {
 		rate := as.oauthRateFor(endpoint)
 		l := as.oauth.counter()
 
-		deny := func(retry time.Duration) {
-			c.Header("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error":             "rate_limit_exceeded",
-				"error_description": "Too many requests. Please try again later.",
-			})
-		}
-
 		if ok, retry := l.Allow("oauth:"+endpoint+":ip:"+clientNetwork(c.ClientIP()), rate.PerIP, oauthLimitWindow); !ok {
-			deny(retry)
+			denyOAuth(c, retry)
 			return
 		}
-		if id := presentedClientID(c, endpoint == "authorize"); id != "" {
-			if len(id) > 64 {
-				id = id[:64]
-			}
-			if ok, retry := l.Allow("oauth:"+endpoint+":client:"+id, rate.PerClient, oauthLimitWindow); !ok {
-				deny(retry)
-				return
-			}
-		}
+		c.Set(oauthEndpointKey, endpoint)
 		c.Next()
 	}
+}
+
+const oauthEndpointKey = "oauth_endpoint"
+
+func denyOAuth(c *gin.Context, retry time.Duration) {
+	c.Header("Retry-After", strconv.Itoa(int(retry.Seconds())+1))
+	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+		"error":             "rate_limit_exceeded",
+		"error_description": "Too many requests. Please try again later.",
+	})
+}
+
+// allowAuthenticatedClient counts one request against an app that has just
+// proved who it is with its secret. It reports false, having answered 429,
+// when the app is over its limit for this endpoint.
+func (as *AuthService) allowAuthenticatedClient(c *gin.Context, clientID string) bool {
+	endpoint := c.GetString(oauthEndpointKey)
+	if endpoint == "" || endpoint == "authorize" {
+		return true
+	}
+	rate := as.oauthRateFor(endpoint)
+	if ok, retry := as.oauth.counter().Allow("oauth:"+endpoint+":client:"+clientID, rate.PerClient, oauthLimitWindow); !ok {
+		denyOAuth(c, retry)
+		return false
+	}
+	return true
 }
