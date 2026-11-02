@@ -56,6 +56,17 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 ---
 
+## 2026-11-02: Keep the OAuth / OpenID Connect provider, and publish it only once it's safe
+
+**Decision:** Keep "Sign in with the archive" and API access for other apps. It's one of the community's biggest asks, and AO3 has no way to offer it today. It stays off the public front door until it has been reviewed and hardened.
+
+**Rules it has to meet before it's published:**
+- **No way to link people across apps.** An app gets a different, stable identifier for each person (a "pairwise" subject), so two apps can't compare notes to find out they have the same user. Pseud details go to an app only when the person chooses to share them.
+- **The pseud rules apply.** Apps see pseuds, never account ids, usernames or (without explicit consent) email addresses. An app must not be able to work out that two pseuds belong to the same person.
+- **Apps get only what the person approved.** Each API route checks the token's scopes. Admin and moderation scopes can never be granted to an app.
+- **Apps are vetted.** Anyone can register an app, but it stays inactive until an admin approves it. Self-registered apps can't use the client-credentials grant, and public apps must use PKCE.
+- **Everything an app does can be undone:** people can see and revoke every app they've approved, and a password change or reset revokes all of them (done).
+
 ## 2026-10-30: The public API names people by pseud only, and drops the account pages
 
 **Decision:**

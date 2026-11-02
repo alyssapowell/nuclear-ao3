@@ -30,7 +30,7 @@ Status key:
   - Status: Works (verified 2026-10-30). The "security events" log was removed; AO3 has no such page.
 - **OAuth2 / OpenID Connect provider**: third-party apps can "Sign in with Nuclear AO3" and call the API on a user's behalf, with consent screens and app revocation.
   - Intent _(inferred)_: let readers' tools (readers, downloaders, rec bots) use the archive without scraping or sharing passwords.
-  - Status: Unverified. This is a large surface area (about 2k lines) for a feature that may not be needed at launch. **Revisit: keep or defer?**
+  - Status: **Kept (decided 2026-11-02).** It's one of the community's biggest asks and something AO3 can't offer today. It is not published yet: the addresses stay private until the security review and hardening below are done.
   - The OAuth and OpenID addresses (`/auth/authorize`, `/auth/token`, `/auth/jwks`, `/.well-known/...`) are **deliberately not published** through Caddy (decided 2026-10-31): AO3 has no such feature, and app registration had been open to anyone, with any scope (admin included) and grant type. Registration is now admin-only. Publishing these addresses waits on the keep-or-remove decision above.
 - **Admin user management**: list users and grant or revoke roles.
   - Status: **Not built.** The endpoints used to report success without doing anything; they now answer "not implemented". Roles are granted with `make grant`.
