@@ -13,7 +13,7 @@ interface BlockedUser {
 interface Comment {
   id: string;
   content: string;
-  author_username: string;
+  author_name: string;
   work_title: string;
   status: 'approved' | 'pending_moderation' | 'flagged' | 'hidden';
   created_at: string;
@@ -88,7 +88,7 @@ export default function PrivacySettingsPage() {
         {
           id: '1',
           content: 'This comment has been flagged for review by community members.',
-          author_username: 'reviewer123',
+          author_name: 'reviewer123',
           work_title: 'My Amazing Story',
           status: 'flagged',
           created_at: '2024-10-20T14:30:00Z',
@@ -97,7 +97,7 @@ export default function PrivacySettingsPage() {
         {
           id: '2',
           content: 'Great work! I really enjoyed this chapter.',
-          author_username: 'fan_reader',
+          author_name: 'fan_reader',
           work_title: 'Another Story',
           status: 'pending_moderation',
           created_at: '2024-10-21T09:15:00Z'
@@ -333,7 +333,7 @@ export default function PrivacySettingsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3 mb-2">
-                    <h4 className="font-medium text-gray-900">{comment.author_username}</h4>
+                    <h4 className="font-medium text-gray-900">{comment.author_name}</h4>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       comment.status === 'flagged' 
                         ? 'bg-red-100 text-red-800'

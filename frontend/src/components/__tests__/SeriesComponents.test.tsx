@@ -93,7 +93,6 @@ const mockWorks = [
     kudos: 10,
     comments: 5,
     bookmarks: 3,
-    username: 'testuser',
     position: 1,
   },
   {
@@ -117,7 +116,6 @@ const mockWorks = [
     kudos: 25,
     comments: 15,
     bookmarks: 8,
-    username: 'testuser',
     position: 2,
   },
 ];

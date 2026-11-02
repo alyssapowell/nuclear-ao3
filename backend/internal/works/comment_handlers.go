@@ -607,8 +607,7 @@ func (ws *WorkService) actingPseud(c *gin.Context, userID uuid.UUID, requested *
 }
 
 // commentPseud returns the pseud a user comments under: the one they asked
-// for, if it's theirs, or else their default (created from their username if
-// they don't have one yet).
+// for, if it's theirs, or else their default.
 func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
 	if requested != nil {
 		var owner uuid.UUID
@@ -621,14 +620,6 @@ func (ws *WorkService) commentPseud(userID uuid.UUID, requested *uuid.UUID) (uui
 	var id uuid.UUID
 	err := ws.db.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1
 		ORDER BY is_default DESC, created_at LIMIT 1`, userID).Scan(&id)
-	if err != sql.ErrNoRows {
-		return id, err
-	}
-	err = ws.db.QueryRow(`
-		INSERT INTO pseuds (user_id, name, is_default)
-		SELECT id, left(username::text, 40), true FROM users WHERE id = $1
-		ON CONFLICT (user_id, lower(name)) DO UPDATE SET is_default = pseuds.is_default
-		RETURNING id`, userID).Scan(&id)
 	return id, err
 }
 

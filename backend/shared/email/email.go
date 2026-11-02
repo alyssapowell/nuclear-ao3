@@ -222,7 +222,7 @@ var linkHTML = template.Must(template.New("link").Parse(`<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <h2>Hello {{.Username}}!</h2>
+  <h2>Hello{{if .Name}} {{.Name}}{{end}}!</h2>
   <p>{{.Intro}}</p>
   <p><a href="{{.Link}}" style="display: inline-block; padding: 12px 24px; background: #990000; color: white; text-decoration: none; border-radius: 6px;">{{.Button}}</a></p>
   <p>If the button doesn't work, copy this address into your browser:<br>{{.Link}}</p>
@@ -232,16 +232,18 @@ var linkHTML = template.Must(template.New("link").Parse(`<!DOCTYPE html>
 </html>`))
 
 // linkEmail builds an email whose point is one link carrying a token.
-func (c *Config) linkEmail(to, username, subject, intro, button, path, token, outro string) (Message, error) {
-	return c.linkMessage(to, username, subject, intro, button, c.SiteURL+path+"?token="+url.QueryEscape(token), outro)
+func (c *Config) linkEmail(to, name, subject, intro, button, path, token, outro string) (Message, error) {
+	return c.linkMessage(to, name, subject, intro, button, c.SiteURL+path+"?token="+url.QueryEscape(token), outro)
 }
 
-// linkMessage builds an email whose point is one link.
-func (c *Config) linkMessage(to, username, subject, intro, button, link, outro string) (Message, error) {
-	username = strings.TrimSpace(username)
+// linkMessage builds an email whose point is one link. name is how the
+// owner is greeted: the account's default pseud name. Accounts have no
+// username; with no name the greeting is just "Hello!".
+func (c *Config) linkMessage(to, name, subject, intro, button, link, outro string) (Message, error) {
+	name = strings.TrimSpace(name)
 	var html bytes.Buffer
 	err := linkHTML.Execute(&html, map[string]string{
-		"Username": username, "Intro": intro, "Button": button, "Link": link, "Outro": outro,
+		"Name": name, "Intro": intro, "Button": button, "Link": link, "Outro": outro,
 	})
 	if err != nil {
 		return Message{}, err
@@ -249,16 +251,24 @@ func (c *Config) linkMessage(to, username, subject, intro, button, link, outro s
 	return Message{
 		To:      to,
 		Subject: subject,
-		Text: fmt.Sprintf("Hello %s!\n\n%s\n\n%s\n\n%s\n\nThis is an automated message. Please do not reply to it.\n",
-			username, intro, link, outro),
+		Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\nThis is an automated message. Please do not reply to it.\n",
+			greeting(name), intro, link, outro),
 		HTML: html.String(),
 	}, nil
 }
 
+// greeting is the first line of the plain-text body.
+func greeting(name string) string {
+	if name == "" {
+		return "Hello!"
+	}
+	return "Hello " + name + "!"
+}
+
 // Activation is the email that lets a new account be activated. The link is
 // good for 14 days.
-func (c *Config) Activation(to, username, token string) (Message, error) {
-	return c.linkEmail(to, username, "Activate your account",
+func (c *Config) Activation(to, name, token string) (Message, error) {
+	return c.linkEmail(to, name, "Activate your account",
 		"Welcome to "+c.FromName+"! Use the link below to activate your account. It works for 14 days.",
 		"Activate my account", "/auth/activate", token,
 		"If you didn't sign up, you can ignore this email.")
@@ -266,18 +276,29 @@ func (c *Config) Activation(to, username, token string) (Message, error) {
 
 // PasswordReset is the email that lets someone choose a new password. The
 // link is good for 6 hours.
-func (c *Config) PasswordReset(to, username, token string) (Message, error) {
-	return c.linkEmail(to, username, "Reset your password",
+func (c *Config) PasswordReset(to, name, token string) (Message, error) {
+	return c.linkEmail(to, name, "Reset your password",
 		"Someone asked to reset the password for your account. Use the link below to choose a new one. It works for 6 hours, once.",
 		"Choose a new password", "/auth/reset-password", token,
 		"If you didn't ask for this, you can ignore this email; your password hasn't changed.")
 }
 
+// SignUpAttempt tells the owner of an account that someone tried to sign up
+// with their email address. Sign-up answers the same whether or not the
+// address has an account, so this email is the only place the owner learns
+// of it. It carries no link that changes anything.
+func (c *Config) SignUpAttempt(to, name string) (Message, error) {
+	return c.linkMessage(to, name, "Someone tried to sign up with your email address",
+		"Someone tried to sign up for a new account with this email address, but it already has an account. Nothing has changed.",
+		"Log in", c.SiteURL+"/auth/login",
+		"If it was you, you can log in, or choose a new password if you have forgotten it. If it wasn't you, you can ignore this email.")
+}
+
 // AccountLocked tells the owner that an account refused logins for a while
 // after many wrong passwords. Resetting the password is safe, and ends the
 // lock. The link goes to the page where a reset is asked for.
-func (c *Config) AccountLocked(to, username string) (Message, error) {
-	return c.linkMessage(to, username, "Repeated failed logins on your account",
+func (c *Config) AccountLocked(to, name string) (Message, error) {
+	return c.linkMessage(to, name, "Repeated failed logins on your account",
 		"There were many failed attempts to log in to your account, so we have paused logins for it for a few minutes. If that was you, you can wait and try again.",
 		"Reset my password", c.SiteURL+"/auth/forgot-password",
 		"If it wasn't you, resetting your password is safe and ends the pause straight away.")
@@ -286,7 +307,7 @@ func (c *Config) AccountLocked(to, username string) (Message, error) {
 // AppReviewed tells the person who registered an app what an admin decided:
 // outcome is "approved", "rejected" or "suspended". The admin's note, if
 // there is one, is quoted. It never says which admin decided.
-func (c *Config) AppReviewed(to, username, appName, outcome, note string) (Message, error) {
+func (c *Config) AppReviewed(to, name, appName, outcome, note string) (Message, error) {
 	var intro string
 	switch outcome {
 	case "approved":
@@ -310,5 +331,5 @@ func (c *Config) AppReviewed(to, username, appName, outcome, note string) (Messa
 	if strings.HasPrefix(outcome, "display_") {
 		subject = "Your app's display changes were " + strings.TrimPrefix(outcome, "display_")
 	}
-	return c.linkMessage(to, username, subject, intro, "Open "+c.FromName, c.SiteURL, outro)
+	return c.linkMessage(to, name, subject, intro, "Open "+c.FromName, c.SiteURL, outro)
 }

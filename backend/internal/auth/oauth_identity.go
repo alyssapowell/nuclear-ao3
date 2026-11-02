@@ -22,7 +22,7 @@ import (
 //  1. No linking across apps. Every app gets its own random subject for the
 //     same person, and nothing else an app receives is the same for two apps.
 //  2. Pseud rules. An app sees only the one pseud the person chose to share,
-//     as {id, name}. Never the account id, username, other pseuds, roles or
+//     as {id, name}. Never the account id, email address, other pseuds, roles or
 //     counts. Email only with the email scope and explicit consent.
 
 // subjectFor returns the subject this app sees for this person, creating it
@@ -224,7 +224,7 @@ func (as *AuthService) userOwnsPseud(ctx context.Context, userID, pseudID uuid.U
 }
 
 // consentView is what a consent screen needs: the app, what it asks for, and
-// the person's own pseuds to choose from. It holds no account id or username.
+// the person's own pseuds to choose from. It holds no account id or email address.
 func (as *AuthService) consentView(ctx context.Context, consentID string, client *models.OAuthClient, scopes []string, userID uuid.UUID) (gin.H, error) {
 	type scopeView struct {
 		Name        string `json:"name"`

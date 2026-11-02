@@ -424,3 +424,70 @@ func TestAppWritesAreCheckedAsAReader(t *testing.T) {
 		}
 	}
 }
+
+// usernameKeys lists the paths of every JSON key in v that names a username.
+func usernameKeys(v any, path string) []string {
+	var out []string
+	switch x := v.(type) {
+	case map[string]any:
+		for k, val := range x {
+			if strings.Contains(strings.ToLower(k), "username") {
+				out = append(out, path+"/"+k)
+			}
+			out = append(out, usernameKeys(val, path+"/"+k)...)
+		}
+	case []any:
+		for i, val := range x {
+			out = append(out, usernameKeys(val, fmt.Sprintf("%s/%d", path, i))...)
+		}
+	}
+	return out
+}
+
+// Accounts have no username, so no answer may have a key for one, whoever
+// asks: an app, another reader, or the person at their own browser. The
+// allowlisted routes are walked with every fixture id, and then every other
+// GET route that needs no ids, asked as the person herself, which is where
+// her own account details are.
+func TestNoAnswerHasAUsername(t *testing.T) {
+	f := newReaderFx(t)
+	e := f.e
+	appTok := e.token(e.alice, e.client, "read comments:write bookmarks:manage subscriptions:manage", "1 hour")
+
+	check := func(who, url, token string) {
+		t.Helper()
+		w := e.get(url, token)
+		var v any
+		if json.Unmarshal(w.Body.Bytes(), &v) != nil {
+			return // not JSON (an error page or a file); no keys to read
+		}
+		if bad := usernameKeys(v, ""); len(bad) > 0 {
+			t.Errorf("GET %s as %s has username keys %v: %s", url, who, bad, short(w.Body.String()))
+		}
+	}
+
+	asked := map[string]bool{}
+	for route := range platform.AppRoutes() {
+		if !strings.HasPrefix(route, "GET ") {
+			continue
+		}
+		for _, u := range f.urls(route) {
+			asked[u] = true
+			check("an app", u, appTok)
+			check("a reader", u, f.carolTok)
+			check("the person", u, "alice-login")
+		}
+	}
+	own := 0
+	for _, r := range e.r.Routes() {
+		if r.Method != "GET" || strings.Contains(r.Path, ":") || strings.Contains(r.Path, "*") || asked[r.Path] {
+			continue
+		}
+		own++
+		check("the person", r.Path, "alice-login")
+	}
+	t.Logf("checked %d allowlisted requests and %d other routes", len(asked), own)
+	if len(asked) < 50 || own < 10 {
+		t.Errorf("only %d + %d requests walked; the walk no longer covers the API", len(asked), own)
+	}
+}

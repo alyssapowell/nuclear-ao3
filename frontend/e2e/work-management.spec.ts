@@ -6,7 +6,7 @@ class WorkManagementUtils {
 
   async login(username = 'testuser', password = 'testpass123') {
     await this.page.goto('/auth/login');
-    await this.page.fill('[data-testid="username"]', username);
+    await this.page.fill('[data-testid="email"]', username);
     await this.page.fill('[data-testid="password"]', password);
     await this.page.click('[data-testid="login-button"]');
     await this.page.waitForURL('/dashboard');

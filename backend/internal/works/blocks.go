@@ -15,7 +15,7 @@ import (
 // Blocks and mutes.
 //
 // Both are chosen by pseud, and neither answer ever contains an account id,
-// a username or another pseud of the same person. A person can only see the
+// the account or another pseud of the same person. A person can only see the
 // pseuds they picked themselves.
 //
 // A block (migration 041) is between two accounts and works in both

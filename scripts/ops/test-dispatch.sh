@@ -48,7 +48,8 @@ expect_run "upgrade v1.2.3" "RUN [$H/upgrade.sh] [v1.2.3]"
 expect_run "upgrade origin/main" "RUN [$H/upgrade.sh] [origin/main]"
 expect_run "restore nuclear-20260101-120000.sql.gz $FLAG" "RUN [$H/restore.sh] [$B/nuclear-20260101-120000.sql.gz] [$FLAG]"
 expect_run "logout-everyone" "RUN [$H/logout-everyone.sh]"
-expect_run "logout-user alice_1" "RUN [$H/logout-user.sh] [alice_1]"
+expect_run "logout-user alice.b+1@example.org" "RUN [$H/logout-user.sh] [alice.b+1@example.org]"
+expect_run "logout-user 123e4567-e89b-12d3-a456-426614174000" "RUN [$H/logout-user.sh] [123e4567-e89b-12d3-a456-426614174000]"
 
 expect_refused 'diagnose; rm -rf /'
 expect_refused 'upgrade $(id)'
@@ -65,9 +66,10 @@ expect_refused 'restore nuclear-1.sql.gz'
 expect_refused 'restore nuclear-20260101-120000.sql.gz'
 expect_refused "restore /etc/nuclear-20260101-120000.sql.gz $FLAG"
 expect_refused "restore nuclear-20260101-120000.sql $FLAG"
-expect_refused 'logout-user a;b'
-expect_refused 'logout-user ab'
-expect_refused 'logout-user alice bob'
+expect_refused 'logout-user a;b@example.org'
+expect_refused 'logout-user alice'
+expect_refused 'logout-user alice@example.org bob@example.org'
+expect_refused 'logout-user $(id)@example.org'
 expect_refused 'logout-everyone now'
 expect_refused 'diagnose extra'
 expect_refused 'emails --retry --x'

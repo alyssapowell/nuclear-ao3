@@ -676,7 +676,7 @@ func TestEachAdminActionWritesExactlyOneAuditRow(t *testing.T) {
 	var actorID uuid.UUID
 	e.db.QueryRow(`SELECT actor_label, actor_user_id, action, target_type, target_id, COALESCE(reason, '')
 		FROM admin_actions ORDER BY id LIMIT 1`).Scan(&actor, &actorID, &action, &targetType, &targetID, &reason)
-	if actor != "mod" || action != "hide" || targetType != "work" || targetID != w || reason != "r" {
+	if actor != "mod@example.org" || action != "hide" || targetType != "work" || targetID != w || reason != "r" {
 		t.Errorf("first audit row = %s %s %s %s %q", actor, action, targetType, targetID, reason)
 	}
 
@@ -785,7 +785,7 @@ func TestAuditEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(out.Actions) != 2 || out.Actions[0].Action != "unhide" || out.Actions[1].Action != "hide" ||
-		out.Actions[1].Actor != "boss" || out.Actions[1].Reason != "because" {
+		out.Actions[1].Actor != "boss@example.org" || out.Actions[1].Reason != "because" {
 		t.Errorf("audit listing: %s", body)
 	}
 	e.expect(200, "GET", "/api/v1/admin/audit?limit=1", adminTok, nil)

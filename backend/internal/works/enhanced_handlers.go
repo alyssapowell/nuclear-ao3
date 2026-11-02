@@ -23,7 +23,7 @@ import (
 // CreateWork posts a new work as a draft, together with its first chapter.
 //
 // Everything is written in one transaction: the work, the author's default
-// pseud (created on first use, named after the username), the creatorship
+// pseud, the creatorship
 // that links the pseud to the work, the first chapter, and the work's tags.
 // Tags that don't exist yet are created unwrangled, as on AO3. The work stays
 // a draft until it is updated with "status": "posted".
@@ -147,18 +147,11 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"work": work, "first_chapter": chapter})
 }
 
-// defaultPseud returns the user's default pseud, creating one named after
-// their username if they don't have one yet.
+// defaultPseud returns the user's default pseud. Every account gets one when
+// it is created, so there is always one.
 func defaultPseud(tx *sql.Tx, userID uuid.UUID) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := tx.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default = true`, userID).Scan(&id)
-	if err != sql.ErrNoRows {
-		return id, err
-	}
-	err = tx.QueryRow(`
-		INSERT INTO pseuds (user_id, name, is_default)
-		SELECT id, left(username::text, 40), true FROM users WHERE id = $1
-		RETURNING id`, userID).Scan(&id)
 	return id, err
 }
 

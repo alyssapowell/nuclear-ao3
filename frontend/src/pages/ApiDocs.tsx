@@ -30,25 +30,17 @@ export default function APIDocsPage() {
           path: '/api/v1/auth/register',
           description: 'Register a new user account',
           body: [
-            { name: 'username', type: 'string', required: true, description: 'Unique username (3-20 characters)' },
-            { name: 'email', type: 'string', required: true, description: 'Valid email address' },
-            { name: 'password', type: 'string', required: true, description: 'Password (8+ characters)' },
-            { name: 'confirmPassword', type: 'string', required: true, description: 'Password confirmation' },
-            { name: 'dateOfBirth', type: 'string', required: true, description: 'ISO date (YYYY-MM-DD)' },
-            { name: 'country', type: 'string', required: true, description: 'Country code' },
-            { name: 'agreedToTerms', type: 'boolean', required: true, description: 'Must be true' }
+            { name: 'email', type: 'string', required: true, description: 'Valid email address; it is the login' },
+            { name: 'password', type: 'string', required: true, description: 'Password (6 to 40 characters)' },
+            { name: 'pen_name', type: 'string', required: true, description: 'Name of the first (default) pseud, 1 to 40 characters' }
           ],
-          response: '{ "message": "User registered successfully", "user": User }',
+          response: '{ "message": "Account created. Check your email for a link to activate it." } (the same whether or not the address already had an account)',
           example: `curl -X POST http://localhost:8080/api/v1/auth/register \\
   -H "Content-Type: application/json" \\
   -d '{
-    "username": "testuser",
     "email": "test@example.com",
     "password": "password123",
-    "confirmPassword": "password123",
-    "dateOfBirth": "1990-01-01",
-    "country": "US",
-    "agreedToTerms": true
+    "pen_name": "Test Writer"
   }'`
         },
         {
@@ -56,13 +48,13 @@ export default function APIDocsPage() {
           path: '/api/v1/auth/login',
           description: 'Authenticate user and create session',
           body: [
-            { name: 'username', type: 'string', required: true, description: 'Username or email' },
+            { name: 'email', type: 'string', required: true, description: 'The account email address' },
             { name: 'password', type: 'string', required: true, description: 'User password' }
           ],
-          response: '{ "message": "Login successful", "user": User, "token": "jwt_token" }',
+          response: '{ "user": { "id", "email", "default_pseud": { "id", "name" } }, "access_token": "...", "token_type": "Bearer", "expires_at": 0 }',
           example: `curl -X POST http://localhost:8080/api/v1/auth/login \\
   -H "Content-Type: application/json" \\
-  -d '{"username": "testuser", "password": "password123"}'`
+  -d '{"email": "test@example.com", "password": "password123"}'`
         },
         {
           method: 'POST',
@@ -263,7 +255,6 @@ export default function APIDocsPage() {
 # Core Types
 type User {
   id: ID!
-  username: String!
   email: String!
   profile: UserProfile
   works: [Work!]!

@@ -22,23 +22,24 @@ func SetupTestDB(t *testing.T) *TestDBConfig {
 	return &TestDBConfig{DB: testdb.New(t)}
 }
 
-// CreateTestUser creates a test user with proper schema
-func (config *TestDBConfig) CreateTestUser(username, email string) (uuid.UUID, uuid.UUID, error) {
+// CreateTestUser creates a test user with proper schema. The account has no
+// username; penName is the name of its default pseud.
+func (config *TestDBConfig) CreateTestUser(penName, email string) (uuid.UUID, uuid.UUID, error) {
 	userID := uuid.New()
 
 	// Insert user
 	_, err := config.DB.Exec(`
-		INSERT INTO users (id, email, username, password_hash, is_verified, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, true, NOW(), NOW())`,
-		userID, email, username, "$2a$10$hash")
+		INSERT INTO users (id, email, password_hash, is_verified, created_at, updated_at)
+		VALUES ($1, $2, $3, true, NOW(), NOW())`,
+		userID, email, "$2a$10$hash")
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}
 
-	// Create default pseudonym in pseuds table (what creatorships references)
-	// (the database made it when the user was inserted)
+	// Create the default pseud (what creatorships references)
 	var pseudID uuid.UUID
-	err = config.DB.QueryRow(`SELECT id FROM pseuds WHERE user_id = $1 AND is_default`, userID).Scan(&pseudID)
+	err = config.DB.QueryRow(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true) RETURNING id`,
+		userID, penName).Scan(&pseudID)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, err
 	}

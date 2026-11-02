@@ -164,7 +164,7 @@ func TestAccountEmails(t *testing.T) {
 	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
 	for _, tc := range []struct {
 		name    string
-		build   func(to, username, token string) (Message, error)
+		build   func(to, name, token string) (Message, error)
 		subject string
 		link    string
 	}{
@@ -177,7 +177,7 @@ func TestAccountEmails(t *testing.T) {
 				t.Fatal(err)
 			}
 			if strings.Contains(m.HTML, "<script>") {
-				t.Error("the username went into the HTML unescaped")
+				t.Error("the name went into the HTML unescaped")
 			}
 			if !strings.Contains(m.HTML, tc.link) || !strings.Contains(m.Text, tc.link) {
 				t.Errorf("missing link %s", tc.link)
@@ -200,7 +200,7 @@ func TestAccountLockedEmail(t *testing.T) {
 		t.Errorf("%+v", m)
 	}
 	if strings.Contains(m.HTML, "<b>owner</b>") {
-		t.Error("the username went into the HTML unescaped")
+		t.Error("the name went into the HTML unescaped")
 	}
 }
 
@@ -221,5 +221,27 @@ func TestAppReviewed(t *testing.T) {
 	}
 	if _, err := c.AppReviewed("a@b.c", "x", "y", "bogus", ""); err == nil {
 		t.Error("an unknown outcome should be an error")
+	}
+}
+
+func TestSignUpAttemptEmail(t *testing.T) {
+	c := &Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
+	m, err := c.SignUpAttempt("owner@example.org", `<i>Pen</i>`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.To != "owner@example.org" || m.Subject != "Someone tried to sign up with your email address" {
+		t.Errorf("%+v", m)
+	}
+	if strings.Contains(m.HTML, "<i>Pen</i>") {
+		t.Error("the name went into the HTML unescaped")
+	}
+	if strings.Contains(m.Text, "token") || strings.Contains(m.HTML, "token") {
+		t.Error("the notice should carry no token")
+	}
+	// An account with no pseud is greeted without a name.
+	m, err = c.SignUpAttempt("owner@example.org", "")
+	if err != nil || !strings.HasPrefix(m.Text, "Hello!\n") || !strings.Contains(m.HTML, "<h2>Hello!</h2>") {
+		t.Errorf("nameless greeting: %v %q", err, m.Text)
 	}
 }

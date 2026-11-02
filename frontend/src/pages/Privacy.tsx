@@ -85,7 +85,7 @@ export default function PrivacyPolicyPage() {
                   <strong>Account Information:</strong>
                   <ul className="list-disc pl-5 mt-1 space-y-1">
                     <li><strong>Email address</strong> - For account recovery only (encrypted, never shared)</li>
-                    <li><strong>Username</strong> - Your chosen public identifier</li>
+                    <li><strong>Pen name</strong> - The name of your first pseud, shown on your works and comments</li>
                     <li><strong>Encrypted password</strong> - Hashed with bcrypt, salt rounds 12+</li>
                     <li><strong>Account creation date</strong> - For security and spam prevention</li>
                   </ul>

@@ -24,8 +24,8 @@ func TestRevokeSessions(t *testing.T) {
 
 	mkUser := func(name string) uuid.UUID {
 		id := uuid.New()
-		if _, err := db.Exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
-			VALUES ($1, $2, $3, 'x', true, true)`, id, name, name+"@example.org"); err != nil {
+		if _, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+			VALUES ($1, $2, 'x', true, true)`, id, name+"@example.org"); err != nil {
 			t.Fatal(err)
 		}
 		return id
@@ -76,14 +76,14 @@ func TestRevokeSessions(t *testing.T) {
 	give(alice)
 	give(bob)
 
-	if _, err := RevokeSessions(ctx, db, "nobody"); err == nil {
-		t.Error("unknown username should be an error")
+	if _, err := RevokeSessions(ctx, db, "nobody@example.org"); err == nil {
+		t.Error("unknown email address should be an error")
 	}
 	if s, _, _ := live(alice); s != 2 {
 		t.Fatalf("a failed revoke changed data: alice has %d live sessions", s)
 	}
 
-	n, err := RevokeSessions(ctx, db, "alice")
+	n, err := RevokeSessions(ctx, db, "alice@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}

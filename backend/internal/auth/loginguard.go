@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -49,15 +48,15 @@ const (
 	attemptsPerIP = 20
 	attemptWindow = 5 * time.Minute
 
-	// attemptsPerName and nameWindow limit tries at one login name from any
-	// number of addresses, as AO3 does (config/config.yml, rack-attack: 5
+	// attemptsPerName and nameWindow limit tries at one email address from
+	// any number of IP addresses, as AO3 does (config/config.yml, rack-attack: 5
 	// per 20 seconds). It applies whether or not the name exists.
 	attemptsPerName = 5
 	nameWindow      = 20 * time.Second
 
-	// maxUnknownNames caps how many unknown login names are remembered.
+	// maxUnknownNames caps how many unknown email addresses are remembered.
 	maxUnknownNames = 10000
-	// maxNameKeyLen cuts very long login names down before they are used as
+	// maxNameKeyLen cuts very long email addresses down before they are used as
 	// a key, so one request can't use up a lot of memory.
 	maxNameKeyLen = 100
 )
@@ -65,11 +64,11 @@ const (
 var (
 	loginFailures = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "nuclear_login_failures_total",
-		Help: "Login attempts refused as invalid credentials: wrong password, unknown name, or locked account.",
+		Help: "Login attempts refused as invalid credentials: wrong password, unknown email address, or locked account.",
 	})
 	loginLockouts = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "nuclear_login_lockouts_total",
-		Help: "Times a login name reached the failed-login limit and was locked.",
+		Help: "Times an account reached the failed-login limit and was locked.",
 	})
 )
 
@@ -102,16 +101,22 @@ func (g *loginGuard) init() {
 	})
 }
 
-// allowNameAttempt reports whether another login try at this name is
-// allowed now, and if not, how many seconds until it is.
-func (as *AuthService) allowNameAttempt(login string) (bool, int) {
-	g := &as.guard
-	g.init()
-	key := strings.ToLower(login)
+// guardKey is what the per-name counters are keyed on: the normalized
+// (trimmed, lowercased) email address, cut to maxNameKeyLen.
+func guardKey(login string) string {
+	key := normalizeEmail(login)
 	if len(key) > maxNameKeyLen {
 		key = key[:maxNameKeyLen]
 	}
-	_, windowEnd, allowed := g.byName.hit("name:"+key, attemptsPerName, nameWindow)
+	return key
+}
+
+// allowNameAttempt reports whether another login try at this email address
+// is allowed now, and if not, how many seconds until it is.
+func (as *AuthService) allowNameAttempt(login string) (bool, int) {
+	g := &as.guard
+	g.init()
+	_, windowEnd, allowed := g.byName.hit("name:"+guardKey(login), attemptsPerName, nameWindow)
 	return allowed, int(time.Until(windowEnd).Seconds()) + 1
 }
 
@@ -150,10 +155,7 @@ func (as *AuthService) noteUnknownFailure(login string) {
 	loginFailures.Inc()
 	g := &as.guard
 	g.init()
-	key := strings.ToLower(login)
-	if len(key) > maxNameKeyLen {
-		key = key[:maxNameKeyLen]
-	}
+	key := guardKey(login)
 	if used, _, allowed := g.unknown.hit(key, maxFailedLogins, lockDuration); allowed && used+1 == maxFailedLogins {
 		loginLockouts.Inc()
 	}
@@ -169,7 +171,7 @@ func (as *AuthService) noteUnknownFailure(login string) {
 // doesn't, so doing it before answering would let response times reveal
 // which names are real accounts. Errors are logged and otherwise ignored:
 // the login is refused either way.
-func (as *AuthService) recordFailedLogin(c *gin.Context, userID uuid.UUID, username, address string) {
+func (as *AuthService) recordFailedLogin(c *gin.Context, userID uuid.UUID, address string) {
 	loginFailures.Inc()
 	g := &as.guard
 	g.pending.Add(1)
@@ -177,13 +179,13 @@ func (as *AuthService) recordFailedLogin(c *gin.Context, userID uuid.UUID, usern
 		defer g.pending.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := as.countFailure(ctx, userID, username, address); err != nil {
+		if err := as.countFailure(ctx, userID, address); err != nil {
 			log.Printf("login: count failed attempt: %v", err)
 		}
 	}()
 }
 
-func (as *AuthService) countFailure(ctx context.Context, userID uuid.UUID, username, address string) error {
+func (as *AuthService) countFailure(ctx context.Context, userID uuid.UUID, address string) error {
 	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -219,7 +221,7 @@ func (as *AuthService) countFailure(ctx context.Context, userID uuid.UUID, usern
 		return err
 	}
 	if as.mail != nil {
-		msg, err := as.mail.AccountLocked(address, username)
+		msg, err := as.mail.AccountLocked(address, defaultPseudName(ctx, tx, userID))
 		if err != nil {
 			return fmt.Errorf("build lock email: %w", err)
 		}

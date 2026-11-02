@@ -307,20 +307,6 @@ export default function UserProfileSettings({ authToken }: UserProfileSettingsPr
               <legend className="sr-only">Basic profile information</legend>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Username
-                </label>
-                <input
-                  type="text"
-                  value={profile.username}
-                  disabled
-                  className="form-input bg-slate-50 text-slate-500"
-                  aria-describedby={`${componentId}-username-help`}
-                />
-                <p id={`${componentId}-username-help`} className="text-sm text-slate-500 mt-1">Username cannot be changed</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
                   Display Name
                 </label>
                 <input

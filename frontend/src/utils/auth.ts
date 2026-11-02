@@ -5,10 +5,19 @@ import { useEffect, useState } from 'react';
  * This provides authentication functions that work with localStorage-based auth
  */
 
+/**
+ * An account has an email address and pseuds; it has no username. The
+ * default pseud is how the account is shown to its owner.
+ */
 export interface User {
   id: string;
-  username: string;
   email: string;
+  default_pseud?: { id: string; name: string };
+}
+
+/** The name to show for the signed-in person: the name of their default pseud. */
+export function penNameOf(user?: Pick<User, 'default_pseud'> | null): string {
+  return user?.default_pseud?.name ?? '';
 }
 
 export interface AuthState {

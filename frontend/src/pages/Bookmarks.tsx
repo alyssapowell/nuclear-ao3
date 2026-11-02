@@ -283,7 +283,7 @@ function BookmarkCard({ bookmark, onUpdate }: BookmarkCardProps) {
   const convertBookmarkWork = (work: Record<string, unknown>) => ({
     id: String(work.id || ''),
     title: String(work.title || ''),
-    author: String(work.author || work.username || ''),
+    author: String(work.author || ''),
     summary: work.summary ? String(work.summary) : undefined,
     word_count: Number(work.word_count || 0),
     chapter_count: Number(work.chapter_count || 0),

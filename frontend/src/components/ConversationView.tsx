@@ -11,7 +11,7 @@ interface ConversationViewProps {
 }
 
 interface FlattenedComment extends Comment {
-  replyToUsername?: string;
+  replyToName?: string;
   replyToCommentId?: string;
   level: number;
 }
@@ -90,11 +90,11 @@ export default function ConversationView({
   const flattenThread = (thread: Comment): FlattenedComment[] => {
     const flattened: FlattenedComment[] = [];
     
-    const flattenRecursive = (comment: Comment, level: number = 0, parentUsername?: string, parentId?: string) => {
+    const flattenRecursive = (comment: Comment, level: number = 0, parentName?: string, parentId?: string) => {
       flattened.push({
         ...comment,
         level,
-        replyToUsername: parentUsername,
+        replyToName: parentName,
         replyToCommentId: parentId
       });
 

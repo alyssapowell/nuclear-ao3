@@ -9,7 +9,6 @@ import (
 // User represents a registered user in the system
 type User struct {
 	ID           uuid.UUID              `json:"id" db:"id"`
-	Username     string                 `json:"username" db:"username" validate:"required,min=3,max=50"`
 	Email        string                 `json:"email" db:"email" validate:"required,email"`
 	PasswordHash string                 `json:"-" db:"password_hash"` // Never serialize password
 	DisplayName  string                 `json:"display_name" db:"display_name"`
@@ -23,13 +22,15 @@ type User struct {
 	CreatedAt    time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time              `json:"updated_at" db:"updated_at"`
 	Roles        []string               `json:"roles"` // Loaded separately
+	// DefaultPseud is how the account is shown to its own owner: the account
+	// has no username. Set on login and profile, not on public copies.
+	DefaultPseud *PseudClaim `json:"default_pseud,omitempty"`
 }
 
 // PublicUser returns a user struct safe for public consumption
 func (u *User) PublicUser() *User {
 	return &User{
 		ID:          u.ID,
-		Username:    u.Username,
 		DisplayName: u.DisplayName,
 		Bio:         u.Bio,
 		Location:    u.Location,
@@ -177,7 +178,6 @@ type UserStatistics struct {
 // UserDashboard represents a user's dashboard view with all relevant information
 type UserDashboard struct {
 	ID                  uuid.UUID  `json:"id" db:"id"`
-	Username            string     `json:"username" db:"username"`
 	DisplayName         *string    `json:"display_name" db:"display_name"`
 	UnreadNotifications int        `json:"unread_notifications" db:"unread_notifications"`
 	PublishedWorks      int        `json:"published_works" db:"published_works"`
@@ -220,12 +220,11 @@ type UserProfileUpdateRequest struct {
 // UserSearchParams represents parameters for searching users
 type UserSearchParams struct {
 	Query      *string    `form:"q"`
-	Username   *string    `form:"username"`
 	Location   *string    `form:"location"`
 	JoinedFrom *time.Time `form:"joined_from"`
 	JoinedTo   *time.Time `form:"joined_to"`
 	IsActive   *bool      `form:"is_active"`
-	SortBy     string     `form:"sort_by" validate:"oneof=username created_at last_login works_count"`
+	SortBy     string     `form:"sort_by" validate:"oneof=created_at last_login works_count"`
 	SortOrder  string     `form:"sort_order" validate:"oneof=asc desc"`
 	Page       int        `form:"page" validate:"min=1"`
 	Limit      int        `form:"limit" validate:"min=1,max=100"`

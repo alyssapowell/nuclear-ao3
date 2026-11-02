@@ -243,7 +243,7 @@ export async function getWorks(searchParams?: WorkListParams) {
       ...data,
       works: data.works?.map((work: Record<string, unknown>) => ({
         ...work,
-        author: work.username // Map username to author for frontend compatibility
+        author: work.author
       })) || []
     };
   } catch (error) {
@@ -2051,7 +2051,6 @@ export async function getPopularTags(type?: 'fandom' | 'character' | 'relationsh
 // User Profile Management interfaces and functions
 export interface UserProfile {
   user_id: string;
-  username: string;
   display_name?: string;
   bio?: string;
   profile_image_url?: string;
@@ -2544,8 +2543,9 @@ export async function getUserDashboard(authToken?: string) {
 
 export interface AuthUser {
   id: string;
-  username: string;
   email: string;
+  /** How the account is shown to its owner. Accounts have no username. */
+  default_pseud?: { id: string; name: string };
 }
 
 export interface AuthResult {
@@ -2577,10 +2577,9 @@ export const PASSWORD_MIN = 6;
 export const PASSWORD_MAX = 40;
 
 const AUTH_ERRORS: Record<string, string> = {
-  invalid_credentials: 'Incorrect username/email or password.',
+  invalid_credentials: 'Incorrect email or password.',
   invalid_request: 'Please check the form and try again.',
   not_activated: "This account hasn't been activated yet. Check your email for the activation link.",
-  user_exists: 'That username or email is already in use.',
   weak_password: `Passwords must be ${PASSWORD_MIN} to ${PASSWORD_MAX} characters long.`,
   wrong_password: 'Your current password is not correct.',
   invalid_token: 'This link is invalid or has expired.',
@@ -2614,16 +2613,20 @@ async function accountCall<T = undefined>(
   return { ok: true, data };
 }
 
-/** `login` is a username or an email address. */
-export async function login(loginName: string, password: string): Promise<AuthResult> {
-  const r = await accountCall<{ access_token?: string; user?: AuthUser }>('login', 'POST', { login: loginName, password });
+/** The email address is the only login. */
+export async function login(email: string, password: string): Promise<AuthResult> {
+  const r = await accountCall<{ access_token?: string; user?: AuthUser }>('login', 'POST', { email, password });
   if (!r.ok) return { error: r.error, code: r.code };
   return { token: r.data?.access_token, user: r.data?.user };
 }
 
-/** On success the account still has to be activated from the email; there is no token. */
-export function register(username: string, email: string, password: string): Promise<AccountResult> {
-  return accountCall('register', 'POST', { username, email, password });
+/**
+ * The pen name is the name of the account's first pseud. On success the
+ * account still has to be activated from the email; there is no token. The
+ * answer is the same when the address already had an account.
+ */
+export function register(penName: string, email: string, password: string): Promise<AccountResult> {
+  return accountCall('register', 'POST', { pen_name: penName, email, password });
 }
 
 /** Activation needs the account's password as well as the emailed token. */

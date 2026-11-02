@@ -7,7 +7,7 @@ class MultiUserTestUtils {
   // User management utilities
   async createUser(username: string, email: string, password: string = 'testpass123') {
     await this.page.goto('/auth/register');
-    await this.page.fill('[data-testid="username"]', username);
+    await this.page.fill('[data-testid="pen-name"]', username);
     await this.page.fill('[data-testid="email"]', email);
     await this.page.fill('[data-testid="password"]', password);
     await this.page.fill('[data-testid="confirm-password"]', password);
@@ -27,7 +27,7 @@ class MultiUserTestUtils {
       if (this.page.url().includes('/auth/register')) {
         // Try logging in with the credentials to see if account was created
         await this.page.goto('/auth/login');
-        await this.page.fill('[data-testid="username"]', email);
+        await this.page.fill('[data-testid="email"]', email);
         await this.page.fill('[data-testid="password"]', password);
         await this.page.click('[data-testid="login-button"]');
         await this.page.waitForURL('/');
@@ -39,7 +39,7 @@ class MultiUserTestUtils {
 
   async loginAs(email: string, password: string = 'testpass123') {
     await this.page.goto('/auth/login');
-    await this.page.fill('[data-testid="username"]', email); // login uses email field
+    await this.page.fill('[data-testid="email"]', email); // login uses email field
     await this.page.fill('[data-testid="password"]', password);
     await this.page.click('[data-testid="login-button"]');
     await this.page.waitForURL('/');

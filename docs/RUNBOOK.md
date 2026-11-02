@@ -15,7 +15,7 @@ Commands assume you're in the repo folder on the server, using Docker Compose. `
 1. Set up the signing key (next section). The app won't start without it.
 2. `docker-compose up -d`. The app creates the database tables itself the first time it starts.
 3. Register your own account on the site like any user.
-4. Make yourself an admin: `make grant USER=yourname ROLE=admin`.
+4. Make yourself an admin: `make grant ACCOUNT=you@example.org ROLE=admin` (the email address you signed up with).
 
 There are no built-in accounts or default passwords.
 
@@ -77,13 +77,13 @@ If the server is gone and the backup is only off-server, fetch it first: see "Re
 
 ### Log everyone out
 
-Use this after a password leak, or when you aren't sure who is logged in. Run the **ops-logout-everyone** workflow (Actions tab -> ops-logout-everyone -> Run workflow; `make ops-logout-everyone` on the server). Or the **ops-logout-user** workflow (`make ops-logout-user USER=name`) for one account. It ends all login sessions, OAuth tokens, unused authorization codes and app permissions, so people and connected apps have to log in again. The summary shows the counts. These need a reviewer's approval on GitHub.
+Use this after a password leak, or when you aren't sure who is logged in. Run the **ops-logout-everyone** workflow (Actions tab -> ops-logout-everyone -> Run workflow; `make ops-logout-everyone` on the server). Or the **ops-logout-user** workflow (`make ops-logout-user ACCOUNT=person@example.org`) for one account. It ends all login sessions, OAuth tokens, unused authorization codes and app permissions, so people and connected apps have to log in again. The summary shows the counts. These need a reviewer's approval on GitHub.
 
-Manual steps: `docker-compose run --rm app nuclear sessions revoke-all`, or `... nuclear sessions revoke <username>`.
+Manual steps: `docker-compose run --rm app nuclear sessions revoke-all`, or `... nuclear sessions revoke <email or account id>`.
 
 ### Give someone a role
 
-`make grant USER=theirname ROLE=tag_wrangler` (or `moderator`, or `admin`). They need to have registered first. Running it again for a role that was revoked restores it.
+`make grant ACCOUNT=their@example.org ROLE=tag_wrangler` (or `moderator`, or `admin`). They need to have registered first. Running it again for a role that was revoked restores it.
 
 ### Upgrade to a new version
 
@@ -213,9 +213,9 @@ What the app already does without help:
 
 What to look at:
 
-1. On the Prometheus page (see docs/MONITORING.md), compare `nuclear_login_failures_total` with `nuclear_login_lockouts_total`. Many failures and few lockouts means the guesses are spread over many names, which is a list of stolen passwords being tried. Many lockouts means someone is going after particular accounts.
+1. On the Prometheus page (see docs/MONITORING.md), compare `nuclear_login_failures_total` with `nuclear_login_lockouts_total`. Many failures and few lockouts means the guesses are spread over many email addresses, which is a list of stolen passwords being tried. Many lockouts means someone is going after particular accounts.
 2. In the app log (`docker-compose logs --tail 500 app`), count the lines for `POST /api/v1/auth/login` with status 429. Many 429s mean the per-address limit is already holding someone back. The app's log doesn't record addresses; the Caddy access log does, if it is on (see `Caddyfile`). If a few addresses or one network dominate, block them there.
-3. Locked accounts are `SELECT username, locked_until FROM users WHERE locked_until > now();` in the database. Don't unlock them by hand: the owner can use "Forgot password" (which clears the lock), and the lock ends by itself after 5 minutes.
+3. Locked accounts are `SELECT email, locked_until FROM users WHERE locked_until > now();` in the database. Don't unlock them by hand: the owner can use "Forgot password" (which clears the lock), and the lock ends by itself after 5 minutes.
 4. If a lot of accounts are locked or people write in saying their account was locked, tell them to use "Forgot password".
 5. If you see signs that guesses succeeded (people reporting activity they didn't do, logins from places they've never been), treat it as account takeover: see "Accounts are being taken over" in [INCIDENTS.md](INCIDENTS.md#accounts-are-being-taken-over).
 

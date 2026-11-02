@@ -45,7 +45,7 @@ export const mockStorage = {
 export const mockOfflineWork = {
   workId: 'test-work-123',
   title: 'Test Fanfiction',
-  authors: [{ pseud_name: 'TestAuthor', username: 'test_author' }],
+  authors: [{ pseud_name: 'TestAuthor' }],
   consentLevel: 'files_and_pwa' as const,
   cachedAt: Date.now() - 3600000, // 1 hour ago
   expiresAt: Date.now() + 86400000, // 24 hours from now
@@ -58,7 +58,7 @@ export const mockOfflineWork = {
 export const mockWorkData = {
   id: 'test-work-123',
   title: 'Test Fanfiction',
-  authors: [{ pseud_name: 'TestAuthor', username: 'test_author' }],
+  authors: [{ pseud_name: 'TestAuthor' }],
   summary: 'A test work for our tests',
   word_count: 15000,
   chapter_count: 5,

@@ -29,13 +29,6 @@ export function getChapterUrl(workId: string, chapterNumber: number): string {
 }
 
 /**
- * Generate a URL for a user's profile
- */
-export function getUserUrl(username: string): string {
-  return `/users/${username}`;
-}
-
-/**
  * Generate a URL for a series page
  */
 export function getSeriesUrl(seriesId: string): string {
@@ -135,14 +128,6 @@ export const urlValidation = {
    */
   isValidThreadId(threadId: string): boolean {
     return this.isValidUUID(threadId);
-  },
-
-  /**
-   * Validate username format
-   */
-  isValidUsername(username: string): boolean {
-    // Basic username validation - adjust as needed
-    return /^[a-zA-Z0-9_-]{3,50}$/.test(username);
   }
 };
 
@@ -292,7 +277,6 @@ export default {
   getWorkCommentsUrl,
   getConversationUrl,
   getChapterUrl,
-  getUserUrl,
   getSeriesUrl,
   getCollectionUrl,
   getSearchUrl,

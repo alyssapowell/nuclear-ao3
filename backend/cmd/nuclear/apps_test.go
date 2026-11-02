@@ -18,11 +18,11 @@ func TestAppsCommands(t *testing.T) {
 	mail := &email.Config{FromName: "Test Archive", SiteURL: "https://archive.example.org"}
 
 	owner := uuid.New()
-	if _, err := db.Exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified)
-		VALUES ($1, 'appowner', 'appowner@example.org', 'x', true, true)`, owner); err != nil {
+	if _, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+		VALUES ($1, 'appowner@example.org', 'x', true, true)`, owner); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`UPDATE pseuds SET name = 'Quill' WHERE user_id = $1 AND is_default`, owner); err != nil {
+	if _, err := db.Exec(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, 'Quill', true)`, owner); err != nil {
 		t.Fatal(err)
 	}
 	mk := func(name string) uuid.UUID {
@@ -52,7 +52,7 @@ func TestAppsCommands(t *testing.T) {
 
 	a, b, c := mk("First app"), mk("Second app"), mk("Third app")
 
-	// The queue lists waiting apps, by the owner's pseud and never the username.
+	// The queue lists waiting apps, by the owner's pseud and never the account's email address.
 	code, out := run()
 	if code != 0 || !strings.Contains(out, "First app") || !strings.Contains(out, "Quill") || strings.Contains(out, "appowner") {
 		t.Fatalf("list: code %d, output:\n%s", code, out)
@@ -108,7 +108,7 @@ func TestAppsCommands(t *testing.T) {
 
 	// Suspend cuts off an approved app: its tokens, codes and consents end.
 	reader := uuid.New()
-	db.Exec(`INSERT INTO users (id, username, email, password_hash, is_active, is_verified) VALUES ($1, 'rdr', 'rdr@example.org', 'x', true, true)`, reader)
+	db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified) VALUES ($1, 'rdr@example.org', 'x', true, true)`, reader)
 	tok := uuid.New()
 	if _, err := db.Exec(`INSERT INTO oauth_access_tokens (id, token_hash, user_id, client_id, scopes, expires_at, family_id)
 		VALUES ($1, $2, $3, $4, ARRAY['read'], now() + interval '1 hour', $5)`, tok, fakeHash(tok), reader, a, uuid.New()); err != nil {

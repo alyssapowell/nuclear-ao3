@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -303,30 +304,43 @@ func notFoundOrNoChange(ctx context.Context, tx *sql.Tx, table string, id uuid.U
 	return ErrNoChange
 }
 
-// UserByName finds an account by its username.
-func (s *Service) UserByName(ctx context.Context, username string) (uuid.UUID, error) {
+// UserByRef finds an account from what an admin types: an email address or
+// an account id.
+func (s *Service) UserByRef(ctx context.Context, ref string) (uuid.UUID, error) {
+	ref = strings.TrimSpace(ref)
+	if id, err := uuid.Parse(ref); err == nil {
+		var found uuid.UUID
+		err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1`, id).Scan(&found)
+		if errors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, fmt.Errorf("no account with id %s: %w", id, ErrNotFound)
+		}
+		return found, err
+	}
 	var id uuid.UUID
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE username = $1`, username).Scan(&id)
+	err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE lower(email) = lower($1)`, ref).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return uuid.Nil, fmt.Errorf("no account named %q: %w", username, ErrNotFound)
+		return uuid.Nil, fmt.Errorf("no account with email %q: %w", ref, ErrNotFound)
 	}
 	return id, err
 }
 
-// lockUser reads and locks the account being changed. orphan_account holds
-// the works of people who left, and AO3 refuses to suspend or ban it
-// (user_manager.rb:52-58).
-func lockUser(ctx context.Context, tx *sql.Tx, id uuid.UUID) (username string, banned, suspended bool, err error) {
-	err = tx.QueryRowContext(ctx, `SELECT username, banned, suspended AND (suspended_until IS NULL OR suspended_until > now())
-		FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&username, &banned, &suspended)
+// orphanAccount holds the works of people who left, and AO3 refuses to
+// suspend or ban it (user_manager.rb:52-58).
+var orphanAccount = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+
+// lockUser reads and locks the account being changed. It returns the
+// account's email address, which goes in the admin log.
+func lockUser(ctx context.Context, tx *sql.Tx, id uuid.UUID) (email string, banned, suspended bool, err error) {
+	err = tx.QueryRowContext(ctx, `SELECT email, banned, suspended AND (suspended_until IS NULL OR suspended_until > now())
+		FROM users WHERE id = $1 FOR UPDATE`, id).Scan(&email, &banned, &suspended)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, false, ErrNotFound
 	}
 	return
 }
 
-func refuseProtected(username string) error {
-	if username == "orphan_account" {
+func refuseProtected(id uuid.UUID) error {
+	if id == orphanAccount {
 		return ErrProtectedAcc
 	}
 	return nil
@@ -343,32 +357,32 @@ func (s *Service) SuspendUser(ctx context.Context, actor audit.Actor, id uuid.UU
 		return fmt.Errorf("%w: the suspension must end in the future", ErrBadInput)
 	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, _, _, err := lockUser(ctx, tx, id)
+		email, _, _, err := lockUser(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		if err := checkSanction(ctx, tx, actor, id); err != nil {
 			return err
 		}
-		if err := refuseProtected(username); err != nil {
+		if err := refuseProtected(id); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE users SET suspended = true, suspended_until = $2 WHERE id = $1`, id, until); err != nil {
 			return err
 		}
-		revoked, err := RevokeSessions(ctx, tx, username)
+		revoked, err := RevokeSessions(ctx, tx, &id)
 		if err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, actor, "suspend", "user", id.String(), reason,
-			map[string]any{"username": username, "until": until.UTC().Format(time.RFC3339), "sessions_ended": revoked.Sessions})
+			map[string]any{"email": email, "until": until.UTC().Format(time.RFC3339), "sessions_ended": revoked.Sessions})
 	})
 }
 
 // LiftSuspension ends a suspension early.
 func (s *Service) LiftSuspension(ctx context.Context, actor audit.Actor, id uuid.UUID, reason string) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, _, suspended, err := lockUser(ctx, tx, id)
+		email, _, suspended, err := lockUser(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -381,7 +395,7 @@ func (s *Service) LiftSuspension(ctx context.Context, actor audit.Actor, id uuid
 		if _, err := tx.ExecContext(ctx, `UPDATE users SET suspended = false, suspended_until = NULL WHERE id = $1`, id); err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, actor, "unsuspend", "user", id.String(), reason, map[string]any{"username": username})
+		return audit.Record(ctx, tx, actor, "unsuspend", "user", id.String(), reason, map[string]any{"email": email})
 	})
 }
 
@@ -392,14 +406,14 @@ func (s *Service) BanUser(ctx context.Context, actor audit.Actor, id uuid.UUID, 
 		return fmt.Errorf("%w: a reason is required to ban", ErrBadInput)
 	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, banned, _, err := lockUser(ctx, tx, id)
+		email, banned, _, err := lockUser(ctx, tx, id)
 		if err != nil {
 			return err
 		}
 		if err := checkSanction(ctx, tx, actor, id); err != nil {
 			return err
 		}
-		if err := refuseProtected(username); err != nil {
+		if err := refuseProtected(id); err != nil {
 			return err
 		}
 		if banned {
@@ -408,19 +422,19 @@ func (s *Service) BanUser(ctx context.Context, actor audit.Actor, id uuid.UUID, 
 		if _, err := tx.ExecContext(ctx, `UPDATE users SET banned = true WHERE id = $1`, id); err != nil {
 			return err
 		}
-		revoked, err := RevokeSessions(ctx, tx, username)
+		revoked, err := RevokeSessions(ctx, tx, &id)
 		if err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, actor, "ban", "user", id.String(), reason,
-			map[string]any{"username": username, "sessions_ended": revoked.Sessions})
+			map[string]any{"email": email, "sessions_ended": revoked.Sessions})
 	})
 }
 
 // UnbanUser lifts a ban.
 func (s *Service) UnbanUser(ctx context.Context, actor audit.Actor, id uuid.UUID, reason string) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, banned, _, err := lockUser(ctx, tx, id)
+		email, banned, _, err := lockUser(ctx, tx, id)
 		if err != nil {
 			return err
 		}
@@ -433,7 +447,7 @@ func (s *Service) UnbanUser(ctx context.Context, actor audit.Actor, id uuid.UUID
 		if _, err := tx.ExecContext(ctx, `UPDATE users SET banned = false WHERE id = $1`, id); err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, actor, "unban", "user", id.String(), reason, map[string]any{"username": username})
+		return audit.Record(ctx, tx, actor, "unban", "user", id.String(), reason, map[string]any{"email": email})
 	})
 }
 
@@ -457,7 +471,7 @@ func (s *Service) GrantRole(ctx context.Context, actor audit.Actor, userID uuid.
 		return fmt.Errorf("%w: unknown role %q (use admin, moderator or tag_wrangler)", ErrBadInput, role)
 	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, _, _, err := lockUser(ctx, tx, userID)
+		email, _, _, err := lockUser(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
@@ -484,7 +498,7 @@ func (s *Service) GrantRole(ctx context.Context, actor audit.Actor, userID uuid.
 			return err
 		}
 		return audit.Record(ctx, tx, actor, "grant_role", "user", userID.String(), "",
-			map[string]any{"username": username, "role": role})
+			map[string]any{"email": email, "role": role})
 	})
 }
 
@@ -494,7 +508,7 @@ func (s *Service) RevokeRole(ctx context.Context, actor audit.Actor, userID uuid
 		return fmt.Errorf("%w: unknown role %q (use admin, moderator or tag_wrangler)", ErrBadInput, role)
 	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		username, _, _, err := lockUser(ctx, tx, userID)
+		email, _, _, err := lockUser(ctx, tx, userID)
 		if err != nil {
 			return err
 		}
@@ -514,13 +528,13 @@ func (s *Service) RevokeRole(ctx context.Context, actor audit.Actor, userID uuid
 			return ErrNoChange
 		}
 		return audit.Record(ctx, tx, actor, "revoke_role", "user", userID.String(), "",
-			map[string]any{"username": username, "role": role})
+			map[string]any{"email": email, "role": role})
 	})
 }
 
 // RoleHolder is one account with a role.
 type RoleHolder struct {
-	Username  string    `json:"username"`
+	Email     string    `json:"email"`
 	Role      string    `json:"role"`
 	GrantedAt time.Time `json:"granted_at"`
 }
@@ -529,10 +543,10 @@ type RoleHolder struct {
 // admins first.
 func (s *Service) RoleHolders(ctx context.Context) ([]RoleHolder, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT u.username, r.role, COALESCE(r.granted_at, u.created_at)
+		SELECT u.email, r.role, COALESCE(r.granted_at, u.created_at)
 		FROM user_roles r JOIN users u ON u.id = r.user_id
 		WHERE r.role <> 'user' AND r.revoked_at IS NULL
-		ORDER BY CASE r.role WHEN 'admin' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END, u.username`)
+		ORDER BY CASE r.role WHEN 'admin' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END, u.email`)
 	if err != nil {
 		return nil, err
 	}
@@ -540,7 +554,7 @@ func (s *Service) RoleHolders(ctx context.Context) ([]RoleHolder, error) {
 	var out []RoleHolder
 	for rows.Next() {
 		var h RoleHolder
-		if err := rows.Scan(&h.Username, &h.Role, &h.GrantedAt); err != nil {
+		if err := rows.Scan(&h.Email, &h.Role, &h.GrantedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, h)
@@ -552,16 +566,15 @@ func (s *Service) RoleHolders(ctx context.Context) ([]RoleHolder, error) {
 type Revoked struct{ Sessions, AccessTokens, RefreshTokens, Codes, Consents int64 }
 
 // RevokeSessions ends login sessions and revokes OAuth tokens inside tx: for
-// every account when username is empty, otherwise for that one account. Only
+// every account when who is nil, otherwise for that one account. Only
 // sessions and tokens that were still live are counted.
-func RevokeSessions(ctx context.Context, tx *sql.Tx, username string) (Revoked, error) {
+func RevokeSessions(ctx context.Context, tx *sql.Tx, who *uuid.UUID) (Revoked, error) {
 	var r Revoked
-	// With no username, "$1 = ''" is true for every row.
-	if username != "" {
-		var id string
-		if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE username = $1`, username).Scan(&id); err != nil {
+	if who != nil {
+		var found uuid.UUID
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id = $1`, *who).Scan(&found); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return r, fmt.Errorf("no account named %q", username)
+				return r, fmt.Errorf("no account with id %s", *who)
 			}
 			return r, err
 		}
@@ -571,19 +584,19 @@ func RevokeSessions(ctx context.Context, tx *sql.Tx, username string) (Revoked, 
 		sql string
 	}{
 		{&r.Sessions, `UPDATE user_sessions SET is_active = false
-			WHERE is_active AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+			WHERE is_active AND ($1::uuid IS NULL OR user_id = $1)`},
 		{&r.AccessTokens, `UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+			WHERE NOT is_revoked AND ($1::uuid IS NULL OR user_id = $1)`},
 		{&r.RefreshTokens, `UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+			WHERE NOT is_revoked AND ($1::uuid IS NULL OR user_id = $1)`},
 		// An unused code could still be swapped for new tokens.
 		{&r.Codes, `UPDATE authorization_codes SET used_at = now()
-			WHERE used_at IS NULL AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+			WHERE used_at IS NULL AND ($1::uuid IS NULL OR user_id = $1)`},
 		// Apps must ask the user for permission again.
 		{&r.Consents, `UPDATE user_consents SET is_revoked = true, revoked_at = now()
-			WHERE NOT is_revoked AND ($1 = '' OR user_id = (SELECT id FROM users WHERE username = $1))`},
+			WHERE NOT is_revoked AND ($1::uuid IS NULL OR user_id = $1)`},
 	} {
-		res, err := tx.ExecContext(ctx, q.sql, username)
+		res, err := tx.ExecContext(ctx, q.sql, who)
 		if err != nil {
 			return r, err
 		}

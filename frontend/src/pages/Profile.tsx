@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/Button';
 
 interface UserProfile {
   id: string;
-  username: string;
   email: string;
   display_name?: string;
   bio?: string;
@@ -64,6 +63,9 @@ export default function ProfilePage() {
     });
   };
 
+  // Accounts have no username: the account is shown by its default pseud.
+  const penName = pseudonyms.find((p) => p.is_default)?.name ?? '';
+
   const getInitials = (name: string) => {
     return name.split(' ').map(word => word.charAt(0).toUpperCase()).slice(0, 2).join('');
   };
@@ -91,12 +93,12 @@ export default function ProfilePage() {
                     {profile.profile_image_url ? (
                       <img
                         src={profile.profile_image_url}
-                        alt={`${profile.username}'s avatar`}
+                        alt={`${penName}'s avatar`}
                         className="w-20 h-20 rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                        {getInitials(profile.display_name || profile.username)}
+                        {getInitials(profile.display_name || penName)}
                       </div>
                     )}
                   </div>
@@ -104,10 +106,10 @@ export default function ProfilePage() {
                   {/* Profile Info */}
                   <div className="flex-1">
                     <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                      {profile.display_name || profile.username}
+                      {profile.display_name || penName}
                     </h1>
-                    {profile.display_name && (
-                      <p className="text-slate-600 mb-2">@{profile.username}</p>
+                    {profile.display_name && penName && (
+                      <p className="text-slate-600 mb-2">{penName}</p>
                     )}
                     
                     {profile.bio && (

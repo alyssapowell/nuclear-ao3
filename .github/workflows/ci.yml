@@ -406,9 +406,9 @@ jobs:
           # 1. Write a marker through the API: a new account.
           marker="ci-marker-$(openssl rand -hex 4)"
           pw="Marker-$(openssl rand -hex 8)-Pass1"
-          body="{\"username\":\"$marker\",\"email\":\"$marker@example.org\",\"password\":\"$pw\",\"confirm_password\":\"$pw\"}"
+          body="{\"pen_name\":\"$marker\",\"email\":\"$marker@example.org\",\"password\":\"$pw\"}"
           curl -fsS -o /dev/null -X POST "$B/auth/register" -H 'Content-Type: application/json' -d "$body"
-          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 1
+          test "$(psql_q "SELECT count(*) FROM users WHERE email = '$marker@example.org'")" = 1
           echo "marker account $marker is in the database"
 
           # 2. Back it up. Then wait, so the safety backup that restore takes
@@ -423,14 +423,14 @@ jobs:
           sleep 2
 
           # 3. Delete the marker.
-          psql_q "DELETE FROM users WHERE username = '$marker'"
-          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 0
+          psql_q "DELETE FROM users WHERE email = '$marker@example.org'"
+          test "$(psql_q "SELECT count(*) FROM users WHERE email = '$marker@example.org'")" = 0
 
           # 4. Restore. make asks for the phrase on standard input.
           printf 'replace the database\n' | make ops-restore FILE="$backup"
 
           # 5. The marker is back, and the app is healthy.
-          test "$(psql_q "SELECT count(*) FROM users WHERE username = '$marker'")" = 1
+          test "$(psql_q "SELECT count(*) FROM users WHERE email = '$marker@example.org'")" = 1
           curl -fsS -m 10 http://127.0.0.1:8088/health
           echo
           echo "PASS  restore brought the marker account back"

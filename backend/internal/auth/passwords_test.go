@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -68,7 +69,7 @@ func tokenIn(t *testing.T, m email.Message, path string) string {
 
 func (e *sessionEnv) register(name, password string) int {
 	return e.status("POST", authAPI+"/register", "", map[string]string{
-		"username": name, "email": name + "@example.org", "password": password})
+		"pen_name": name, "email": name + "@example.org", "password": password})
 }
 
 func (e *sessionEnv) mustExec(query string, args ...any) {
@@ -80,7 +81,7 @@ func (e *sessionEnv) mustExec(query string, args ...any) {
 
 func TestRegisterAndActivate(t *testing.T) {
 	e := newPasswordEnv(t)
-	w := e.do("POST", authAPI+"/register", "", map[string]string{"username": "newbie", "email": "newbie@example.org", "password": "secret1"})
+	w := e.do("POST", authAPI+"/register", "", map[string]string{"pen_name": "newbie", "email": "newbie@example.org", "password": "secret1"})
 	if w.Code != http.StatusCreated {
 		t.Fatalf("register: %d %s", w.Code, w.Body)
 	}
@@ -98,12 +99,12 @@ func TestRegisterAndActivate(t *testing.T) {
 	}
 	token := tokenIn(t, mails[0], "/auth/activate")
 
-	login := map[string]string{"login": "newbie", "password": "secret1"}
+	login := map[string]string{"email": "newbie@example.org", "password": "secret1"}
 	w = e.do("POST", authAPI+"/login", "", login)
 	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "not_activated") {
 		t.Fatalf("login before activation: %d %s", w.Code, w.Body)
 	}
-	wrong := e.do("POST", authAPI+"/login", "", map[string]string{"login": "newbie", "password": "nope-nope"})
+	wrong := e.do("POST", authAPI+"/login", "", map[string]string{"email": "newbie@example.org", "password": "nope-nope"})
 	if wrong.Code != http.StatusUnauthorized {
 		t.Errorf("wrong password on unactivated account: %d (must not reveal not_activated)", wrong.Code)
 	}
@@ -165,7 +166,7 @@ func TestRegisterValidation(t *testing.T) {
 		{strings.Repeat("c", 41), http.StatusBadRequest},
 	} {
 		name := "user" + string(tc.pw[0]) + string(rune('0'+len(tc.pw)/10)) + string(rune('0'+len(tc.pw)%10))
-		w := e.do("POST", authAPI+"/register", "", map[string]string{"username": name, "email": name + "@example.org", "password": tc.pw})
+		w := e.do("POST", authAPI+"/register", "", map[string]string{"pen_name": name, "email": name + "@example.org", "password": tc.pw})
 		if w.Code != tc.want {
 			t.Errorf("password of %d: %d, want %d", len(tc.pw), w.Code, tc.want)
 		}
@@ -173,14 +174,14 @@ func TestRegisterValidation(t *testing.T) {
 			t.Errorf("password of %d: %s", len(tc.pw), w.Body)
 		}
 	}
-	if c := e.status("POST", authAPI+"/register", "", map[string]string{"username": "", "email": "x@example.org", "password": "secret1"}); c != http.StatusBadRequest {
-		t.Errorf("no username: %d", c)
+	if c := e.status("POST", authAPI+"/register", "", map[string]string{"pen_name": "", "email": "x@example.org", "password": "secret1"}); c != http.StatusBadRequest {
+		t.Errorf("no pen name: %d", c)
 	}
-	if c := e.status("POST", authAPI+"/register", "", map[string]string{"username": "someone", "email": "", "password": "secret1"}); c != http.StatusBadRequest {
+	if c := e.status("POST", authAPI+"/register", "", map[string]string{"email": "x@example.org", "password": "secret1"}); c != http.StatusBadRequest {
+		t.Errorf("pen name missing altogether: %d", c)
+	}
+	if c := e.status("POST", authAPI+"/register", "", map[string]string{"pen_name": "someone", "email": "", "password": "secret1"}); c != http.StatusBadRequest {
 		t.Errorf("no email: %d", c)
-	}
-	if c := e.register("userb40", "secret1"); c != http.StatusConflict {
-		t.Errorf("duplicate: %d", c)
 	}
 }
 
@@ -250,7 +251,7 @@ func TestPasswordResetFlow(t *testing.T) {
 			t.Errorf("old session still works: %d", c)
 		}
 	}
-	if c := e.status("POST", authAPI+"/login", "", map[string]string{"login": "forgetful", "password": "old-password"}); c != http.StatusUnauthorized {
+	if c := e.status("POST", authAPI+"/login", "", map[string]string{"email": "forgetful@example.org", "password": "old-password"}); c != http.StatusUnauthorized {
 		t.Errorf("old password: %d", c)
 	}
 	e.login("forgetful", "new-password")
@@ -335,7 +336,7 @@ func TestActivationNeedsThePassword(t *testing.T) {
 		t.Fatalf("wrong password: %d %s", w.Code, w.Body)
 	}
 	var verified bool
-	e.as.db.QueryRow(`SELECT is_verified FROM users WHERE username = 'squatter'`).Scan(&verified)
+	e.as.db.QueryRow(`SELECT is_verified FROM users WHERE email = 'squatter@example.org'`).Scan(&verified)
 	if verified {
 		t.Fatal("activated with the wrong password")
 	}
@@ -345,17 +346,27 @@ func TestActivationNeedsThePassword(t *testing.T) {
 	}
 }
 
-func TestUsernamesFollowAO3Rules(t *testing.T) {
+// The pen name is the name of the first pseud, so it follows the rules for a
+// pseud name; it may be anything a pseud may be, including what would once
+// have been a username.
+func TestPenNameFollowsPseudRules(t *testing.T) {
 	e := newPasswordEnv(t)
+	i := 0
 	for name, want := range map[string]int{
-		"ab": http.StatusBadRequest, "a@b.org": http.StatusBadRequest, "_lead": http.StatusBadRequest,
-		"trail_": http.StatusBadRequest, "has space": http.StatusBadRequest, strings.Repeat("a", 41): http.StatusBadRequest,
-		"abc": http.StatusCreated, "under_score9": http.StatusCreated, strings.Repeat("b", 40): http.StatusCreated,
+		"": http.StatusBadRequest, "   ": http.StatusBadRequest, "a@b.org": http.StatusBadRequest,
+		"Anonymous Creator": http.StatusBadRequest, "anonymouscreator": http.StatusBadRequest,
+		"!!!": http.StatusBadRequest, "---": http.StatusBadRequest, strings.Repeat("a", 41): http.StatusBadRequest,
+		"a": http.StatusCreated, "ab": http.StatusCreated, "has space": http.StatusCreated, "under_score9": http.StatusCreated,
+		"_lead": http.StatusCreated, "Ünïcode 日本語": http.StatusCreated, strings.Repeat("b", 40): http.StatusCreated,
 	} {
+		i++
 		w := e.do("POST", authAPI+"/register", "", map[string]string{
-			"username": name, "email": strings.ReplaceAll(strings.ReplaceAll(name, "@", "at"), " ", "") + "@example.org", "password": "secret1"})
+			"pen_name": name, "email": fmt.Sprintf("pen%d@example.org", i), "password": "secret1"})
 		if w.Code != want {
-			t.Errorf("username %q: %d, want %d (%s)", name, w.Code, want, w.Body)
+			t.Errorf("pen name %q: %d, want %d (%s)", name, w.Code, want, w.Body)
+		}
+		if want == http.StatusBadRequest && !strings.Contains(w.Body.String(), "invalid_pen_name") {
+			t.Errorf("pen name %q: %s", name, w.Body)
 		}
 	}
 }
@@ -367,7 +378,7 @@ func TestPasswordChangeRevokesAppsAndResetLinks(t *testing.T) {
 	e.addUser("connected", "connected@example.org", "old-password")
 	tok := e.login("connected", "old-password")
 	var userID uuid.UUID
-	e.as.db.QueryRow(`SELECT id FROM users WHERE username = 'connected'`).Scan(&userID)
+	e.as.db.QueryRow(`SELECT id FROM users WHERE email = 'connected@example.org'`).Scan(&userID)
 	client := uuid.New()
 	e.mustExec(`INSERT INTO oauth_clients (client_id, client_name, redirect_uris, scopes) VALUES ($1, 'Reader app', '{https://app.example}', '{read}')`, client)
 	addAppToken := func() {

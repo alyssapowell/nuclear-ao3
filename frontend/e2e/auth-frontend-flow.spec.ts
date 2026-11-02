@@ -161,7 +161,7 @@ test.describe('Frontend Registration Flow', () => {
     await page.goto('/register');
     
     // Should see registration form fields
-    await expect(page.getByLabel(/username/i)).toBeVisible();
+    await expect(page.getByLabel(/pen name/i)).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /register|sign.*up|create/i })).toBeVisible();
@@ -181,7 +181,7 @@ test.describe('Frontend Registration Flow', () => {
     await page.goto('/register');
     
     // Try to register with existing user email
-    await page.getByLabel(/username/i).fill('existinguser');
+    await page.getByLabel(/pen name/i).fill('Existing User');
     await page.getByLabel(/email/i).fill(TEST_USER.email);
     await page.getByLabel(/display.*name/i).fill('Existing User');
     

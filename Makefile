@@ -72,9 +72,9 @@ keys-setup:
 	fi; \
 	if ! grep -q '^APP_UID=' .env; then echo "APP_UID=$$(id -u)" >> .env; fi
 
-grant: ## Give an account a role: make grant USER=name ROLE=admin|moderator|tag_wrangler
-	@if [ -z "$(USER)" ] || [ -z "$(ROLE)" ]; then echo "usage: make grant USER=name ROLE=admin"; exit 1; fi
-	@docker-compose run --rm app nuclear grant $(USER) $(ROLE)
+grant: ## Give an account a role: make grant ACCOUNT=you@example.org ROLE=admin|moderator|tag_wrangler
+	@if [ -z "$(ACCOUNT)" ] || [ -z "$(ROLE)" ]; then echo "usage: make grant ACCOUNT=you@example.org ROLE=admin"; exit 1; fi
+	@docker-compose run --rm app nuclear grant $(ACCOUNT) $(ROLE)
 
 jobs: ## Show background jobs (emails): waiting, running, failed, and why
 	@docker-compose run --rm app nuclear jobs
@@ -213,9 +213,9 @@ ops-restore: ## Replace the database with a backup: make ops-restore FILE=nuclea
 ops-logout-everyone: ## Log every account out (everyone logs in again)
 	@scripts/ops/logout-everyone.sh
 
-ops-logout-user: ## Log one account out: make ops-logout-user USER=name
-	@if [ "$(origin USER)" != "command line" ] || [ -z "$(USER)" ]; then echo "usage: make ops-logout-user USER=name"; exit 1; fi
-	@scripts/ops/logout-user.sh "$(USER)"
+ops-logout-user: ## Log one account out: make ops-logout-user ACCOUNT=person@example.org
+	@if [ -z "$(ACCOUNT)" ]; then echo "usage: make ops-logout-user ACCOUNT=person@example.org"; exit 1; fi
+	@scripts/ops/logout-user.sh "$(ACCOUNT)"
 
 # Performance and Monitoring
 monitor: ## Open monitoring dashboard

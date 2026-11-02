@@ -7,7 +7,7 @@ const FIRST_PARTY_CLIENT_ID = '11111111-1111-1111-1111-111111111111';
 // Test user data
 export const TEST_USER = {
   email: `test_user_${Date.now()}@example.com`,
-  username: `test_user_${Date.now()}`,
+  pen_name: `test_user_${Date.now()}`,
   password: 'TestPassword123!'
 };
 
@@ -17,7 +17,7 @@ export async function loginUser(page: Page, userSuffix?: string): Promise<string
   const suffix = userSuffix || timestamp.toString();
   const uniqueTestUser = {
     email: `e2e_test_${suffix}@example.com`,
-    username: `e2e_test_${suffix}`,
+    pen_name: `e2e_test_${suffix}`,
     password: 'E2ETestPassword123!'
   };
 

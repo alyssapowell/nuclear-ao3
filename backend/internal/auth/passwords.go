@@ -8,11 +8,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/mail"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -99,7 +99,7 @@ var (
 
 // issue stores a new token for the user and queues the email carrying it.
 // With email turned off the token is still stored but nothing is sent.
-func (as *AuthService) issue(c *gin.Context, tx *sql.Tx, k tokenKind, userID uuid.UUID, to, username string) error {
+func (as *AuthService) issue(c *gin.Context, tx *sql.Tx, k tokenKind, userID uuid.UUID, to, name string) error {
 	token, hash, err := newToken()
 	if err != nil {
 		return err
@@ -122,7 +122,7 @@ func (as *AuthService) issue(c *gin.Context, tx *sql.Tx, k tokenKind, userID uui
 	if as.mail == nil {
 		return nil
 	}
-	msg, err := k.build(as.mail, to, username, token)
+	msg, err := k.build(as.mail, to, name, token)
 	if err != nil {
 		return err
 	}
@@ -145,12 +145,12 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 	defer tx.Rollback()
 
 	var userID uuid.UUID
-	var to, username string
+	var to string
 	// The row lock makes two requests at once send one email, not two.
 	err = tx.QueryRowContext(c.Request.Context(), `
-		SELECT u.id, u.email, u.username FROM users u
+		SELECT u.id, u.email FROM users u
 		WHERE lower(u.email) = lower($1) AND `+k.eligible+`
-		LIMIT 1 FOR UPDATE`, address).Scan(&userID, &to, &username)
+		LIMIT 1 FOR UPDATE`, address).Scan(&userID, &to)
 	if err == sql.ErrNoRows {
 		return
 	}
@@ -169,7 +169,7 @@ func (as *AuthService) sendLink(c *gin.Context, k tokenKind, address string) {
 	if recent {
 		return
 	}
-	if err := as.issue(c, tx, k, userID, to, username); err != nil {
+	if err := as.issue(c, tx, k, userID, to, defaultPseudName(c.Request.Context(), tx, userID)); err != nil {
 		log.Printf("send %s link: %v", k.table, err)
 		return
 	}
@@ -194,43 +194,48 @@ func useToken(c *gin.Context, tx *sql.Tx, k tokenKind, token string) (userID uui
 	return userID, err == nil, err
 }
 
-// usernamePattern is AO3's rule: 3 to 40 letters, numbers and underscores,
-// starting and ending with a letter or number. It also means a username can
-// never look like an email address, so login can tell them apart by "@".
-var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9_]{1,38})[A-Za-z0-9]$`)
-
-const usernameMessage = "Usernames are 3 to 40 characters: letters, numbers and underscores, starting and ending with a letter or number."
+// signUpAnswer is what sign-up says whether or not the email address
+// already had an account, so the answer can't be used to find out.
+var signUpAnswer = gin.H{"message": "Account created. Check your email for a link to activate it."}
 
 // Register creates an account that can't log in until it is activated from
-// the email sent to it.
+// the email sent to it. An account has an email address, a password and a
+// pen name, the name of its first, default pseud; it has no username.
+//
+// Sign-up never says whether the email address already has an account. If it
+// does, nothing is created, the answer is the same, and the owner is emailed
+// that someone tried.
 func (as *AuthService) Register(c *gin.Context) {
 	var req struct {
-		Username    string `json:"username"`
-		Email       string `json:"email"`
-		Password    string `json:"password"`
-		DisplayName string `json:"display_name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		PenName  string `json:"pen_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 		return
 	}
-	req.Username = strings.TrimSpace(req.Username)
+	req.PenName = strings.TrimSpace(req.PenName)
 	req.Email = strings.TrimSpace(req.Email)
-	// A pseud may not be called "Anonymous Creator", and every account gets a
-	// pseud named after its username.
-	if !usernamePattern.MatchString(req.Username) || models.IsReservedPseudName(req.Username) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_username", "message": usernameMessage})
+	// The pen name is a pseud name, with a pseud's rules (which include that
+	// it may not be "Anonymous Creator").
+	if err := models.ValidatePseudName(req.PenName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_pen_name", "message": "Pen name: " + err.Error()})
 		return
 	}
-	if _, err := mail.ParseAddress(req.Email); err != nil {
+	addr, err := mail.ParseAddress(req.Email)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "message": "A valid email address is required."})
 		return
 	}
+	req.Email = addr.Address
 	if !passwordOK(req.Password) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "weak_password", "message": weakPasswordMessage})
 		return
 	}
 
+	// Hashed whether or not the address is taken, so the time taken doesn't
+	// tell either.
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("register: hash password: %v", err)
@@ -238,42 +243,100 @@ func (as *AuthService) Register(c *gin.Context) {
 		return
 	}
 
-	// The account, its activation token and the email are saved together:
-	// the email is sent if and only if the account exists.
-	tx, err := as.db.BeginTx(c.Request.Context(), nil)
+	created, err := as.createAccount(c, req.Email, string(hash), req.PenName)
 	if err != nil {
+		log.Printf("register: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
+	}
+	if !created {
+		as.tellOwnerOfSignUp(c, req.Email)
+	}
+	c.JSON(http.StatusCreated, signUpAnswer)
+}
+
+// createAccount saves the account, its default pseud, its activation token
+// and the email together: the email is sent if and only if the account
+// exists. created is false, with no error, when the email address already
+// has an account.
+func (as *AuthService) createAccount(c *gin.Context, address, hash, penName string) (created bool, err error) {
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
 	}
 	defer tx.Rollback()
 	userID := uuid.New()
-	_, err = tx.ExecContext(c.Request.Context(), `
-		INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified)
-		VALUES ($1, $2, $3, $4, $5, true, false)`,
-		userID, req.Username, req.Email, string(hash), req.DisplayName)
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO users (id, email, password_hash, is_active, is_verified)
+		VALUES ($1, $2, $3, true, false)`, userID, address, hash)
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
-		c.JSON(http.StatusConflict, gin.H{"error": "user_exists", "message": "That username or email address is already taken."})
-		return
+		return false, nil
 	}
 	if err != nil {
-		log.Printf("register: create user: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-		return
+		return false, fmt.Errorf("create user: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`,
+		userID, penName); err != nil {
+		return false, fmt.Errorf("create default pseud: %w", err)
 	}
 	if as.mail == nil {
-		log.Printf("register: activation emails are off (no mail settings), so %q can't be activated by email", req.Username)
+		log.Printf("register: activation emails are off (no mail settings), so account %s can't be activated by email", userID)
 	}
-	if err := as.issue(c, tx, activationKind, userID, req.Email, req.Username); err != nil {
-		log.Printf("register: activation email: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+	if err := as.issue(c, tx, activationKind, userID, address, penName); err != nil {
+		return false, fmt.Errorf("activation email: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// tellOwnerOfSignUp emails the owner of an account that someone tried to
+// sign up with their address. At most one of these a day per address, so
+// signing up over and over can't flood an inbox. Failures are logged, not
+// shown: the person signing up must not learn anything from them.
+func (as *AuthService) tellOwnerOfSignUp(c *gin.Context, address string) {
+	if as.mail == nil {
+		return
+	}
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("register: sign-up attempt email: %v", err)
+		return
+	}
+	defer tx.Rollback()
+	var userID uuid.UUID
+	var to string
+	err = tx.QueryRowContext(ctx, `SELECT id, email FROM users WHERE lower(email) = lower($1) FOR UPDATE`, address).Scan(&userID, &to)
+	if err != nil {
+		log.Printf("register: sign-up attempt email: %v", err)
+		return
+	}
+	msg, err := as.mail.SignUpAttempt(to, defaultPseudName(ctx, tx, userID))
+	if err != nil {
+		log.Printf("register: sign-up attempt email: %v", err)
+		return
+	}
+	var sentToday bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
+		WHERE kind = 'email' AND payload->>'to' = $1 AND payload->>'subject' = $2
+		  AND created_at > now() - interval '1 day')`, msg.To, msg.Subject).Scan(&sentToday); err != nil {
+		log.Printf("register: sign-up attempt email: %v", err)
+		return
+	}
+	if sentToday {
+		return
+	}
+	if err := jobs.Enqueue(ctx, tx, "email", msg); err != nil {
+		log.Printf("register: sign-up attempt email: %v", err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
-		return
+		log.Printf("register: sign-up attempt email: %v", err)
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "Account created. Check your email for a link to activate it."})
 }
 
 // VerifyEmail activates the account an activation link was sent to.

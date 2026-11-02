@@ -31,10 +31,10 @@ backup
 upgrade <version>
 restore <backup file name> --i-understand-this-replaces-the-database
 logout-everyone
-logout-user <username>
+logout-user <email or account id>
 ```
 
-Each value is checked against a strict pattern: a version may contain only letters, digits, `.`, `_`, `/` and `-`, may not start with `-` and may not contain `..`; a username is 3 to 40 letters, digits or `_`; a backup file must be named like `nuclear-20260101-120000.sql.gz` and is only looked for in `backups/`. Anything else is refused with "not allowed". The text is never run through a shell.
+Each value is checked against a strict pattern: a version may contain only letters, digits, `.`, `_`, `/` and `-`, may not start with `-` and may not contain `..`; an account is an email address or an account id (letters, digits and `. _ + - @` only); a backup file must be named like `nuclear-20260101-120000.sql.gz` and is only looked for in `backups/`. Anything else is refused with "not allowed". The text is never run through a shell.
 
 **What the key can do:** run those seven operations, including replacing the database and upgrading to any version in the repository. Treat it like an admin password.
 

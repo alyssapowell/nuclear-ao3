@@ -17,7 +17,6 @@ type Work struct {
 	Summary                string     `json:"summary" db:"summary"`
 	Notes                  string     `json:"notes" db:"notes"`
 	UserID                 uuid.UUID  `json:"-" db:"user_id"` // never shown: creators are named by pseud, in "authors"
-	Username               string     `json:"-"`              // Loaded from join; never shown
 	SeriesID               *uuid.UUID `json:"series_id" db:"series_id"`
 	Language               string     `json:"language" db:"language" validate:"required,len=2"`
 	Rating                 string     `json:"rating" db:"rating" validate:"required,oneof=general teen mature explicit"`
@@ -192,7 +191,6 @@ type WorkAuthor struct {
 	PseudID     *uuid.UUID `json:"id"`
 	PseudName   string     `json:"name"`
 	UserID      *uuid.UUID `json:"-"`
-	Username    string     `json:"-"`
 	IsAnonymous bool       `json:"-"`
 }
 

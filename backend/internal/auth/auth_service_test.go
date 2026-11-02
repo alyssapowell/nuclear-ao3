@@ -25,7 +25,7 @@ func TestGetProfileReturnsOwnAccountOnly(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["id"] != id.String() || got["username"] != "alice" || got["email"] != "alice@example.org" {
+	if got["id"] != id.String() || got["default_pseud"].(map[string]any)["name"] != "alice" || got["email"] != "alice@example.org" {
 		t.Errorf("wrong account: %v", got)
 	}
 	if _, leaked := got["password_hash"]; leaked {
@@ -58,7 +58,7 @@ func TestConcurrentLogins(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			codes <- e.status("POST", "/api/v1/auth/login", "", map[string]string{"login": "alice", "password": "secret1"})
+			codes <- e.status("POST", "/api/v1/auth/login", "", map[string]string{"email": "alice@example.org", "password": "secret1"})
 		}()
 	}
 	wg.Wait()

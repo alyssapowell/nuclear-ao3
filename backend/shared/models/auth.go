@@ -9,26 +9,24 @@ import (
 
 // AuthClaims represents JWT token claims
 type AuthClaims struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Username string    `json:"username"`
-	Email    string    `json:"email"`
-	Roles    []string  `json:"roles"`
+	UserID uuid.UUID `json:"user_id"`
+	Email  string    `json:"email"`
+	Roles  []string  `json:"roles"`
 	jwt.RegisteredClaims
 }
 
 // LoginRequest represents a login request
 type LoginRequest struct {
-	Login    string `json:"login"` // username or email
-	Email    string `json:"email"` // alias of Login for old clients
+	Email    string `json:"email" validate:"required"`
 	Password string `json:"password" validate:"required"`
 }
 
 // RegisterRequest represents a registration request
 type RegisterRequest struct {
-	Username        string `json:"username" validate:"required,min=3,max=50"`
 	Email           string `json:"email" validate:"required,email"`
 	Password        string `json:"password" validate:"required,min=8"`
 	ConfirmPassword string `json:"confirm_password" validate:"required,eqfield=Password"`
+	PenName         string `json:"pen_name" validate:"required,min=1,max=40"` // the name of the first, default pseud
 	DisplayName     string `json:"display_name" validate:"max=100"`
 	AcceptTOS       bool   `json:"accept_tos" validate:"required"`
 }

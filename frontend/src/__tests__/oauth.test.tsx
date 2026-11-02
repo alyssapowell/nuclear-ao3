@@ -43,7 +43,6 @@ const logIn = () => vi.mocked(localStorage.getItem).mockImplementation((k: strin
 
 // Fixture values that must never appear on a page.
 const ACCOUNT_ID = '7d1f0c52-aaaa-4bbb-8ccc-000000000001'
-const USERNAME = 'secret_account_name'
 const EMAIL = 'private.person@example.org'
 const PSEUD_A = { id: 'pppppppp-0000-4000-8000-00000000000a', name: 'Quill Shown' }
 const PSEUD_B = { id: 'pppppppp-0000-4000-8000-00000000000b', name: 'Ink Second' }
@@ -73,7 +72,7 @@ afterEach(() => {
 
 function expectNoAccountDetails() {
   const text = document.body.textContent ?? ''
-  for (const secret of [ACCOUNT_ID, USERNAME, EMAIL]) expect(text).not.toContain(secret)
+  for (const secret of [ACCOUNT_ID, EMAIL]) expect(text).not.toContain(secret)
 }
 
 describe('safeRedirect for the authorize page', () => {
@@ -454,11 +453,11 @@ describe('Admin app review', () => {
 describe('Login and logout cookie', () => {
   it('does not write the token to a cookie on login, and logout clears a leftover one', async () => {
     const cookieSet = vi.spyOn(document, 'cookie', 'set')
-    mockApi({ 'POST /api/v1/auth/login': { status: 200, body: { access_token: 't', user: { id: '1', username: 'u', email: 'e@x.org' } } } })
+    mockApi({ 'POST /api/v1/auth/login': { status: 200, body: { access_token: 't', user: { id: '1', email: 'e@x.org' } } } })
     const original = window.location
     Object.defineProperty(window, 'location', { value: { ...original, href: '' }, writable: true, configurable: true })
     render(<Login />)
-    await userEvent.type(screen.getByLabelText('Username or email'), 'u')
+    await userEvent.type(screen.getByLabelText('Email'), 'e@x.org')
     await userEvent.type(screen.getByLabelText('Password'), 'secret1')
     await userEvent.click(screen.getByRole('button', { name: 'Sign In' }))
     await waitFor(() => expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 't'))

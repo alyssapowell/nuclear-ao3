@@ -10,17 +10,21 @@ import (
 	"nuclear-ao3/shared/models"
 )
 
-// seedUser inserts an activated account straight into the database and gives
-// it the extra roles asked for. Registering through the API now needs an
-// emailed activation, which the OAuth suites have no use for.
-func seedUser(db *sql.DB, username, email, password string, roles ...string) (*models.User, error) {
+// seedUser inserts an activated account straight into the database, with a
+// default pseud called penName, and gives it the extra roles asked for.
+// Registering through the API needs an emailed activation, which the OAuth
+// suites have no use for.
+func seedUser(db *sql.DB, penName, email, password string, roles ...string) (*models.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	if err != nil {
 		return nil, err
 	}
 	id := uuid.New()
-	if _, err := db.Exec(`INSERT INTO users (id, username, email, password_hash, display_name, is_active, is_verified)
-		VALUES ($1, $2, $3, $4, $5, true, true)`, id, username, email, string(hash), username); err != nil {
+	if _, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_active, is_verified)
+		VALUES ($1, $2, $3, true, true)`, id, email, string(hash)); err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec(`INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`, id, penName); err != nil {
 		return nil, err
 	}
 	for _, role := range roles {
@@ -28,7 +32,7 @@ func seedUser(db *sql.DB, username, email, password string, roles ...string) (*m
 			return nil, err
 		}
 	}
-	return &models.User{ID: id, Username: username, Email: email, IsVerified: true}, nil
+	return &models.User{ID: id, Email: email, IsVerified: true}, nil
 }
 
 // signIn gives a request a real login: a session row and a signed token for
@@ -52,7 +56,7 @@ func signIn(as *AuthService, req *http.Request, userID uuid.UUID) error {
 func signInAsAdmin(as *AuthService, req *http.Request) error {
 	var id uuid.UUID
 	err := as.db.QueryRow(`SELECT u.id FROM users u JOIN user_roles r ON r.user_id = u.id
-		WHERE r.role = 'admin' AND r.revoked_at IS NULL AND u.username = 'client_admin'`).Scan(&id)
+		WHERE r.role = 'admin' AND r.revoked_at IS NULL AND u.email = 'client-admin@nuclear-ao3.test'`).Scan(&id)
 	if err == sql.ErrNoRows {
 		u, err := seedUser(as.db, "client_admin", "client-admin@nuclear-ao3.test", "admin-pass", "admin")
 		if err != nil {

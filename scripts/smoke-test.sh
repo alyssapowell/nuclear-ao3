@@ -59,11 +59,11 @@ activate() {
 
 register() { # name
 	curl -s -X POST "$B/auth/register" -H 'Content-Type: application/json' \
-		-d "{\"username\":\"$1\",\"email\":\"$1@example.org\",\"password\":\"$PW\",\"confirm_password\":\"$PW\"}"
+		-d "{\"pen_name\":\"$1\",\"email\":\"$1@example.org\",\"password\":\"$PW\"}"
 }
 login() { # name password -> prints the response
 	curl -s -w '\n%{http_code}' -X POST "$B/auth/login" -H 'Content-Type: application/json' \
-		-d "{\"login\":\"$1@example.org\",\"password\":\"$2\"}"
+		-d "{\"email\":\"$1@example.org\",\"password\":\"$2\"}"
 }
 token_of() { sed '$d' | json "d.get('access_token','')"; }
 
@@ -89,7 +89,7 @@ if [ "${SMOKE_READ_ONLY:-}" = "1" ]; then
 	check "works list answers" 200 "$(code "$B/works?limit=1")"
 	check "search answers" 200 "$(code "$B/search/works?q=the&limit=1")"
 
-	BAD_LOGIN='{"login":"no-such-account-smoke","password":"not-a-real-password"}'
+	BAD_LOGIN='{"email":"no-such-account-smoke@example.org","password":"not-a-real-password"}'
 	check "login rejects a wrong password" 401 "$(code -X POST "$B/auth/login" -H 'Content-Type: application/json' -d "$BAD_LOGIN")"
 	check "logged-out requests are refused" 401 "$(code "$B/auth/sessions")"
 	if [ "$FAILED" = 0 ]; then echo "All checks passed."; else echo "Some checks failed."; fi
@@ -109,8 +109,8 @@ ACT=$(token_for "$NAME@example.org" /auth/activate)
 check "activating needs the account's password" 401 "$(activate "$ACT" "wrong-$PW")"
 check "activate the account" 204 "$(activate "$ACT" "$PW")"
 check "activation link works once" 400 "$(activate "$ACT" "$PW")"
-AT_NAME='{"username":"a@b.org","email":"ab@example.org","password":"long-enough-1"}'
-check "usernames can't contain @" 400 "$(code -X POST "$B/auth/register" -H 'Content-Type: application/json' -d "$AT_NAME")"
+AT_NAME='{"pen_name":"a@b.org","email":"ab@example.org","password":"long-enough-1"}'
+check "pen names can't contain @" 400 "$(code -X POST "$B/auth/register" -H 'Content-Type: application/json' -d "$AT_NAME")"
 OLD=$(login "$NAME" "$PW" | token_of)
 [ -n "$OLD" ]; check "log in once activated" 0 $?
 NEWPW="Changed-$RANDOM-Password2"

@@ -64,12 +64,12 @@ test.describe('Multi-User Framework Demo', () => {
     // Author goes to registration
     await authorPage.goto('/auth/register');
     await expect(authorPage.locator('h1')).toContainText('Sign Up');
-    await expect(authorPage.locator('[data-testid="username"]')).toBeVisible();
+    await expect(authorPage.locator('[data-testid="email"]')).toBeVisible();
     
     // Reader goes to login  
     await readerPage.goto('/auth/login');
     await expect(readerPage.locator('h1')).toContainText('Log In');
-    await expect(readerPage.locator('[data-testid="username"]')).toBeVisible();
+    await expect(readerPage.locator('[data-testid="email"]')).toBeVisible();
     
     // Anonymous user browses works
     await anonymousPage.goto('/works');
@@ -150,12 +150,12 @@ test.describe('Multi-User Framework Demo', () => {
     
     // Both can fill forms simultaneously without interference
     await Promise.all([
-      authorPage.fill('[data-testid="username"]', 'author-demo'),
-      readerPage.fill('[data-testid="username"]', 'reader-demo')
+      authorPage.fill('[data-testid="email"]', 'author-demo'),
+      readerPage.fill('[data-testid="email"]', 'reader-demo')
     ]);
     
-    const authorValue = await authorPage.locator('[data-testid="username"]').inputValue();
-    const readerValue = await readerPage.locator('[data-testid="username"]').inputValue();
+    const authorValue = await authorPage.locator('[data-testid="email"]').inputValue();
+    const readerValue = await readerPage.locator('[data-testid="email"]').inputValue();
     
     expect(authorValue).toBe('author-demo');
     expect(readerValue).toBe('reader-demo');

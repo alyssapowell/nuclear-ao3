@@ -12,7 +12,7 @@
 // mailto (AO3 also allows ftp), and media embeds and CSS classes, which AO3
 // allows in some fields, are not supported yet.
 //
-// Titles, tag names, pseud names and usernames are plain text, not HTML, and
+// Titles, tag names, pseud names are plain text, not HTML, and
 // must not be passed through here: the web page escapes them when it shows
 // them.
 package html
