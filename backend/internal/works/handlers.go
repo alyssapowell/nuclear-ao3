@@ -3723,7 +3723,7 @@ func (ws *WorkService) CreateBookmark(c *gin.Context) {
 		}
 		requestedPseud = &pid
 	}
-	pseudID, perr := ws.commentPseud(userUUID, requestedPseud)
+	pseudID, perr := ws.actingPseud(c, userUUID, requestedPseud)
 	if perr != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "That pseud is not yours"})
 		return

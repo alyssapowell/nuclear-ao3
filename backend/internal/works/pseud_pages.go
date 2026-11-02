@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 )
 
@@ -54,6 +55,12 @@ func (ws *WorkService) loadPseudPage(c *gin.Context) (pseudPage, *uuid.UUID, boo
 	}
 	viewer := ws.getUserIDFromContext(c)
 	p.Owned = viewer != nil && *viewer == p.OwnerID
+	// A page shows its owner extra (drafts, works that hide their creator).
+	// An app gets the page as any other reader would see it, or the
+	// difference would tell the app which pseuds belong to the person.
+	if p.Owned && platform.IsApp(c) {
+		viewer, p.Owned = nil, false
+	}
 	return p, viewer, true
 }
 

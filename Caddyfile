@@ -34,9 +34,18 @@
     handle /ws {
         reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
     }
-    # Sign-in for other apps (OAuth2 / OpenID Connect) is deliberately NOT
-    # sent to the app: AO3 has no such feature, and whether to keep it is
-    # undecided (docs/FEATURES.md). Until then those addresses stay private.
+    # "Sign in with the archive" for other apps (OAuth2 / OpenID Connect).
+    # These are sent to the app by exact address, never as /auth/*: the
+    # website has its own pages under /auth (login, activate, reset password)
+    # and those must keep going to the website's files below. Do not widen
+    # this list to a prefix. /auth/register-client (admin-only) is left out
+    # on purpose: admins register apps on the website. What an app's token may
+    # do once it has one is decided by the app itself (docs/API_SCOPES.md).
+    # (One "path" line with many addresses: they are alternatives.)
+    @oauth path /.well-known/openid-configuration /.well-known/oauth-authorization-server /auth/authorize /auth/token /auth/userinfo /auth/introspect /auth/revoke /auth/jwks /auth/consent/*
+    handle @oauth {
+        reverse_proxy {$APP_HOST:app}:{$APP_PORT:8080}
+    }
 
     # The website itself: plain files built by frontend/Dockerfile into /srv.
     # Any address that isn't a file (like /works/123) gets index.html, and the

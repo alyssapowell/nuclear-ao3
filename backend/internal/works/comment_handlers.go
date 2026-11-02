@@ -15,6 +15,7 @@ import (
 	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/internal/html"
 	"nuclear-ao3/internal/moderation"
+	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
 )
@@ -45,7 +46,7 @@ func (ws *WorkService) CreateComment(c *gin.Context) {
 	var pseudonymID *uuid.UUID
 	if u := ws.getUserIDFromContext(c); u != nil {
 		userID = u
-		pid, err := ws.commentPseud(*u, req.PseudonymID)
+		pid, err := ws.actingPseud(c, *u, req.PseudonymID)
 		if err == errNotYourPseud {
 			c.JSON(http.StatusForbidden, gin.H{"error": "That pseud isn't yours"})
 			return
@@ -571,6 +572,27 @@ func shapeCommentPseud(c *models.CommentWithDetails, creatorHidden bool) {
 }
 
 var errNotYourPseud = errors.New("pseud belongs to someone else")
+
+// actingPseud is the pseud a write is made under. For the person at their own
+// browser it is commentPseud: the one they asked for, or their default. An
+// app acts under the one pseud the person shared with it. If it asks for a
+// different one it gets the same "isn't yours" answer whether or not that
+// pseud belongs to the person, so asking cannot be used to find out which
+// pseuds are theirs. An app the person shared no pseud with posts under their
+// default pseud, which the person sees as the poster of the comment.
+func (ws *WorkService) actingPseud(c *gin.Context, userID uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
+	if !platform.IsApp(c) {
+		return ws.commentPseud(userID, requested)
+	}
+	shared, has := platform.AppPseud(c)
+	if requested != nil && (!has || *requested != shared) {
+		return uuid.Nil, errNotYourPseud
+	}
+	if has {
+		return shared, nil
+	}
+	return ws.commentPseud(userID, nil)
+}
 
 // commentPseud returns the pseud a user comments under: the one they asked
 // for, if it's theirs, or else their default (created from their username if

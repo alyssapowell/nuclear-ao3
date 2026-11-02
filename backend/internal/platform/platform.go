@@ -60,11 +60,23 @@ type Deps struct {
 	DB *sql.DB
 
 	validate TokenValidator
+	app      AppTokenResolver
+	appAllow AppLimiter
+	appLimit int
+	appEvery time.Duration
 }
 
-// NewDeps builds the shared dependencies.
-func NewDeps(db *sql.DB, validate TokenValidator) *Deps {
-	return &Deps{DB: db, validate: validate}
+// Option changes how NewDeps builds Deps.
+type Option func(*Deps)
+
+// NewDeps builds the shared dependencies. Without the WithAppTokens option,
+// app (OAuth) tokens are not understood at all and only login tokens work.
+func NewDeps(db *sql.DB, validate TokenValidator, opts ...Option) *Deps {
+	d := &Deps{DB: db, validate: validate, appLimit: DefaultAppRateLimit, appEvery: DefaultAppRateWindow}
+	for _, o := range opts {
+		o(d)
+	}
+	return d
 }
 
 // Close shuts down the database connection.
@@ -75,21 +87,37 @@ func (d *Deps) Close() {
 // userFromRequest validates the Authorization: Bearer token, if any.
 // Identity comes only from a verified token, never from headers like
 // X-User-ID that a client can set.
-func (d *Deps) userFromRequest(c *gin.Context) (uuid.UUID, bool) {
+//
+// When the AppAccess gate ran first it has already decided who this is (a
+// login, or an app that passed its scope check), and that answer is used.
+// Without the gate only login tokens are accepted: an app token is never
+// believed unless the gate has checked the route's scope.
+func (d *Deps) userFromRequest(c *gin.Context) (identity, bool) {
+	if v, ok := c.Get(ctxIdentity); ok {
+		id, ok := v.(identity)
+		return id, ok && id.user != uuid.Nil
+	}
 	h := c.GetHeader("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {
-		return uuid.Nil, false
+		return identity{}, false
 	}
 	id, err := d.validate(strings.TrimPrefix(h, "Bearer "))
 	if err != nil {
-		return uuid.Nil, false
+		return identity{}, false
 	}
-	return id, true
+	return identity{user: id}, true
 }
 
-func setUser(c *gin.Context, id uuid.UUID) {
-	c.Set("user_id", id.String())
-	c.Set("user_uuid", id)
+func setUser(c *gin.Context, id identity) {
+	c.Set("user_id", id.user.String())
+	c.Set("user_uuid", id.user)
+	if id.app != nil {
+		c.Set(CtxAuthKind, "app")
+		c.Set(CtxClientID, id.app.ClientID.String())
+		c.Set(CtxScopes, id.app.Scopes)
+	} else {
+		c.Set(CtxAuthKind, "login")
+	}
 }
 
 // RequireUser rejects requests without a valid login token.
@@ -111,7 +139,7 @@ func (d *Deps) RequireUserFromQuery(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
-	setUser(c, id)
+	setUser(c, identity{user: id})
 	c.Next()
 }
 
@@ -132,6 +160,12 @@ func (d *Deps) RequireRole(roles ...string) gin.HandlerFunc {
 		id, ok := c.Get("user_uuid")
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+			return
+		}
+		// Roles are the person's own. An app never acts with them, even if
+		// a route was opened to apps by mistake.
+		if IsApp(c) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not_available_to_apps"})
 			return
 		}
 		var has bool

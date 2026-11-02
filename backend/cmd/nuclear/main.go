@@ -155,7 +155,14 @@ func main() {
 
 	// Auth comes first: everything else checks logins through it.
 	var authSvc *auth.AuthService
-	deps := platform.NewDeps(db, func(token string) (uuid.UUID, error) { return authSvc.ValidateUserToken(token) })
+	appLimit, _ := strconv.Atoi(platform.Env("APP_RATE_LIMIT_PER_MINUTE", strconv.Itoa(platform.DefaultAppRateLimit)))
+	deps := platform.NewDeps(db,
+		func(token string) (uuid.UUID, error) { return authSvc.ValidateUserToken(token) },
+		platform.WithAppTokens(
+			func(ctx context.Context, token string) (*platform.AppToken, error) {
+				return authSvc.ResolveAppToken(ctx, token)
+			},
+			auth.NewLimiter().Allow, appLimit))
 	defer deps.Close()
 
 	if authSvc, err = auth.New(db); err != nil {
@@ -186,7 +193,7 @@ func main() {
 	}
 	platform.RegisterDBMetrics(db)
 	r.Use(platform.Metrics(), gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
-		platform.PublicCache(), authSvc.RateLimitMiddleware())
+		platform.PublicCache(), authSvc.RateLimitMiddleware(), deps.AppAccess)
 	mountRoutes(r, deps, services{
 		auth:   authSvc,
 		works:  worksSvc,

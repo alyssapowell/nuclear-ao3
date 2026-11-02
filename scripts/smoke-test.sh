@@ -76,6 +76,13 @@ account() {
 
 check "site is up" 200 "$(code "$BASE/health")"
 
+# The "Sign in with the archive" addresses are published by exact path (see
+# the Caddyfile), so this also proves the proxy sends them to the app and not
+# to the website's index.html. Read-only; works in both modes.
+check "OIDC discovery has jwks_uri" yes "$(curl -s "$BASE/.well-known/openid-configuration" | json "'yes' if d.get('jwks_uri') else 'no'")"
+check "OAuth discovery answers" 200 "$(code "$BASE/.well-known/oauth-authorization-server")"
+check "the key set has keys" yes "$(curl -s "$BASE/auth/jwks" | json "'yes' if len(d.get('keys',[])) > 0 else 'no'")"
+
 # SMOKE_READ_ONLY=1 checks a live archive without changing anything: no
 # accounts, works or emails. This is what upgrades run against the real site.
 if [ "${SMOKE_READ_ONLY:-}" = "1" ]; then

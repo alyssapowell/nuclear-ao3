@@ -68,10 +68,11 @@ make service-status
 
 ### 🎯 Take It for a Test Drive
 
-**The OAuth2/OIDC API** is not published yet. Apps are registered by an admin
-(`POST /auth/register-client`, with an admin login), use the authorization-code
-flow with PKCE (S256), and can ask for the non-admin scopes only. There is no
-client-credentials grant. See `docs/FEATURES.md`.
+**The OAuth2/OIDC API** is published (exact addresses only, see the Caddyfile).
+Anyone in good standing registers an app at `/profile/my-apps`; an admin must
+approve it before it works. Apps use the authorization-code flow with PKCE
+(S256) and can ask for the non-admin scopes only. There is no client-credentials
+grant. What an app's token can reach is in `docs/API_SCOPES.md`.
 
 **Create and search works:**
 ```bash

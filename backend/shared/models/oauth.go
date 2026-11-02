@@ -292,7 +292,7 @@ var AO3OAuthScopes = map[string]OAuthScope{
 	},
 	"read": {
 		Name:            "read",
-		Description:     "Read your works, bookmarks, and other content",
+		Description:     "Read works, series, collections, comments, bookmarks and tags as you see them (including works only members can see), and what you follow",
 		Category:        "works",
 		IsDefault:       true,
 		RequiresConsent: true,
@@ -326,6 +326,14 @@ var AO3OAuthScopes = map[string]OAuthScope{
 		Name:            "bookmarks:manage",
 		Description:     "Manage your bookmarks",
 		Category:        "works",
+		IsDefault:       false,
+		RequiresConsent: true,
+		IsAdminOnly:     false,
+	},
+	"subscriptions:manage": {
+		Name:            "subscriptions:manage",
+		Description:     "Follow and unfollow authors, works, series and tags for you",
+		Category:        "social",
 		IsDefault:       false,
 		RequiresConsent: true,
 		IsAdminOnly:     false,

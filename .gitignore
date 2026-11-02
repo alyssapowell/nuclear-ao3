@@ -183,3 +183,6 @@ secrets/
 
 # Database backups made by scripts/ops/backup.sh
 backups/
+
+# A local build of the app (go build ./cmd/nuclear from backend/)
+backend/nuclear
