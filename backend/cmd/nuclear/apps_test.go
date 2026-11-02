@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,7 +58,31 @@ func TestAppsCommands(t *testing.T) {
 		t.Fatalf("list: code %d, output:\n%s", code, out)
 	}
 
-	if code, _ := run("approve", a.String()); code != 0 {
+	revision := func(id uuid.UUID) string {
+		var r int
+		if err := db.QueryRow(`SELECT revision FROM oauth_clients WHERE client_id = $1`, id).Scan(&r); err != nil {
+			t.Fatal(err)
+		}
+		return strconv.Itoa(r)
+	}
+	if !strings.Contains(out, "revision "+revision(a)) {
+		t.Errorf("the listing should show each app's revision:\n%s", out)
+	}
+	// Approving needs the revision you looked at.
+	if code, _ := run("approve", a.String()); code != 2 {
+		t.Errorf("approve without --revision: %d, want 2", code)
+	}
+	stale := revision(a)
+	if _, err := db.Exec(`UPDATE oauth_clients SET redirect_uris = ARRAY['https://elsewhere.example.org/cb'] WHERE client_id = $1`, a); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := run("approve", a.String(), "--revision", stale); code != 1 {
+		t.Errorf("approve with a stale revision: %d, want 1", code)
+	}
+	if s, _ := status(a); s == "approved" {
+		t.Fatal("an app changed after it was looked at was approved")
+	}
+	if code, _ := run("approve", a.String(), "--revision", revision(a)); code != 0 {
 		t.Fatalf("approve: %d", code)
 	}
 	if s, active := status(a); s != "approved" || !active || audited("oauth_client.approve", a) != 1 {
@@ -110,7 +135,7 @@ func TestAppsCommands(t *testing.T) {
 	if code, _ := run("approve", "not-an-id"); code == 0 {
 		t.Error("a bad id should fail")
 	}
-	if code, _ := run("approve", a.String()); code == 0 {
+	if code, _ := run("approve", a.String(), "--revision", revision(a)); code == 0 {
 		t.Error("a suspended app can't be approved from the command line")
 	}
 	if code, _ := run("delete", c.String()); code == 0 {
