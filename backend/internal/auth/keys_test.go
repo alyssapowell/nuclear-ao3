@@ -45,7 +45,7 @@ func newTestAuthService(db *sql.DB) (*AuthService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AuthService{db: db, jwt: jm}, nil
+	return &AuthService{db: db, jwt: jm, oauthRates: generousOAuthRates()}, nil
 }
 
 func newKey(t *testing.T, bits int) *rsa.PrivateKey {

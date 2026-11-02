@@ -1,8 +1,7 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/base64"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"nuclear-ao3/internal/platform"
+	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +20,32 @@ import (
 
 // OAuth2/OIDC Discovery endpoints
 
+// discoveryUnavailable answers when the archive's public address (SITE_URL)
+// is missing or still a placeholder. The provider must not name itself with
+// a made-up address.
+func discoveryUnavailable(c *gin.Context, err error) {
+	log.Printf("oauth: discovery refused: %v", err)
+	c.JSON(http.StatusServiceUnavailable, gin.H{
+		"error":             "server_error",
+		"error_description": "Sign-in with this archive is not set up yet",
+	})
+}
+
+// userinfoClaims are the claims the userinfo endpoint and the ID token
+// return today. The ao3_* extras are left out on purpose: they are removed
+// in the next phase and are not promised to apps.
+var userinfoClaims = []string{
+	"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce",
+	"name", "preferred_username", "profile", "updated_at",
+	"email", "email_verified",
+}
+
 func (as *AuthService) WellKnownOIDC(c *gin.Context) {
-	baseURL := platform.Env("BASE_URL", "https://ao3.example.com")
+	baseURL, err := oauthIssuer()
+	if err != nil {
+		discoveryUnavailable(c, err)
+		return
+	}
 
 	config := models.OIDCDiscoveryDocument{
 		Issuer:                baseURL,
@@ -30,33 +53,23 @@ func (as *AuthService) WellKnownOIDC(c *gin.Context) {
 		TokenEndpoint:         baseURL + "/auth/token",
 		UserinfoEndpoint:      baseURL + "/auth/userinfo",
 		JWKSUri:               baseURL + "/auth/jwks",
-		RegistrationEndpoint:  baseURL + "/auth/register-client",
 		RevocationEndpoint:    baseURL + "/auth/revoke",
 		IntrospectionEndpoint: baseURL + "/auth/introspect",
 
-		ScopesSupported: []string{
-			"openid", "profile", "email", "read", "write", "works:manage",
-			"comments:write", "bookmarks:manage", "collections:manage",
-		},
-		ResponseTypesSupported: []string{"code", "code id_token"},
-		ResponseModesSupported: []string{"query", "fragment", "form_post"},
-		GrantTypesSupported: []string{
-			"authorization_code", "refresh_token", "client_credentials",
-		},
-		SubjectTypesSupported:            []string{"public"},
-		IDTokenSigningAlgValuesSupported: []string{"RS256", "ES256"},
-		TokenEndpointAuthMethodsSupported: []string{
-			"client_secret_basic", "client_secret_post", "none",
-		},
-		CodeChallengeMethodsSupported: []string{"S256", "plain"},
-		ClaimsSupported: []string{
-			"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce",
-			"name", "preferred_username", "email", "email_verified",
-			"ao3_username", "ao3_display_name", "ao3_roles", "ao3_join_date",
-		},
-		ServiceDocumentation: baseURL + "/docs/oauth2",
-		OpPolicyURI:          baseURL + "/terms",
-		OpTosURI:             baseURL + "/privacy",
+		ScopesSupported:                   models.GrantableScopes(),
+		ResponseTypesSupported:            []string{"code"},
+		ResponseModesSupported:            []string{"query"},
+		GrantTypesSupported:               append([]string(nil), allowedGrantTypes...),
+		SubjectTypesSupported:             []string{"public"},
+		IDTokenSigningAlgValuesSupported:  []string{"RS256"},
+		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic", "client_secret_post", "none"},
+		// Revocation and introspection are for confidential apps only.
+		RevocationEndpointAuthMethodsSupported:    []string{"client_secret_basic", "client_secret_post"},
+		IntrospectionEndpointAuthMethodsSupported: []string{"client_secret_basic", "client_secret_post"},
+		CodeChallengeMethodsSupported:             []string{"S256"},
+		ClaimsSupported:                           userinfoClaims,
+		OpPolicyURI:                               baseURL + "/privacy",
+		OpTosURI:                                  baseURL + "/terms",
 	}
 
 	c.Header("Cache-Control", "public, max-age=3600")
@@ -64,21 +77,27 @@ func (as *AuthService) WellKnownOIDC(c *gin.Context) {
 }
 
 func (as *AuthService) WellKnownOAuth2(c *gin.Context) {
-	baseURL := platform.Env("BASE_URL", "https://ao3.example.com")
+	baseURL, err := oauthIssuer()
+	if err != nil {
+		discoveryUnavailable(c, err)
+		return
+	}
 
 	config := map[string]interface{}{
-		"issuer":                                baseURL,
-		"authorization_endpoint":                baseURL + "/auth/authorize",
-		"token_endpoint":                        baseURL + "/auth/token",
-		"jwks_uri":                              baseURL + "/auth/jwks",
-		"registration_endpoint":                 baseURL + "/auth/register-client",
-		"revocation_endpoint":                   baseURL + "/auth/revoke",
-		"introspection_endpoint":                baseURL + "/auth/introspect",
-		"scopes_supported":                      []string{"read", "write", "admin"},
-		"response_types_supported":              []string{"code"},
-		"grant_types_supported":                 []string{"authorization_code", "refresh_token", "client_credentials"},
-		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"code_challenge_methods_supported":      []string{"S256", "plain"},
+		"issuer":                                        baseURL,
+		"authorization_endpoint":                        baseURL + "/auth/authorize",
+		"token_endpoint":                                baseURL + "/auth/token",
+		"jwks_uri":                                      baseURL + "/auth/jwks",
+		"revocation_endpoint":                           baseURL + "/auth/revoke",
+		"introspection_endpoint":                        baseURL + "/auth/introspect",
+		"scopes_supported":                              models.GrantableScopes(),
+		"response_types_supported":                      []string{"code"},
+		"response_modes_supported":                      []string{"query"},
+		"grant_types_supported":                         allowedGrantTypes,
+		"token_endpoint_auth_methods_supported":         []string{"client_secret_basic", "client_secret_post", "none"},
+		"revocation_endpoint_auth_methods_supported":    []string{"client_secret_basic", "client_secret_post"},
+		"introspection_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
+		"code_challenge_methods_supported":              []string{"S256"},
 	}
 
 	c.Header("Cache-Control", "public, max-age=3600")
@@ -87,159 +106,183 @@ func (as *AuthService) WellKnownOAuth2(c *gin.Context) {
 
 // Client Registration
 
+// problemJSON is the body for a refused registration or admin change.
+func problemJSON(code, desc string) gin.H {
+	return gin.H{"error": code, "error_description": desc}
+}
+
+// adminActor says who is making an admin request, for the audit log.
+func (as *AuthService) adminActor(c *gin.Context) (audit.Actor, bool) {
+	v, ok := c.Get("user_uuid")
+	id, isID := v.(uuid.UUID)
+	if !ok || !isID {
+		return audit.Actor{}, false
+	}
+	var name string
+	if err := as.db.QueryRowContext(c.Request.Context(), `SELECT username FROM users WHERE id = $1`, id).Scan(&name); err != nil {
+		return audit.Actor{}, false
+	}
+	return audit.UserActor(id, name), true
+}
+
 func (as *AuthService) RegisterClient(c *gin.Context) {
 	var req models.ClientRegistrationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":             "invalid_request",
-			"error_description": "Invalid client registration request",
-		})
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "Invalid client registration request"))
+		return
+	}
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
 
-	// Validate redirect URIs
-	for _, uri := range req.RedirectURIs {
-		if !isValidRedirectURI(uri, req.IsPublic) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":             "invalid_redirect_uri",
-				"error_description": fmt.Sprintf("Invalid redirect URI: %s", uri),
-			})
-			return
-		}
+	if n := len([]rune(strings.TrimSpace(req.Name))); n == 0 || n > maxClientNameLen {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_client_metadata", "client_name must be 1 to 100 characters"))
+		return
+	}
+	if len([]rune(req.Description)) > maxDescriptionLen {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_client_metadata", "description is too long"))
+		return
+	}
+	if !validOptionalURL(req.Website) || !validOptionalURL(req.LogoURL) {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_client_metadata", "website and logo_url must be https addresses"))
+		return
 	}
 
-	// Validate scopes
-	for _, scope := range req.Scopes {
-		if _, exists := models.AO3OAuthScopes[scope]; !exists {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":             "invalid_scope",
-				"error_description": fmt.Sprintf("Invalid scope: %s", scope),
-			})
-			return
-		}
+	redirectURIs, problem := cleanRedirectURIs(req.RedirectURIs, req.IsPublic)
+	if problem != "" {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_redirect_uri", problem))
+		return
+	}
+	scopes, problem := cleanScopes(req.Scopes)
+	if problem != "" {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_scope", problem))
+		return
 	}
 
-	// Generate client credentials
-	clientID := uuid.New()
-	var clientSecret string
-	if !req.IsPublic {
-		secret, err := generateClientSecret()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":             "server_error",
-				"error_description": "Failed to generate client secret",
-			})
-			return
-		}
-		clientSecret = secret
-	}
-
-	// The route only lets admins through; the admin owns the client.
-	var ownerID *uuid.UUID
-	if uid, ok := c.Get("user_uuid"); ok {
-		id := uid.(uuid.UUID)
-		ownerID = &id
-	}
-
-	// Set defaults (the table refuses empty lists for these)
+	// Defaults, then the allowlists. client_credentials is not on the list.
 	if len(req.GrantTypes) == 0 {
 		req.GrantTypes = []string{"authorization_code"}
 	}
 	if len(req.ResponseTypes) == 0 {
 		req.ResponseTypes = []string{"code"}
 	}
-	if req.AccessTokenTTL == 0 {
-		req.AccessTokenTTL = 86400 // 24 hours (dev-friendly)
+	grantTypes, ok := cleanChoices(req.GrantTypes, allowedGrantTypes)
+	if !ok || !contains(grantTypes, "authorization_code") {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_client_metadata",
+			"grant_types must be authorization_code, optionally with refresh_token"))
+		return
 	}
-	if req.RefreshTokenTTL == 0 {
-		req.RefreshTokenTTL = 2592000 // 30 days
-	}
-
-	// Create client
-	client := &models.OAuthClient{
-		ID:              clientID,
-		Secret:          clientSecret,
-		Name:            req.Name,
-		Description:     req.Description,
-		Website:         req.Website,
-		LogoURL:         req.LogoURL,
-		RedirectURIs:    req.RedirectURIs,
-		Scopes:          req.Scopes,
-		GrantTypes:      req.GrantTypes,
-		ResponseTypes:   req.ResponseTypes,
-		IsPublic:        req.IsPublic,
-		IsConfidential:  !req.IsPublic,
-		IsTrusted:       false, // Admin-only
-		IsFirstParty:    false, // Admin-only
-		OwnerID:         ownerID,
-		AccessTokenTTL:  req.AccessTokenTTL,
-		RefreshTokenTTL: req.RefreshTokenTTL,
-		IsActive:        true,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+	responseTypes, ok := cleanChoices(req.ResponseTypes, allowedResponseTypes)
+	if !ok {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_client_metadata", "response_types must be code"))
+		return
 	}
 
-	// Hash client secret if present
-	if clientSecret != "" {
-		hashedSecret, err := bcrypt.GenerateFromPassword([]byte(clientSecret), bcrypt.DefaultCost)
+	// Generate client credentials
+	clientID := uuid.New()
+	var clientSecret, secretHash string
+	if !req.IsPublic {
+		secret, err := generateClientSecret()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, problemJSON("server_error", "Failed to generate client secret"))
+			return
+		}
+		clientSecret = secret
+		hashed, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 			return
 		}
-		client.Secret = string(hashedSecret)
+		secretHash = string(hashed)
 	}
 
-	// Store in database
-	query := `
+	accessTTL := clampAccessTTL(req.AccessTokenTTL)
+	refreshTTL := clampRefreshTTL(req.RefreshTokenTTL)
+
+	tx, err := as.db.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		log.Printf("register client: %v", err)
+		c.JSON(http.StatusInternalServerError, problemJSON("server_error", "Failed to register client"))
+		return
+	}
+	defer tx.Rollback()
+
+	// The route only lets admins through; the admin owns the client.
+	// Self-registered apps are not trusted or first-party.
+	var createdAt time.Time
+	err = tx.QueryRowContext(c.Request.Context(), `
 		INSERT INTO oauth_clients (
 			client_id, client_secret, client_name, description, website, logo_url,
 			redirect_uris, scopes, grant_types, response_types, is_public, is_confidential,
-			is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl,
-			is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`
-
-	_, err := as.db.Exec(query,
-		client.ID, client.Secret, client.Name, client.Description, client.Website, client.LogoURL,
-		pq.Array(client.RedirectURIs), pq.Array(client.Scopes), pq.Array(client.GrantTypes),
-		pq.Array(client.ResponseTypes), client.IsPublic, client.IsConfidential,
-		client.IsTrusted, client.IsFirstParty, client.OwnerID, client.AccessTokenTTL,
-		client.RefreshTokenTTL, client.IsActive, client.CreatedAt, client.UpdatedAt)
-
+			is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl, is_active
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false, false, $13, $14, $15, true)
+		RETURNING created_at`,
+		clientID, secretHash, strings.TrimSpace(req.Name), req.Description, req.Website, req.LogoURL,
+		pq.Array(redirectURIs), pq.Array(scopes), pq.Array(grantTypes), pq.Array(responseTypes),
+		req.IsPublic, !req.IsPublic, actor.UserID, accessTTL, refreshTTL).Scan(&createdAt)
+	if err == nil {
+		err = audit.Record(c.Request.Context(), tx, actor, "oauth_client.create", "oauth_client", clientID.String(), "",
+			map[string]any{"client_name": strings.TrimSpace(req.Name), "is_public": req.IsPublic,
+				"scopes": scopes, "grant_types": grantTypes, "redirect_uris": redirectURIs})
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
 	if err != nil {
 		log.Printf("register client: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":             "server_error",
-			"error_description": "Failed to register client",
-		})
+		c.JSON(http.StatusInternalServerError, problemJSON("server_error", "Failed to register client"))
 		return
 	}
 
-	// Return registration response
 	response := models.ClientRegistrationResponse{
 		ClientID:        clientID.String(),
-		Name:            client.Name,
-		Description:     client.Description,
-		Website:         client.Website,
-		LogoURL:         client.LogoURL,
-		RedirectURIs:    client.RedirectURIs,
-		Scopes:          client.Scopes,
-		GrantTypes:      client.GrantTypes,
-		ResponseTypes:   client.ResponseTypes,
-		IsPublic:        client.IsPublic,
-		AccessTokenTTL:  client.AccessTokenTTL,
-		RefreshTokenTTL: client.RefreshTokenTTL,
-		CreatedAt:       client.CreatedAt,
+		Name:            strings.TrimSpace(req.Name),
+		Description:     req.Description,
+		Website:         req.Website,
+		LogoURL:         req.LogoURL,
+		RedirectURIs:    redirectURIs,
+		Scopes:          scopes,
+		GrantTypes:      grantTypes,
+		ResponseTypes:   responseTypes,
+		IsPublic:        req.IsPublic,
+		AccessTokenTTL:  accessTTL,
+		RefreshTokenTTL: refreshTTL,
 	}
-
+	response.CreatedAt = createdAt
 	// Include client secret only for confidential clients
-	if !client.IsPublic {
+	if !req.IsPublic {
 		response.ClientSecret = clientSecret
 	}
-
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusCreated, response)
 }
 
 // Authorization endpoint
+
+// authzProblem is a refused authorization request that is reported to the
+// app by redirect.
+type authzProblem struct{ code, desc string }
+
+// checkAuthorizeRequest applies the rules that depend on the app: response
+// type, grant, scopes and PKCE. It returns the scopes to grant.
+func (as *AuthService) checkAuthorizeRequest(client *models.OAuthClient, req models.AuthorizeRequest) ([]string, *authzProblem) {
+	if req.ResponseType != "code" || !contains(client.ResponseTypes, req.ResponseType) {
+		return nil, &authzProblem{"unsupported_response_type", "Response type not supported"}
+	}
+	if !contains(client.GrantTypes, "authorization_code") {
+		return nil, &authzProblem{"unauthorized_client", "This app may not use the authorization code grant"}
+	}
+	scopes := parseScopes(req.Scope)
+	if !scopesAllowed(scopes, client.Scopes) {
+		return nil, &authzProblem{"invalid_scope", "Invalid scope"}
+	}
+	if !validPKCEChallenge(req.CodeChallengeMethod, req.CodeChallenge) {
+		return nil, &authzProblem{"invalid_request", "PKCE required: send a 43-character S256 code_challenge with code_challenge_method=S256"}
+	}
+	return scopes, nil
+}
 
 func (as *AuthService) Authorize(c *gin.Context) {
 	var req models.AuthorizeRequest
@@ -248,20 +291,24 @@ func (as *AuthService) Authorize(c *gin.Context) {
 		return
 	}
 
-	// Validate client
+	// Cap the size of what an app can make us hold on to.
+	if len(req.State) > maxStateLen || len(req.Nonce) > maxNonceLen ||
+		len(req.LoginHint) > maxLoginHintLen || len(req.RedirectURI) > maxRedirectURILen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request", "error_description": "A parameter is too long"})
+		return
+	}
+
+	// Validate client. Nothing is stored for an unknown or switched-off app.
 	client, err := as.getClientByID(req.ClientID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Invalid client"})
 		return
 	}
 
-	if !client.IsActive {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "Client is disabled"})
-		return
-	}
-
-	// Validate redirect URI
-	if !contains(client.RedirectURIs, req.RedirectURI) {
+	// Validate redirect URI: it must be one the app registered, character for
+	// character, and still acceptable today. Until it is verified, errors
+	// are shown here and never redirected.
+	if !contains(client.RedirectURIs, req.RedirectURI) || !validRedirectURI(req.RedirectURI, client.IsPublic) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             "invalid_request",
 			"error_description": "Invalid redirect_uri",
@@ -269,22 +316,9 @@ func (as *AuthService) Authorize(c *gin.Context) {
 		return
 	}
 
-	// Validate response type
-	if !contains(client.ResponseTypes, req.ResponseType) {
-		as.redirectWithError(c, req.RedirectURI, req.State, "unsupported_response_type", "Response type not supported")
-		return
-	}
-
-	// Validate scopes
-	requestedScopes := strings.Fields(req.Scope)
-	if !as.validateScopes(requestedScopes, client.Scopes) {
-		as.redirectWithError(c, req.RedirectURI, req.State, "invalid_scope", "Invalid scope")
-		return
-	}
-
-	// Validate PKCE for public clients
-	if client.IsPublic && req.CodeChallenge == "" {
-		as.redirectWithError(c, req.RedirectURI, req.State, "invalid_request", "PKCE required for public clients")
+	requestedScopes, problem := as.checkAuthorizeRequest(client, req)
+	if problem != nil {
+		as.redirectWithError(c, req.RedirectURI, req.State, problem.code, problem.desc)
 		return
 	}
 
@@ -293,13 +327,20 @@ func (as *AuthService) Authorize(c *gin.Context) {
 	if userID == nil {
 		// Store authorization request and redirect to login
 		authReqID := as.storeAuthorizationRequest(req)
-		loginURL := fmt.Sprintf("/login?auth_request=%s", authReqID)
+		loginURL := fmt.Sprintf("/login?auth_request=%s", url.QueryEscape(authReqID))
 		c.Redirect(http.StatusFound, loginURL)
 		return
 	}
 
-	// Check consent (skip for trusted clients)
-	if !client.IsTrusted && !as.hasValidConsent(*userID, client.ID, requestedScopes) {
+	// Check consent. A trusted app skips the screen, but the approval is
+	// still recorded, so the person can see it and take it back.
+	if client.IsTrusted {
+		if err := as.storeUserConsent(*userID, client.ID, requestedScopes); err != nil {
+			log.Printf("oauth: record trusted consent: %v", err)
+			as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to record consent")
+			return
+		}
+	} else if !as.hasValidConsent(*userID, client.ID, requestedScopes) {
 		// Show consent screen
 		as.showConsentScreen(c, client, requestedScopes, req)
 		return
@@ -308,266 +349,82 @@ func (as *AuthService) Authorize(c *gin.Context) {
 	// Generate authorization code
 	code, err := as.generateAuthorizationCode(*userID, client.ID, req)
 	if err != nil {
+		log.Printf("oauth: generate code: %v", err)
 		as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to generate authorization code")
 		return
 	}
 
 	// Redirect back to client
-	callbackURL := as.buildCallbackURL(req.RedirectURI, code, req.State)
-	c.Redirect(http.StatusFound, callbackURL)
+	c.Header("Cache-Control", "no-store")
+	c.Redirect(http.StatusFound, as.buildCallbackURL(req.RedirectURI, code, req.State))
 }
 
 // Token endpoint
 
+func tokenError(c *gin.Context, status int, code, desc string) {
+	c.JSON(status, models.TokenErrorResponse{Error: code, ErrorDescription: desc})
+}
+
+// noStore keeps proxies and browsers from keeping token responses.
+func noStore(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
+}
+
 func (as *AuthService) Token(c *gin.Context) {
-	var req models.TokenRequest
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-			Error:            "invalid_request",
-			ErrorDescription: "Invalid token request",
-		})
+	noStore(c)
+	if rejectSecretsInQuery(c) {
 		return
 	}
 
-	switch req.GrantType {
+	grant := c.PostForm("grant_type")
+	if grant != "authorization_code" && grant != "refresh_token" {
+		tokenError(c, http.StatusBadRequest, "unsupported_grant_type", "Grant type not supported")
+		return
+	}
+
+	// Public apps may skip the secret here, and only here.
+	client, err := as.authenticateClient(c, authAllowPublic)
+	if err != nil {
+		clientAuthFailed(c, err)
+		return
+	}
+	if !contains(client.GrantTypes, grant) {
+		tokenError(c, http.StatusBadRequest, "unauthorized_client", "This app may not use that grant type")
+		return
+	}
+
+	var result *tokenResult
+	var gerr *grantError
+	switch grant {
 	case "authorization_code":
-		as.handleAuthorizationCodeGrant(c, req)
+		result, gerr = as.exchangeCode(c.Request.Context(), client,
+			c.PostForm("code"), c.PostForm("redirect_uri"), c.PostForm("code_verifier"),
+			c.ClientIP(), c.GetHeader("User-Agent"))
 	case "refresh_token":
-		as.handleRefreshTokenGrant(c, req)
-	case "client_credentials":
-		as.handleClientCredentialsGrant(c, req)
-	default:
-		c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-			Error:            "unsupported_grant_type",
-			ErrorDescription: "Grant type not supported",
-		})
+		result, gerr = as.refreshTokens(c.Request.Context(), client,
+			c.PostForm("refresh_token"), c.PostForm("scope"),
+			c.ClientIP(), c.GetHeader("User-Agent"))
 	}
-}
-
-func (as *AuthService) handleAuthorizationCodeGrant(c *gin.Context, req models.TokenRequest) {
-	// Authenticate client
-	client, err := as.authenticateClient(req.ClientID, req.ClientSecret, c.Request)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.TokenErrorResponse{
-			Error:            "invalid_client",
-			ErrorDescription: "Client authentication failed",
-		})
+	if gerr != nil {
+		tokenError(c, gerr.status, gerr.code, gerr.desc)
 		return
 	}
 
-	// Validate authorization code
-	authCode, err := as.validateAuthorizationCode(req.Code, client.ID, req.RedirectURI, req.CodeVerifier)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-			Error:            "invalid_grant",
-			ErrorDescription: "Invalid authorization code",
-		})
-		return
-	}
-
-	// Generate tokens
-	accessToken, refreshToken, err := as.generateTokens(authCode.UserID, client.ID, authCode.Scopes, c.ClientIP(), c.GetHeader("User-Agent"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-			Error:            "server_error",
-			ErrorDescription: "Failed to generate tokens",
-		})
-		return
-	}
-
-	// Generate ID token for OIDC
-	var idToken string
-	if contains(authCode.Scopes, "openid") {
-		idToken, err = as.generateIDToken(authCode.UserID, client.ID, authCode.Nonce, authCode.Scopes)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-				Error:            "server_error",
-				ErrorDescription: "Failed to generate ID token",
-			})
-			return
-		}
-	}
-
-	// Mark code as used
-	as.markCodeAsUsed(authCode.Code)
-
-	// Build response
-	response := models.TokenResponse{
-		AccessToken:  accessToken.Token,
+	c.JSON(http.StatusOK, models.TokenResponse{
+		AccessToken:  result.AccessToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int(time.Until(accessToken.ExpiresAt).Seconds()),
-		RefreshToken: refreshToken.Token,
-		Scope:        strings.Join(authCode.Scopes, " "),
-	}
-
-	if idToken != "" {
-		response.IDToken = idToken
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-func (as *AuthService) handleRefreshTokenGrant(c *gin.Context, req models.TokenRequest) {
-	// Authenticate client
-	client, err := as.authenticateClient(req.ClientID, req.ClientSecret, c.Request)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.TokenErrorResponse{
-			Error:            "invalid_client",
-			ErrorDescription: "Client authentication failed",
-		})
-		return
-	}
-
-	// Validate refresh token
-	refreshToken, err := as.validateRefreshToken(req.RefreshToken, client.ID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-			Error:            "invalid_grant",
-			ErrorDescription: "Invalid refresh token",
-		})
-		return
-	}
-
-	// Determine scopes (use original scopes or subset)
-	scopes := refreshToken.Scopes
-	if req.Scope != "" {
-		requestedScopes := strings.Fields(req.Scope)
-		if !as.isScopeSubset(requestedScopes, refreshToken.Scopes) {
-			c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-				Error:            "invalid_scope",
-				ErrorDescription: "Requested scope exceeds original grant",
-			})
-			return
-		}
-		scopes = requestedScopes
-	}
-
-	// Generate new tokens
-	newAccessToken, newRefreshToken, err := as.generateTokens(refreshToken.UserID, client.ID, scopes, c.ClientIP(), c.GetHeader("User-Agent"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-			Error:            "server_error",
-			ErrorDescription: "Failed to generate tokens",
-		})
-		return
-	}
-
-	// Revoke old refresh token
-	as.revokeRefreshToken(refreshToken.ID)
-
-	// Generate new ID token for OIDC
-	var idToken string
-	if contains(scopes, "openid") {
-		idToken, err = as.generateIDToken(refreshToken.UserID, client.ID, "", scopes)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-				Error:            "server_error",
-				ErrorDescription: "Failed to generate ID token",
-			})
-			return
-		}
-	}
-
-	// Build response
-	response := models.TokenResponse{
-		AccessToken:  newAccessToken.Token,
-		TokenType:    "Bearer",
-		ExpiresIn:    int(time.Until(newAccessToken.ExpiresAt).Seconds()),
-		RefreshToken: newRefreshToken.Token,
-		Scope:        strings.Join(scopes, " "),
-	}
-
-	if idToken != "" {
-		response.IDToken = idToken
-	}
-
-	c.JSON(http.StatusOK, response)
-}
-
-func (as *AuthService) handleClientCredentialsGrant(c *gin.Context, req models.TokenRequest) {
-	// Authenticate client
-	client, err := as.authenticateClient(req.ClientID, req.ClientSecret, c.Request)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.TokenErrorResponse{
-			Error:            "invalid_client",
-			ErrorDescription: "Client authentication failed",
-		})
-		return
-	}
-
-	// Client credentials flow doesn't involve a user
-	if !contains(client.GrantTypes, "client_credentials") {
-		c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-			Error:            "unauthorized_client",
-			ErrorDescription: "Client not authorized for client credentials grant",
-		})
-		return
-	}
-
-	// Determine scopes
-	scopes := client.Scopes
-	if req.Scope != "" {
-		requestedScopes := strings.Fields(req.Scope)
-		if !as.validateScopes(requestedScopes, client.Scopes) {
-			c.JSON(http.StatusBadRequest, models.TokenErrorResponse{
-				Error:            "invalid_scope",
-				ErrorDescription: "Invalid scope",
-			})
-			return
-		}
-		scopes = requestedScopes
-	}
-
-	// Generate access token (no refresh token for client credentials)
-	tokenID := uuid.New()
-	tokenStr, err := generateSecureToken()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-			Error:            "server_error",
-			ErrorDescription: "Failed to generate token",
-		})
-		return
-	}
-
-	expiresAt := time.Now().Add(time.Duration(client.AccessTokenTTL) * time.Second)
-
-	accessToken := &models.OAuthAccessToken{
-		ID:        tokenID,
-		Token:     tokenStr,
-		UserID:    nil, // No user for client credentials
-		ClientID:  client.ID,
-		Scopes:    scopes,
-		TokenType: "Bearer",
-		ExpiresAt: expiresAt,
-		IPAddress: c.ClientIP(),
-		UserAgent: c.GetHeader("User-Agent"),
-		CreatedAt: time.Now(),
-	}
-
-	// Store access token
-	err = as.storeAccessToken(accessToken)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.TokenErrorResponse{
-			Error:            "server_error",
-			ErrorDescription: "Failed to store token",
-		})
-		return
-	}
-
-	// Build response
-	response := models.TokenResponse{
-		AccessToken: accessToken.Token,
-		TokenType:   "Bearer",
-		ExpiresIn:   int(time.Until(accessToken.ExpiresAt).Seconds()),
-		Scope:       strings.Join(scopes, " "),
-	}
-
-	c.JSON(http.StatusOK, response)
+		ExpiresIn:    result.ExpiresIn,
+		RefreshToken: result.RefreshToken,
+		Scope:        strings.Join(result.Scopes, " "),
+		IDToken:      result.IDToken,
+	})
 }
 
 // User Info endpoint (OIDC)
 
 func (as *AuthService) UserInfo(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	// Extract access token
 	token := as.extractBearerToken(c.GetHeader("Authorization"))
 	if token == "" {
@@ -597,15 +454,6 @@ func (as *AuthService) UserInfo(c *gin.Context) {
 		return
 	}
 
-	// Get user info (only for user-based tokens)
-	if accessToken.UserID == nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":             "invalid_token",
-			"error_description": "User info not available for client credentials tokens",
-		})
-		return
-	}
-
 	user, err := as.getUserByID(*accessToken.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -617,13 +465,17 @@ func (as *AuthService) UserInfo(c *gin.Context) {
 
 	// Build user info response based on scopes
 	userInfo := models.UserInfoResponse{
-		Subject: accessToken.UserID.String(),
+		Subject: accessToken.UserID.String(), // TODO(phase 2): replace with a pairwise subject
 	}
 
 	if contains(accessToken.Scopes, "profile") {
 		userInfo.Name = user.DisplayName
 		userInfo.PreferredUsername = user.Username
-		userInfo.Profile = fmt.Sprintf("https://ao3.example.com/users/%s", user.Username)
+		// The profile address is built on the archive's own address. Without
+		// a usable SITE_URL there is nothing true to say, so it is left out.
+		if issuer, err := oauthIssuer(); err == nil {
+			userInfo.Profile = fmt.Sprintf("%s/users/%s", issuer, url.PathEscape(user.Username))
+		}
 		userInfo.UpdatedAt = user.UpdatedAt.Unix()
 		userInfo.AO3Username = user.Username
 		userInfo.AO3DisplayName = user.DisplayName
@@ -655,67 +507,19 @@ func (as *AuthService) UserInfo(c *gin.Context) {
 // Token introspection
 
 func (as *AuthService) Introspect(c *gin.Context) {
-	var req models.IntrospectRequest
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":             "invalid_request",
-			"error_description": "Invalid introspection request",
-		})
+	noStore(c)
+	if rejectSecretsInQuery(c) {
 		return
 	}
 
-	// Authenticate client
-	_, err := as.authenticateClient(req.ClientID, req.ClientSecret, c.Request)
+	// Only apps that can keep a secret may ask, and only about their own tokens.
+	client, err := as.authenticateClient(c, authConfidentialOnly)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":             "invalid_client",
-			"error_description": "Client authentication failed",
-		})
+		clientAuthFailed(c, err)
 		return
 	}
 
-	// Validate token
-	accessToken, err := as.validateAccessToken(req.Token)
-	if err != nil {
-		// Return inactive for invalid tokens
-		c.JSON(http.StatusOK, models.IntrospectResponse{Active: false})
-		return
-	}
-
-	// Build introspection response
-	response := models.IntrospectResponse{
-		Active:   true,
-		Scope:    strings.Join(accessToken.Scopes, " "),
-		ClientID: accessToken.ClientID.String(),
-	}
-
-	// Add user info if available (not for client credentials)
-	if accessToken.UserID != nil {
-		user, err := as.getUserByID(*accessToken.UserID)
-		if err != nil {
-			c.JSON(http.StatusOK, models.IntrospectResponse{Active: false})
-			return
-		}
-		response.Username = user.Username
-		response.Subject = accessToken.UserID.String()
-	}
-
-	response.TokenType = accessToken.TokenType
-	response.ExpiresAt = accessToken.ExpiresAt.Unix()
-	response.IssuedAt = accessToken.CreatedAt.Unix()
-	response.JWTID = accessToken.ID.String()
-
-	c.JSON(http.StatusOK, response)
-}
-
-// Token revocation
-
-func (as *AuthService) Revoke(c *gin.Context) {
 	token := c.PostForm("token")
-	tokenTypeHint := c.PostForm("token_type_hint")
-	clientID := c.PostForm("client_id")
-	clientSecret := c.PostForm("client_secret")
-
 	if token == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             "invalid_request",
@@ -724,95 +528,126 @@ func (as *AuthService) Revoke(c *gin.Context) {
 		return
 	}
 
-	// Authenticate client
-	_, err := as.authenticateClient(clientID, clientSecret, c.Request)
+	// Validate token
+	accessToken, err := as.validateAccessToken(token)
+	if err != nil || accessToken.ClientID != client.ID {
+		// Unknown, expired, revoked, or another app's token: all look the same.
+		c.JSON(http.StatusOK, models.IntrospectResponse{Active: false})
+		return
+	}
+
+	response := models.IntrospectResponse{
+		Active:    true,
+		Scope:     strings.Join(accessToken.Scopes, " "),
+		ClientID:  accessToken.ClientID.String(),
+		TokenType: accessToken.TokenType,
+		ExpiresAt: accessToken.ExpiresAt.Unix(),
+		IssuedAt:  accessToken.CreatedAt.Unix(),
+		JWTID:     accessToken.ID.String(),
+		// TODO(phase 2): replace with the pairwise subject for this app.
+		Subject: accessToken.UserID.String(),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// Token revocation
+
+func (as *AuthService) Revoke(c *gin.Context) {
+	noStore(c)
+	if rejectSecretsInQuery(c) {
+		return
+	}
+
+	// Revocation is for apps that can keep a secret.
+	client, err := as.authenticateClient(c, authConfidentialOnly)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":             "invalid_client",
-			"error_description": "Client authentication failed",
+		clientAuthFailed(c, err)
+		return
+	}
+
+	token := c.PostForm("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":             "invalid_request",
+			"error_description": "Missing token parameter",
 		})
 		return
 	}
 
-	// Try to revoke as refresh token first, then access token
-	if tokenTypeHint == "refresh_token" || tokenTypeHint == "" {
-		if as.revokeRefreshTokenByValue(token) {
-			c.Status(http.StatusOK)
-			return
-		}
-	}
-
-	if tokenTypeHint == "access_token" || tokenTypeHint == "" {
-		if as.revokeAccessTokenByValue(token) {
-			c.Status(http.StatusOK)
-			return
-		}
-	}
+	// token_type_hint is only a hint (RFC 7009): look for the token as both
+	// kinds. Only this app's own tokens can be found, and revoking one also
+	// revokes the token it is linked to.
+	as.revokeOwnToken(c.Request.Context(), client.ID, hashSecret(token))
 
 	// Return 200 even if token not found (per RFC 7009)
 	c.Status(http.StatusOK)
 }
 
+// revokeOwnToken revokes the access or refresh token with this hash if it
+// belongs to the app, along with its partner: a refresh token's access token,
+// or an access token's refresh token.
+func (as *AuthService) revokeOwnToken(ctx context.Context, clientID uuid.UUID, tokenHash string) {
+	var accessID uuid.UUID
+	err := as.db.QueryRowContext(ctx, `
+		UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now()
+		WHERE token_hash = $1 AND client_id = $2 AND NOT is_revoked
+		RETURNING access_token_id`, tokenHash, clientID).Scan(&accessID)
+	if err == nil {
+		as.db.ExecContext(ctx,
+			`UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now() WHERE id = $1 AND client_id = $2 AND NOT is_revoked`,
+			accessID, clientID)
+	}
+
+	err = as.db.QueryRowContext(ctx, `
+		UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = now()
+		WHERE token_hash = $1 AND client_id = $2 AND NOT is_revoked
+		RETURNING id`, tokenHash, clientID).Scan(&accessID)
+	if err == nil {
+		as.db.ExecContext(ctx,
+			`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE access_token_id = $1 AND client_id = $2 AND NOT is_revoked`,
+			accessID, clientID)
+	}
+}
+
 // Helper functions
 
-func (as *AuthService) getClientByID(clientID string) (*models.OAuthClient, error) {
-	client := &models.OAuthClient{}
-	query := `
-		SELECT client_id, client_secret, client_name, description, website, logo_url,
-			redirect_uris, scopes, grant_types, response_types, is_public, is_confidential,
-			is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl,
-			is_active, created_at, updated_at
-		FROM oauth_clients 
-		WHERE client_id = $1 AND is_active = true`
+const clientColumns = `client_id, COALESCE(client_secret, ''), client_name, COALESCE(description, ''),
+	COALESCE(website, ''), COALESCE(logo_url, ''), redirect_uris, scopes, grant_types, response_types,
+	is_public, is_confidential, is_trusted, is_first_party, owner_id, access_token_ttl, refresh_token_ttl,
+	is_active, created_at, updated_at`
 
-	err := as.db.QueryRow(query, clientID).Scan(
+type rowScanner interface{ Scan(dest ...any) error }
+
+func scanClient(row rowScanner) (*models.OAuthClient, error) {
+	client := &models.OAuthClient{}
+	err := row.Scan(
 		&client.ID, &client.Secret, &client.Name, &client.Description, &client.Website, &client.LogoURL,
 		pq.Array(&client.RedirectURIs), pq.Array(&client.Scopes), pq.Array(&client.GrantTypes),
 		pq.Array(&client.ResponseTypes), &client.IsPublic, &client.IsConfidential,
 		&client.IsTrusted, &client.IsFirstParty, &client.OwnerID, &client.AccessTokenTTL,
 		&client.RefreshTokenTTL, &client.IsActive, &client.CreatedAt, &client.UpdatedAt)
-
-	return client, err
-}
-
-func generateClientSecret() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
-func generateSecureToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes), nil
-}
-
-func isValidRedirectURI(uri string, isPublic bool) bool {
-	parsed, err := url.Parse(uri)
 	if err != nil {
-		return false
+		return nil, err
 	}
+	return client, nil
+}
 
-	// For public clients, allow localhost and custom schemes
-	if isPublic {
-		if parsed.Scheme == "http" && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1") {
-			return true
-		}
-		if parsed.Scheme != "https" && parsed.Scheme != "http" {
-			return true // Custom schemes for mobile apps
-		}
+// getClientByID finds an app that is switched on. It is what every user-facing
+// and app-facing path uses: a switched-off app does not exist to them.
+func (as *AuthService) getClientByID(clientID string) (*models.OAuthClient, error) {
+	id, err := uuid.Parse(clientID)
+	if err != nil {
+		return nil, err
 	}
+	return scanClient(as.db.QueryRow(
+		`SELECT `+clientColumns+` FROM oauth_clients WHERE client_id = $1 AND is_active = true`, id))
+}
 
-	// For confidential clients, require HTTPS (except localhost)
-	if parsed.Scheme != "https" {
-		return parsed.Scheme == "http" && (parsed.Hostname() == "localhost" || parsed.Hostname() == "127.0.0.1")
-	}
-
-	return true
+// getClientForAdmin finds an app whether or not it is switched on.
+func (as *AuthService) getClientForAdmin(id uuid.UUID) (*models.OAuthClient, error) {
+	return scanClient(as.db.QueryRow(
+		`SELECT `+clientColumns+` FROM oauth_clients WHERE client_id = $1`, id))
 }
 
 func contains(slice []string, item string) bool {
@@ -824,49 +659,58 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-func (as *AuthService) validateScopes(requested, allowed []string) bool {
-	for _, scope := range requested {
-		if !contains(allowed, scope) {
-			return false
-		}
-	}
-	return true
+func (as *AuthService) isScopeSubset(subset, superset []string) bool {
+	return subsetOf(subset, superset)
 }
 
-func (as *AuthService) isScopeSubset(subset, superset []string) bool {
-	for _, scope := range subset {
-		if !contains(superset, scope) {
-			return false
-		}
+// errorRedirectURL builds the address that sends an error back to an app.
+// The pieces are set with the URL parser, so nothing the app or the person
+// typed can add parameters or change the destination. It returns "" if the
+// address does not parse.
+func errorRedirectURL(redirectURI, state, errorCode, errorDescription string) string {
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return ""
 	}
-	return true
+	q := u.Query()
+	q.Set("error", errorCode)
+	if errorDescription != "" {
+		q.Set("error_description", errorDescription)
+	}
+	if state != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func (as *AuthService) redirectWithError(c *gin.Context, redirectURI, state, errorCode, errorDescription string) {
-	if redirectURI == "" {
+	target := ""
+	if redirectURI != "" {
+		target = errorRedirectURL(redirectURI, state, errorCode, errorDescription)
+	}
+	if target == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":             errorCode,
 			"error_description": errorDescription,
 		})
 		return
 	}
-
-	errorURL := fmt.Sprintf("%s?error=%s&error_description=%s",
-		redirectURI, url.QueryEscape(errorCode), url.QueryEscape(errorDescription))
-
-	if state != "" {
-		errorURL += "&state=" + url.QueryEscape(state)
-	}
-
-	c.Redirect(http.StatusFound, errorURL)
+	c.Redirect(http.StatusFound, target)
 }
 
 func (as *AuthService) buildCallbackURL(redirectURI, code, state string) string {
-	callbackURL := fmt.Sprintf("%s?code=%s", redirectURI, url.QueryEscape(code))
-	if state != "" {
-		callbackURL += "&state=" + url.QueryEscape(state)
+	u, err := url.Parse(redirectURI)
+	if err != nil {
+		return redirectURI
 	}
-	return callbackURL
+	q := u.Query()
+	q.Set("code", code)
+	if state != "" {
+		q.Set("state", state)
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func (as *AuthService) extractBearerToken(authHeader string) string {
@@ -881,11 +725,3 @@ func (as *AuthService) extractBearerToken(authHeader string) string {
 
 	return parts[1]
 }
-
-// Additional helper functions would be implemented here:
-// - storeAuthorizationRequest, showConsentScreen, generateAuthorizationCode
-// - validateAuthorizationCode, generateTokens, generateIDToken
-// - validateAccessToken, validateRefreshToken, etc.
-//
-// These would handle the database operations and business logic
-// for the complete OAuth2/OIDC flow.

@@ -371,8 +371,8 @@ func TestPasswordChangeRevokesAppsAndResetLinks(t *testing.T) {
 	client := uuid.New()
 	e.mustExec(`INSERT INTO oauth_clients (client_id, client_name, redirect_uris, scopes) VALUES ($1, 'Reader app', '{https://app.example}', '{read}')`, client)
 	addAppToken := func() {
-		e.mustExec(`INSERT INTO oauth_access_tokens (id, token, user_id, client_id, scopes, expires_at)
-			VALUES ($1, $2, $3, $4, '{read}', now() + interval '1 hour')`, uuid.New(), uuid.NewString(), userID, client)
+		e.mustExec(`INSERT INTO oauth_access_tokens (id, token_hash, user_id, client_id, scopes, expires_at, family_id)
+			VALUES ($1, $2, $3, $4, '{read}', now() + interval '1 hour', $5)`, uuid.New(), hashSecret(uuid.NewString()), userID, client, uuid.New())
 	}
 	liveAppTokens := func() (n int) {
 		e.as.db.QueryRow(`SELECT
@@ -381,8 +381,8 @@ func TestPasswordChangeRevokesAppsAndResetLinks(t *testing.T) {
 			(SELECT count(*) FROM user_consents WHERE user_id = $1 AND NOT is_revoked)`, userID).Scan(&n)
 		return
 	}
-	e.mustExec(`INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, expires_at)
-		VALUES ('unexchanged', $1, $2, 'https://app.example', '{read}', now() + interval '10 minutes')`, client, userID)
+	e.mustExec(`INSERT INTO authorization_codes (code_hash, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at)
+		VALUES ($3, $1, $2, 'https://app.example', '{read}', $4, 'S256', now() + interval '10 minutes')`, client, userID, hashSecret("unexchanged"), testChallenge)
 	e.mustExec(`INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at) VALUES ($1, $2, $3, '{read}', now())`,
 		uuid.New(), userID, client)
 

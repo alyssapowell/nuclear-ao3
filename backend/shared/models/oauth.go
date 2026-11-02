@@ -1,6 +1,7 @@
 package models
 
 import (
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -160,17 +161,17 @@ type OIDCAddress struct {
 // Request/Response types
 
 type ClientRegistrationRequest struct {
-	Name            string   `json:"client_name" validate:"required,min=1,max=100"`
-	Description     string   `json:"description" validate:"max=500"`
-	Website         string   `json:"website" validate:"omitempty,url"`
-	LogoURL         string   `json:"logo_url" validate:"omitempty,url"`
-	RedirectURIs    []string `json:"redirect_uris" validate:"required,min=1,dive,required,uri"`
-	Scopes          []string `json:"scopes" validate:"required,min=1"`
-	GrantTypes      []string `json:"grant_types" validate:"required,min=1"`
-	ResponseTypes   []string `json:"response_types" validate:"required,min=1"`
+	Name            string   `json:"client_name"`
+	Description     string   `json:"description"`
+	Website         string   `json:"website"`
+	LogoURL         string   `json:"logo_url"`
+	RedirectURIs    []string `json:"redirect_uris"`
+	Scopes          []string `json:"scopes"`
+	GrantTypes      []string `json:"grant_types"`
+	ResponseTypes   []string `json:"response_types"`
 	IsPublic        bool     `json:"is_public"`
-	AccessTokenTTL  int      `json:"access_token_ttl" validate:"min=300,max=86400"`     // 5 min to 24 hours
-	RefreshTokenTTL int      `json:"refresh_token_ttl" validate:"min=3600,max=2592000"` // 1 hour to 30 days
+	AccessTokenTTL  int      `json:"access_token_ttl"`  // seconds; the server clamps it to 300-3600
+	RefreshTokenTTL int      `json:"refresh_token_ttl"` // seconds; the server clamps it to 3600-30 days
 }
 
 type ClientRegistrationResponse struct {
@@ -198,7 +199,7 @@ type AuthorizeRequest struct {
 	State               string `form:"state"`
 	Nonce               string `form:"nonce"`          // OIDC
 	CodeChallenge       string `form:"code_challenge"` // PKCE
-	CodeChallengeMethod string `form:"code_challenge_method" validate:"omitempty,oneof=S256 plain"`
+	CodeChallengeMethod string `form:"code_challenge_method" validate:"omitempty,oneof=S256"`
 	Display             string `form:"display" validate:"omitempty,oneof=page popup touch wap"`
 	Prompt              string `form:"prompt" validate:"omitempty,oneof=none login consent select_account"`
 	MaxAge              int    `form:"max_age"`
@@ -207,7 +208,7 @@ type AuthorizeRequest struct {
 }
 
 type TokenRequest struct {
-	GrantType    string `form:"grant_type" validate:"required,oneof=authorization_code refresh_token client_credentials"`
+	GrantType    string `form:"grant_type"`
 	Code         string `form:"code"`
 	RedirectURI  string `form:"redirect_uri"`
 	ClientID     string `form:"client_id"`
@@ -215,8 +216,6 @@ type TokenRequest struct {
 	RefreshToken string `form:"refresh_token"`
 	Scope        string `form:"scope"`
 	CodeVerifier string `form:"code_verifier"` // PKCE
-	Username     string `form:"username"`      // Resource Owner Password Credentials (if enabled)
-	Password     string `form:"password"`      // Resource Owner Password Credentials (if enabled)
 }
 
 type TokenResponse struct {
@@ -245,7 +244,6 @@ type IntrospectResponse struct {
 	Active    bool   `json:"active"`
 	Scope     string `json:"scope,omitempty"`
 	ClientID  string `json:"client_id,omitempty"`
-	Username  string `json:"username,omitempty"`
 	TokenType string `json:"token_type,omitempty"`
 	ExpiresAt int64  `json:"exp,omitempty"`
 	IssuedAt  int64  `json:"iat,omitempty"`
@@ -423,4 +421,31 @@ var AO3OAuthScopes = map[string]OAuthScope{
 		RequiresConsent: true,
 		IsAdminOnly:     true,
 	},
+}
+
+// IsAdminOnlyScope reports whether a scope can never be granted to an app.
+// AO3OAuthScopes is the one list the server reads. The oauth_scopes table
+// (migration 003) mirrors it, and a test checks the two agree.
+func IsAdminOnlyScope(name string) bool {
+	s, ok := AO3OAuthScopes[name]
+	return ok && s.IsAdminOnly
+}
+
+// IsGrantableScope reports whether an app may ask for the scope: it exists
+// and is not admin-only.
+func IsGrantableScope(name string) bool {
+	s, ok := AO3OAuthScopes[name]
+	return ok && !s.IsAdminOnly
+}
+
+// GrantableScopes lists every scope an app may ask for, in a stable order.
+func GrantableScopes() []string {
+	out := make([]string, 0, len(AO3OAuthScopes))
+	for name, s := range AO3OAuthScopes {
+		if !s.IsAdminOnly {
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

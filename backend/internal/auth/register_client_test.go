@@ -14,7 +14,7 @@ func TestOnlyAdminsCanRegisterOAuthClients(t *testing.T) {
 	e.mustExec(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'admin')`, adminID)
 
 	client := map[string]any{
-		"name":          "Some app",
+		"client_name":   "Some app",
 		"redirect_uris": []string{"https://app.example.org/callback"},
 		"scopes":        []string{"read"},
 		"grant_types":   []string{"authorization_code"},

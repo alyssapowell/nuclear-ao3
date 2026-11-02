@@ -68,24 +68,10 @@ make service-status
 
 ### 🎯 Take It for a Test Drive
 
-**Try the OAuth2/OIDC API:**
-```bash
-# Register an OAuth2 client
-curl -X POST http://localhost:8088/auth/register-client \
-  -H "Content-Type: application/json" \
-  -d '{
-    "client_name": "My Test App",
-    "redirect_uris": ["https://example.com/callback"],
-    "scopes": ["read", "write"],
-    "grant_types": ["client_credentials"],
-    "response_types": ["code"]
-  }'
-
-# Get an access token (replace YOUR_CLIENT_ID and YOUR_CLIENT_SECRET)
-curl -X POST http://localhost:8088/auth/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET"
-```
+**The OAuth2/OIDC API** is not published yet. Apps are registered by an admin
+(`POST /auth/register-client`, with an admin login), use the authorization-code
+flow with PKCE (S256), and can ask for the non-admin scopes only. There is no
+client-credentials grant. See `docs/FEATURES.md`.
 
 **Create and search works:**
 ```bash
@@ -113,14 +99,8 @@ curl "http://localhost:8088/api/v1/search/works?q=fanfic" | jq
 # Start services
 make dev-setup
 
-# Register your app
-curl -X POST http://localhost:8088/auth/register-client \
-  -H "Content-Type: application/json" \
-  -d '{"client_name": "My App", "redirect_uris": ["http://localhost:3000/callback"], "scopes": ["read", "write"], "grant_types": ["authorization_code", "client_credentials"], "response_types": ["code"]}'
-
-# Use client credentials for testing
-curl -X POST http://localhost:8088/auth/token \
-  -d "grant_type=client_credentials&client_id=YOUR_ID&client_secret=YOUR_SECRET"
+# Then register an app as an admin and follow the authorization-code flow
+# with PKCE (see docs/FEATURES.md). SITE_URL must be set to the archive's address.
 ```
 
 **2. Frontend Developer Building UI:**
@@ -378,15 +358,6 @@ make performance-test
 ```bash
 # 1. Get OAuth2 discovery info
 curl http://localhost:8088/.well-known/openid-configuration | jq
-
-# 2. Register a client
-curl -X POST http://localhost:8088/auth/register-client \
-  -H "Content-Type: application/json" \
-  -d '{"client_name": "Test App", "redirect_uris": ["https://example.com"], "scopes": ["read"], "grant_types": ["client_credentials"], "response_types": ["code"]}'
-
-# 3. Get access token
-curl -X POST http://localhost:8088/auth/token \
-  -d "grant_type=client_credentials&client_id=YOUR_ID&client_secret=YOUR_SECRET"
 ```
 
 **Test Work Management:**

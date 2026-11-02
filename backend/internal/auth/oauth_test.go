@@ -144,7 +144,7 @@ func (suite *OAuth2TestSuite) createTestClients() {
 		{
 			name:          "public_client",
 			isPublic:      true,
-			redirectURIs:  []string{"https://mobile-app.com/callback", "myapp://oauth/callback"},
+			redirectURIs:  []string{"https://mobile-app.com/callback", "com.example.myapp://oauth/callback"},
 			scopes:        []string{"read", "profile"},
 			grantTypes:    []string{"authorization_code", "refresh_token"},
 			responseTypes: []string{"code"},
@@ -154,16 +154,8 @@ func (suite *OAuth2TestSuite) createTestClients() {
 			isPublic:      false,
 			redirectURIs:  []string{"https://nuclear-ao3.com/auth/callback"},
 			scopes:        []string{"read", "write", "works:manage", "bookmarks:manage", "profile", "email"},
-			grantTypes:    []string{"authorization_code", "refresh_token", "client_credentials"},
+			grantTypes:    []string{"authorization_code", "refresh_token"},
 			responseTypes: []string{"code"},
-		},
-		{
-			name:          "service_client",
-			isPublic:      false,
-			redirectURIs:  []string{"https://api.external.com/callback"},
-			scopes:        []string{"read"},
-			grantTypes:    []string{"client_credentials"},
-			responseTypes: []string{},
 		},
 	}
 
@@ -248,7 +240,7 @@ func (suite *OAuth2TestSuite) TestClientRegistration_PublicClient_Success() {
 	regReq := models.ClientRegistrationRequest{
 		Name:            "Mobile App",
 		Description:     "A mobile application",
-		RedirectURIs:    []string{"myapp://oauth/callback"},
+		RedirectURIs:    []string{"com.example.myapp://oauth/callback"},
 		Scopes:          []string{"read", "profile"},
 		GrantTypes:      []string{"authorization_code", "refresh_token"},
 		ResponseTypes:   []string{"code"},
@@ -370,7 +362,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_ConfidentialClient_Success()
 	user := suite.testUsers["oauth_user"]
 
 	// Step 1: Initiate authorization
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=read profile&state=random_state",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=read profile&state=random_state"+pkceParams,
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 
@@ -398,16 +390,17 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_ConfidentialClient_Success()
 	// Step 2: Exchange authorization code for tokens
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	tokenW := httptest.NewRecorder()
 	tokenReq_, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	tokenReq_.Header.Set("Content-Type", "application/json")
+	tokenReq_.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(tokenW, tokenReq_)
 
@@ -478,10 +471,10 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_PKCE_Success() {
 		CodeVerifier: codeVerifier,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	tokenW := httptest.NewRecorder()
 	tokenReq_, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	tokenReq_.Header.Set("Content-Type", "application/json")
+	tokenReq_.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(tokenW, tokenReq_)
 
@@ -523,10 +516,10 @@ func (suite *OAuth2TestSuite) TestAuthorizationFlow_InvalidPKCE() {
 		CodeVerifier: "wrong_verifier",
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	tokenW := httptest.NewRecorder()
 	tokenReq_, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	tokenReq_.Header.Set("Content-Type", "application/json")
+	tokenReq_.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(tokenW, tokenReq_)
 
@@ -573,10 +566,10 @@ func (suite *OAuth2TestSuite) TestTokenIntrospection_ValidToken() {
 		ClientSecret: client.Secret,
 	}
 
-	introspectBody, _ := json.Marshal(introspectReq)
+	introspectBody := formBody(introspectReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/introspect", bytes.NewBuffer(introspectBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -588,7 +581,6 @@ func (suite *OAuth2TestSuite) TestTokenIntrospection_ValidToken() {
 	assert.True(suite.T(), response.Active)
 	assert.Equal(suite.T(), "read profile", response.Scope)
 	assert.Equal(suite.T(), client.ID.String(), response.ClientID)
-	assert.Equal(suite.T(), "oauth_user", response.Username)
 	assert.Equal(suite.T(), "Bearer", response.TokenType)
 	assert.Greater(suite.T(), response.ExpiresAt, time.Now().Unix())
 }
@@ -602,10 +594,10 @@ func (suite *OAuth2TestSuite) TestTokenIntrospection_InvalidToken() {
 		ClientSecret: client.Secret,
 	}
 
-	introspectBody, _ := json.Marshal(introspectReq)
+	introspectBody := formBody(introspectReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/introspect", bytes.NewBuffer(introspectBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -626,10 +618,10 @@ func (suite *OAuth2TestSuite) TestTokenIntrospection_InvalidClient() {
 		ClientSecret: "invalid-secret",
 	}
 
-	introspectBody, _ := json.Marshal(introspectReq)
+	introspectBody := formBody(introspectReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/introspect", bytes.NewBuffer(introspectBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -731,10 +723,10 @@ func (suite *OAuth2TestSuite) TestTokenRevocation_AccessToken() {
 		ClientSecret: client.Secret,
 	}
 
-	introspectBody, _ := json.Marshal(introspectReq)
+	introspectBody := formBody(introspectReq)
 	introspectW := httptest.NewRecorder()
 	introspectReq_, _ := http.NewRequest("POST", "/auth/introspect", bytes.NewBuffer(introspectBody))
-	introspectReq_.Header.Set("Content-Type", "application/json")
+	introspectReq_.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(introspectW, introspectReq_)
 
@@ -770,10 +762,10 @@ func (suite *OAuth2TestSuite) TestTokenRevocation_RefreshToken() {
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	tokenW := httptest.NewRecorder()
 	tokenReq_, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	tokenReq_.Header.Set("Content-Type", "application/json")
+	tokenReq_.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(tokenW, tokenReq_)
 
@@ -785,7 +777,7 @@ func (suite *OAuth2TestSuite) TestTokenRevocation_RefreshToken() {
 func (suite *OAuth2TestSuite) TestScopeValidation_InvalidScope() {
 	client := suite.testClients["confidential_client"]
 
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=admin",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=admin"+pkceParams,
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 
@@ -822,54 +814,6 @@ func (suite *OAuth2TestSuite) TestScopeValidation_ExceedsClientScopes() {
 	assert.Contains(suite.T(), location, "error=invalid_scope")
 }
 
-// Test Client Credentials Grant
-
-func (suite *OAuth2TestSuite) TestClientCredentials_Success() {
-	client := suite.testClients["service_client"]
-
-	tokenReq := models.TokenRequest{
-		GrantType:    "client_credentials",
-		Scope:        "read",
-		ClientID:     client.ID.String(),
-		ClientSecret: client.Secret,
-	}
-
-	tokenBody, _ := json.Marshal(tokenReq)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
-
-	var tokenResp models.TokenResponse
-	err := json.Unmarshal(w.Body.Bytes(), &tokenResp)
-	assert.NoError(suite.T(), err)
-	assert.NotEmpty(suite.T(), tokenResp.AccessToken)
-	assert.Empty(suite.T(), tokenResp.RefreshToken) // No refresh token for client credentials
-	assert.Equal(suite.T(), "Bearer", tokenResp.TokenType)
-}
-
-func (suite *OAuth2TestSuite) TestClientCredentials_UnauthorizedClient() {
-	client := suite.testClients["public_client"] // Doesn't support client_credentials
-
-	tokenReq := models.TokenRequest{
-		GrantType: "client_credentials",
-		Scope:     "read",
-		ClientID:  client.ID.String(),
-	}
-
-	tokenBody, _ := json.Marshal(tokenReq)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	suite.router.ServeHTTP(w, req)
-
-	assert.Equal(suite.T(), http.StatusBadRequest, w.Code)
-}
-
 // Test Refresh Token Flow
 
 func (suite *OAuth2TestSuite) TestRefreshToken_Success() {
@@ -883,10 +827,10 @@ func (suite *OAuth2TestSuite) TestRefreshToken_Success() {
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -913,10 +857,10 @@ func (suite *OAuth2TestSuite) TestRefreshToken_ScopeReduction() {
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -941,10 +885,10 @@ func (suite *OAuth2TestSuite) TestRefreshToken_ScopeExpansion_ShouldFail() {
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -963,16 +907,17 @@ func (suite *OAuth2TestSuite) TestAuthorizationCode_DoubleUse_ShouldFail() {
 	// Use it once
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w1 := httptest.NewRecorder()
 	req1, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w1, req1)
 	assert.Equal(suite.T(), http.StatusOK, w1.Code)
@@ -980,7 +925,7 @@ func (suite *OAuth2TestSuite) TestAuthorizationCode_DoubleUse_ShouldFail() {
 	// Try to use it again - should fail
 	w2 := httptest.NewRecorder()
 	req2, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w2, req2)
 	assert.Equal(suite.T(), http.StatusBadRequest, w2.Code)
@@ -1025,16 +970,17 @@ func (suite *OAuth2TestSuite) getValidTokenPair(client *models.OAuthClient, user
 
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -1046,21 +992,11 @@ func (suite *OAuth2TestSuite) getValidTokenPair(client *models.OAuthClient, user
 func (suite *OAuth2TestSuite) getAuthorizationCode(client *models.OAuthClient, user *models.User, scopes []string) string {
 	scopeStr := strings.Join(scopes, " ")
 
-	var authURL string
-	if client.IsPublic {
-		codeVerifier := suite.generateCodeVerifier()
-		codeChallenge := suite.generateCodeChallenge(codeVerifier)
-		authURL = fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&code_challenge=%s&code_challenge_method=S256",
-			client.ID.String(),
-			url.QueryEscape(client.RedirectURIs[0]),
-			url.QueryEscape(scopeStr),
-			codeChallenge)
-	} else {
-		authURL = fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s",
-			client.ID.String(),
-			url.QueryEscape(client.RedirectURIs[0]),
-			url.QueryEscape(scopeStr))
-	}
+	// PKCE is required of every app. The tests share one verifier (testVerifier).
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s",
+		client.ID.String(),
+		url.QueryEscape(client.RedirectURIs[0]),
+		url.QueryEscape(scopeStr)) + pkceParams
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)
@@ -1079,7 +1015,7 @@ func (suite *OAuth2TestSuite) TestAuthorize_AsksForConsentFirst() {
 	_, err := suite.db.Exec(`DELETE FROM user_consents WHERE user_id = $1`, user.ID)
 	suite.Require().NoError(err)
 
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=read&state=s1",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=read&state=s1"+pkceParams,
 		client.ID, url.QueryEscape(client.RedirectURIs[0]))
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", authURL, nil)

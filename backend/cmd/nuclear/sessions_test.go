@@ -2,12 +2,21 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"nuclear-ao3/internal/testdb"
 )
+
+// fakeHash is a stand-in for a stored token hash: 64 hex digits.
+func fakeHash(id uuid.UUID) string {
+	sum := sha256.Sum256([]byte(id.String()))
+	return hex.EncodeToString(sum[:])
+}
 
 func TestRevokeSessions(t *testing.T) {
 	db := testdb.New(t)
@@ -34,12 +43,12 @@ func TestRevokeSessions(t *testing.T) {
 			}
 		}
 		at := uuid.New()
-		if _, err := db.Exec(`INSERT INTO oauth_access_tokens (id, token, user_id, client_id, scopes, expires_at)
-			VALUES ($1, $2, $3, $4, ARRAY['read'], now() + interval '1 hour')`, at, at.String(), uid, client); err != nil {
+		if _, err := db.Exec(`INSERT INTO oauth_access_tokens (id, token_hash, user_id, client_id, scopes, expires_at, family_id)
+			VALUES ($1, $2, $3, $4, ARRAY['read'], now() + interval '1 hour', $5)`, at, fakeHash(at), uid, client, uuid.New()); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec(`INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, expires_at)
-			VALUES ($1, $2, $3, 'http://x/cb', ARRAY['read'], now() + interval '5 minutes')`, uuid.NewString(), client, uid); err != nil {
+		if _, err := db.Exec(`INSERT INTO authorization_codes (code_hash, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at)
+			VALUES ($1, $2, $3, 'http://x/cb', ARRAY['read'], $4, 'S256', now() + interval '5 minutes')`, fakeHash(uuid.New()), client, uid, strings.Repeat("a", 43)); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Exec(`INSERT INTO user_consents (id, user_id, client_id, scopes) VALUES ($1, $2, $3, ARRAY['read'])`,
@@ -47,8 +56,8 @@ func TestRevokeSessions(t *testing.T) {
 			t.Fatal(err)
 		}
 		rt := uuid.New()
-		if _, err := db.Exec(`INSERT INTO oauth_refresh_tokens (id, token, access_token_id, user_id, client_id, scopes, expires_at)
-			VALUES ($1, $2, $3, $4, $5, ARRAY['read'], now() + interval '1 day')`, rt, rt.String(), at, uid, client); err != nil {
+		if _, err := db.Exec(`INSERT INTO oauth_refresh_tokens (id, token_hash, access_token_id, user_id, client_id, scopes, expires_at, family_id, family_created_at)
+			VALUES ($1, $2, $3, $4, $5, ARRAY['read'], now() + interval '1 day', $6, now())`, rt, fakeHash(rt), at, uid, client, uuid.New()); err != nil {
 			t.Fatal(err)
 		}
 	}

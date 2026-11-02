@@ -143,16 +143,17 @@ func (suite *OIDCTestSuite) TestOIDCFlow_WithIDToken() {
 	// Step 2: Exchange for tokens (should include ID token)
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -179,16 +180,17 @@ func (suite *OIDCTestSuite) TestOIDCFlow_WithoutOpenIDScope_NoIDToken() {
 	// Exchange for tokens
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -205,16 +207,17 @@ func (suite *OIDCTestSuite) TestIDToken_ClaimsValidation() {
 
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -259,16 +262,17 @@ func (suite *OIDCTestSuite) TestIDToken_ExpirationValidation() {
 
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 
@@ -333,7 +337,7 @@ func (suite *OIDCTestSuite) TestConsentFlow_FirstTime() {
 	suite.Require().NoError(err)
 
 	// First authorization asks the person instead of issuing a code
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile email&state=consent_test",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile email&state=consent_test"+pkceParams,
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 
@@ -381,7 +385,7 @@ func (suite *OIDCTestSuite) TestConsentFlow_PreviouslyGranted() {
 	suite.grantConsent(user.ID, client.ID, []string{"openid", "profile", "email"})
 
 	// Second authorization should skip consent
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile email",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile email"+pkceParams,
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 
@@ -420,7 +424,7 @@ func (suite *OIDCTestSuite) TestConsentRevocation() {
 	assert.Equal(suite.T(), http.StatusUnauthorized, uw.Code)
 
 	// And the next authorization asks again instead of issuing a code
-	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile",
+	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=openid profile"+pkceParams,
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]))
 	authW := httptest.NewRecorder()
@@ -463,7 +467,7 @@ func (suite *OIDCTestSuite) getAuthorizationCode(client *models.OAuthClient, use
 	authURL := fmt.Sprintf("/auth/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s",
 		client.ID.String(),
 		url.QueryEscape(client.RedirectURIs[0]),
-		url.QueryEscape(scopeStr))
+		url.QueryEscape(scopeStr)) + pkceParams
 
 	if nonce != "" {
 		authURL += "&nonce=" + url.QueryEscape(nonce)
@@ -485,16 +489,17 @@ func (suite *OIDCTestSuite) getAccessToken(client *models.OAuthClient, user *mod
 
 	tokenReq := models.TokenRequest{
 		GrantType:    "authorization_code",
+		CodeVerifier: testVerifier,
 		Code:         authCode,
 		RedirectURI:  client.RedirectURIs[0],
 		ClientID:     client.ID.String(),
 		ClientSecret: client.Secret,
 	}
 
-	tokenBody, _ := json.Marshal(tokenReq)
+	tokenBody := formBody(tokenReq)
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/auth/token", bytes.NewBuffer(tokenBody))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	suite.router.ServeHTTP(w, req)
 

@@ -36,68 +36,53 @@ func (suite *DebugTestSuite) TearDownSuite() {
 	}
 }
 
-func (suite *DebugTestSuite) TestDebugClientCredentials() {
-	// First, register a client
-	clientReq := models.ClientRegistrationRequest{
-		Name:          "Test Client",
-		Description:   "Test OAuth2 client",
-		Website:       "https://example.com",
-		RedirectURIs:  []string{"https://example.com/callback"},
-		Scopes:        []string{"read", "write"},
-		GrantTypes:    []string{"client_credentials"},
-		ResponseTypes: []string{"code"}, // Add required response types
-		IsPublic:      false,
+// The client-credentials grant is gone: an app cannot be registered for it,
+// and asking for it at the token endpoint is refused even by an app that
+// authenticates correctly.
+func (suite *DebugTestSuite) TestClientCredentialsGrantIsGone() {
+	register := func(grants []string) *httptest.ResponseRecorder {
+		clientReq := models.ClientRegistrationRequest{
+			Name:          "Test Client",
+			Description:   "Test OAuth2 client",
+			Website:       "https://example.com",
+			RedirectURIs:  []string{"https://example.com/callback"},
+			Scopes:        []string{"read", "write"},
+			GrantTypes:    grants,
+			ResponseTypes: []string{"code"},
+			IsPublic:      false,
+		}
+		reqBody, _ := json.Marshal(clientReq)
+		req := httptest.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		suite.Require().NoError(signInAsAdmin(suite.authService, req))
+		w := httptest.NewRecorder()
+		suite.router.ServeHTTP(w, req)
+		return w
 	}
 
-	reqBody, _ := json.Marshal(clientReq)
-	req := httptest.NewRequest("POST", "/auth/register-client", bytes.NewBuffer(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	suite.Require().NoError(signInAsAdmin(suite.authService, req))
-	w := httptest.NewRecorder()
-	suite.router.ServeHTTP(w, req)
+	suite.Equal(http.StatusBadRequest, register([]string{"client_credentials"}).Code)
+	suite.Equal(http.StatusBadRequest, register([]string{"authorization_code", "client_credentials"}).Code)
 
-	// Debug: Print client registration response
-	suite.T().Logf("Client Registration Status: %d", w.Code)
-	suite.T().Logf("Client Registration Body: %s", w.Body.String())
-
-	if w.Code != http.StatusCreated {
-		suite.T().Fatalf("Client registration failed")
-		return
-	}
-
+	w := register([]string{"authorization_code"})
+	suite.Require().Equal(http.StatusCreated, w.Code)
 	var clientResp models.ClientRegistrationResponse
-	err := json.Unmarshal(w.Body.Bytes(), &clientResp)
-	suite.Require().NoError(err)
+	suite.Require().NoError(json.Unmarshal(w.Body.Bytes(), &clientResp))
 
-	// Debug: Print client details
-	suite.T().Logf("Client ID: %s", clientResp.ClientID)
-	suite.T().Logf("Client Secret: %s", clientResp.ClientSecret)
-
-	// Now test client credentials flow
 	tokenData := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {clientResp.ClientID},
 		"client_secret": {clientResp.ClientSecret},
 		"scope":         {"read"},
 	}
-
 	tokenReq := httptest.NewRequest("POST", "/auth/token", strings.NewReader(tokenData.Encode()))
 	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	tokenW := httptest.NewRecorder()
-
 	suite.router.ServeHTTP(tokenW, tokenReq)
 
-	// Debug: Print response
-	suite.T().Logf("Token Response Status: %d", tokenW.Code)
-	suite.T().Logf("Token Response Body: %s", tokenW.Body.String())
-
-	if tokenW.Code != http.StatusOK {
-		// Let's see what the error is
-		var errorResp models.TokenErrorResponse
-		if err := json.Unmarshal(tokenW.Body.Bytes(), &errorResp); err == nil {
-			suite.T().Logf("Token Error: %s - %s", errorResp.Error, errorResp.ErrorDescription)
-		}
-	}
+	suite.Equal(http.StatusBadRequest, tokenW.Code)
+	var errorResp models.TokenErrorResponse
+	suite.Require().NoError(json.Unmarshal(tokenW.Body.Bytes(), &errorResp))
+	suite.Equal("unsupported_grant_type", errorResp.Error)
 }
 
 func TestDebugTestSuite(t *testing.T) {

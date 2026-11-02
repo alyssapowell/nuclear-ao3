@@ -2,63 +2,21 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 
-	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// Client authentication
-
-func (as *AuthService) authenticateClient(clientID, clientSecret string, r *http.Request) (*models.OAuthClient, error) {
-	client, err := as.getClientByID(clientID)
-	if err != nil {
-		return nil, fmt.Errorf("client not found")
-	}
-
-	// Public clients don't need authentication
-	if client.IsPublic {
-		if clientSecret != "" {
-			return nil, fmt.Errorf("public clients must not send secret")
-		}
-		return client, nil
-	}
-
-	// Confidential clients must authenticate
-	if clientSecret == "" {
-		// Try HTTP Basic Auth
-		basicClientID, basicSecret, ok := r.BasicAuth()
-		if !ok {
-			return nil, fmt.Errorf("client authentication required")
-		}
-		if basicClientID != clientID {
-			return nil, fmt.Errorf("client ID mismatch")
-		}
-		clientSecret = basicSecret
-	}
-
-	// Verify client secret
-	if err := bcrypt.CompareHashAndPassword([]byte(client.Secret), []byte(clientSecret)); err != nil {
-		return nil, fmt.Errorf("invalid client secret")
-	}
-
-	return client, nil
-}
 
 // Authorization request handling
 
@@ -112,8 +70,9 @@ func (as *AuthService) getAuthenticatedUser(c *gin.Context) *uuid.UUID {
 
 // Consent management
 
+// hasValidConsent says whether the user has a live approval for this app
+// that covers every one of the scopes.
 func (as *AuthService) hasValidConsent(userID, clientID uuid.UUID, scopes []string) bool {
-	// Check if user has already consented to these scopes for this client
 	query := `
 		SELECT scopes FROM user_consents 
 		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false 
@@ -125,7 +84,12 @@ func (as *AuthService) hasValidConsent(userID, clientID uuid.UUID, scopes []stri
 		return false
 	}
 
-	// Check if all requested scopes are covered by consent
+	// Admin-only scopes never count, whatever an old row says.
+	for _, s := range scopes {
+		if !models.IsGrantableScope(s) {
+			return false
+		}
+	}
 	return as.isScopeSubset(scopes, consentedScopes)
 }
 
@@ -169,7 +133,9 @@ func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthCli
 		"scopes":             scopes,
 		"scope_descriptions": scopeDescriptions,
 		"consent_url":        fmt.Sprintf("/auth/consent/%s", consentID),
-		"cancel_url":         req.RedirectURI + "?error=access_denied&state=" + req.State,
+		// Built with the URL parser, so a hostile state value can't add
+		// parameters or change where it points.
+		"cancel_url": errorRedirectURL(req.RedirectURI, req.State, "access_denied", ""),
 	})
 }
 
@@ -187,14 +153,10 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		Scopes           []string                `json:"scopes"`
 		AuthorizeRequest models.AuthorizeRequest `json:"authorize_request"`
 	}
-	if err := json.Unmarshal(consentJSON, &consentData); err != nil {
+	if err := json.Unmarshal(consentJSON, &consentData); err != nil || consentData.Client == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent data"})
 		return
 	}
-
-	// Extract data
-	clientID := consentData.Client.ID
-	scopes := consentData.Scopes
 
 	userID := as.getAuthenticatedUser(c)
 	if userID == nil {
@@ -212,298 +174,96 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		return
 	}
 
+	// The app may have been switched off or changed since the screen was
+	// shown, so check the request again against the app as it is now.
+	req := consentData.AuthorizeRequest
+	client, err := as.getClientByID(consentData.Client.ID.String())
+	if err != nil || !contains(client.RedirectURIs, req.RedirectURI) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "This app is no longer available"})
+		return
+	}
+	scopes, problem := as.checkAuthorizeRequest(client, req)
+	if problem != nil {
+		as.redirectWithError(c, req.RedirectURI, req.State, problem.code, problem.desc)
+		return
+	}
+
 	if !approved {
 		// User denied consent
-		req := consentData.AuthorizeRequest
 		as.redirectWithError(c, req.RedirectURI, req.State, "access_denied", "User denied access")
 		return
 	}
 
 	// Store consent
-	as.storeUserConsent(*userID, clientID, scopes)
+	if err := as.storeUserConsent(*userID, client.ID, scopes); err != nil {
+		log.Printf("oauth: store consent: %v", err)
+		as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to record consent")
+		return
+	}
 
 	// Continue with authorization
-	req := consentData.AuthorizeRequest
-	code, err := as.generateAuthorizationCode(*userID, clientID, req)
+	code, err := as.generateAuthorizationCode(*userID, client.ID, req)
 	if err != nil {
 		as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to generate code")
 		return
 	}
 
-	callbackURL := as.buildCallbackURL(req.RedirectURI, code, req.State)
-	c.Redirect(http.StatusFound, callbackURL)
+	c.Redirect(http.StatusFound, as.buildCallbackURL(req.RedirectURI, code, req.State))
 }
 
+// storeUserConsent records that the user allows an app these scopes. A new
+// approval adds to what was approved before; after a revocation it starts
+// again from only what was just approved.
 func (as *AuthService) storeUserConsent(userID, clientID uuid.UUID, scopes []string) error {
 	query := `
 		INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at, is_revoked)
-		VALUES ($1, $2, $3, $4, $5, false)
+		VALUES ($1, $2, $3, $4, now(), false)
 		ON CONFLICT (user_id, client_id) 
-		DO UPDATE SET scopes = $4, granted_at = $5, is_revoked = false`
+		DO UPDATE SET
+			scopes = CASE WHEN user_consents.is_revoked THEN EXCLUDED.scopes
+				ELSE ARRAY(SELECT DISTINCT s FROM unnest(user_consents.scopes || EXCLUDED.scopes) s) END,
+			granted_at = now(), is_revoked = false, revoked_at = NULL`
 
-	_, err := as.db.Exec(query, uuid.New(), userID, clientID, pq.Array(scopes), time.Now())
+	_, err := as.db.Exec(query, uuid.New(), userID, clientID, pq.Array(scopes))
 	return err
 }
 
 // Authorization code management
 
+// generateAuthorizationCode stores a code that is good for 60 seconds and
+// tied to the redirect address it was asked for, and returns the raw code.
+// Only the code's hash is kept.
 func (as *AuthService) generateAuthorizationCode(userID, clientID uuid.UUID, req models.AuthorizeRequest) (string, error) {
-	// Generate secure code
-	codeBytes := make([]byte, 32)
-	if _, err := rand.Read(codeBytes); err != nil {
+	code, err := randomToken()
+	if err != nil {
 		return "", err
 	}
-	code := base64.URLEncoding.EncodeToString(codeBytes)
-
-	// Store authorization code
-	authCode := &models.AuthorizationCode{
-		Code:                code,
-		ClientID:            clientID,
-		UserID:              userID,
-		RedirectURI:         req.RedirectURI,
-		Scopes:              strings.Fields(req.Scope),
-		State:               req.State,
-		Nonce:               req.Nonce,
-		CodeChallenge:       req.CodeChallenge,
-		CodeChallengeMethod: req.CodeChallengeMethod,
-		ExpiresAt:           time.Now().Add(time.Minute * 10), // 10 minute expiry
-		CreatedAt:           time.Now(),
-	}
-
-	query := `
+	_, err = as.db.Exec(`
 		INSERT INTO authorization_codes (
-			code, client_id, user_id, redirect_uri, scopes, state, nonce,
-			code_challenge, code_challenge_method, expires_at, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
-
-	_, err := as.db.Exec(query,
-		authCode.Code, authCode.ClientID, authCode.UserID, authCode.RedirectURI,
-		pq.Array(authCode.Scopes), authCode.State, authCode.Nonce,
-		authCode.CodeChallenge, authCode.CodeChallengeMethod,
-		authCode.ExpiresAt, authCode.CreatedAt)
-
-	return code, err
-}
-
-func (as *AuthService) validateAuthorizationCode(code string, clientID uuid.UUID, redirectURI, codeVerifier string) (*models.AuthorizationCode, error) {
-	authCode := &models.AuthorizationCode{}
-
-	query := `
-		SELECT code, client_id, user_id, redirect_uri, scopes, state, nonce,
-			code_challenge, code_challenge_method, expires_at, used_at, created_at
-		FROM authorization_codes 
-		WHERE code = $1 AND client_id = $2 AND used_at IS NULL`
-
-	err := as.db.QueryRow(query, code, clientID).Scan(
-		&authCode.Code, &authCode.ClientID, &authCode.UserID, &authCode.RedirectURI,
-		pq.Array(&authCode.Scopes), &authCode.State, &authCode.Nonce,
-		&authCode.CodeChallenge, &authCode.CodeChallengeMethod,
-		&authCode.ExpiresAt, &authCode.UsedAt, &authCode.CreatedAt)
-
+			code_hash, client_id, user_id, redirect_uri, scopes, state, nonce,
+			code_challenge, code_challenge_method, expires_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + $10 * interval '1 second')`,
+		hashSecret(code), clientID, userID, req.RedirectURI, pq.Array(parseScopes(req.Scope)),
+		req.State, req.Nonce, req.CodeChallenge, req.CodeChallengeMethod, int(authCodeTTL.Seconds()))
 	if err != nil {
-		return nil, fmt.Errorf("invalid authorization code")
+		return "", err
 	}
-
-	// Check expiry
-	if time.Now().After(authCode.ExpiresAt) {
-		return nil, fmt.Errorf("authorization code expired")
-	}
-
-	// Check redirect URI
-	if authCode.RedirectURI != redirectURI {
-		return nil, fmt.Errorf("redirect URI mismatch")
-	}
-
-	// Validate PKCE if present
-	if authCode.CodeChallenge != "" {
-		if codeVerifier == "" {
-			return nil, fmt.Errorf("code verifier required")
-		}
-
-		if !as.validatePKCE(authCode.CodeChallenge, authCode.CodeChallengeMethod, codeVerifier) {
-			return nil, fmt.Errorf("invalid code verifier")
-		}
-	}
-
-	return authCode, nil
-}
-
-func (as *AuthService) validatePKCE(codeChallenge, codeChallengeMethod, codeVerifier string) bool {
-	switch codeChallengeMethod {
-	case "S256":
-		hash := sha256.Sum256([]byte(codeVerifier))
-		computed := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(hash[:])
-		return computed == codeChallenge
-	case "plain":
-		return codeVerifier == codeChallenge
-	default:
-		return false
-	}
-}
-
-func (as *AuthService) markCodeAsUsed(code string) {
-	query := `UPDATE authorization_codes SET used_at = NOW() WHERE code = $1`
-	as.db.Exec(query, code)
-}
-
-// Token management
-
-func (as *AuthService) generateTokens(userID, clientID uuid.UUID, scopes []string, ipAddress, userAgent string) (*models.OAuthAccessToken, *models.OAuthRefreshToken, error) {
-	// Generate access token
-	accessTokenStr, err := generateSecureToken()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	refreshTokenStr, err := generateSecureToken()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Get client to determine TTL
-	client, err := as.getClientByID(clientID.String())
-	if err != nil {
-		return nil, nil, err
-	}
-
-	accessToken := &models.OAuthAccessToken{
-		ID:        uuid.New(),
-		Token:     accessTokenStr,
-		UserID:    &userID,
-		ClientID:  clientID,
-		Scopes:    scopes,
-		TokenType: "Bearer",
-		ExpiresAt: time.Now().Add(time.Duration(client.AccessTokenTTL) * time.Second),
-		IPAddress: ipAddress,
-		UserAgent: userAgent,
-		CreatedAt: time.Now(),
-	}
-
-	refreshToken := &models.OAuthRefreshToken{
-		ID:            uuid.New(),
-		Token:         refreshTokenStr,
-		AccessTokenID: accessToken.ID,
-		UserID:        userID,
-		ClientID:      clientID,
-		Scopes:        scopes,
-		ExpiresAt:     time.Now().Add(time.Duration(client.RefreshTokenTTL) * time.Second),
-		CreatedAt:     time.Now(),
-	}
-
-	// Store tokens in database
-	if err := as.storeAccessToken(accessToken); err != nil {
-		return nil, nil, err
-	}
-
-	if err := as.storeRefreshToken(refreshToken); err != nil {
-		return nil, nil, err
-	}
-
-	return accessToken, refreshToken, nil
-}
-
-// inetOrZero makes a client address fit an inet column: an address that does
-// not parse (for example none, behind a unix socket) is stored as 0.0.0.0, as
-// sessions do, instead of failing the whole request.
-func inetOrZero(ip string) string {
-	if net.ParseIP(ip) == nil {
-		return "0.0.0.0"
-	}
-	return ip
-}
-
-func (as *AuthService) storeAccessToken(token *models.OAuthAccessToken) error {
-	query := `
-		INSERT INTO oauth_access_tokens (
-			id, token, user_id, client_id, scopes, token_type, expires_at,
-			is_revoked, ip_address, user_agent, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $9, $10)`
-
-	_, err := as.db.Exec(query,
-		token.ID, token.Token, token.UserID, token.ClientID, pq.Array(token.Scopes),
-		token.TokenType, token.ExpiresAt, inetOrZero(token.IPAddress), token.UserAgent, token.CreatedAt)
-
-	return err
-}
-
-func (as *AuthService) storeRefreshToken(token *models.OAuthRefreshToken) error {
-	query := `
-		INSERT INTO oauth_refresh_tokens (
-			id, token, access_token_id, user_id, client_id, scopes, expires_at,
-			is_revoked, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8)`
-
-	_, err := as.db.Exec(query,
-		token.ID, token.Token, token.AccessTokenID, token.UserID, token.ClientID,
-		pq.Array(token.Scopes), token.ExpiresAt, token.CreatedAt)
-
-	return err
-}
-
-func (as *AuthService) validateAccessToken(token string) (*models.OAuthAccessToken, error) {
-	accessToken := &models.OAuthAccessToken{}
-
-	query := `
-		SELECT id, token, user_id, client_id, scopes, token_type, expires_at,
-			is_revoked, last_used, ip_address, user_agent, created_at
-		FROM oauth_access_tokens 
-		WHERE token = $1 AND is_revoked = false`
-
-	err := as.db.QueryRow(query, token).Scan(
-		&accessToken.ID, &accessToken.Token, &accessToken.UserID, &accessToken.ClientID,
-		pq.Array(&accessToken.Scopes), &accessToken.TokenType, &accessToken.ExpiresAt,
-		&accessToken.IsRevoked, &accessToken.LastUsed, &accessToken.IPAddress,
-		&accessToken.UserAgent, &accessToken.CreatedAt)
-
-	if err != nil {
-		return nil, fmt.Errorf("invalid access token")
-	}
-
-	// Check expiry
-	if time.Now().After(accessToken.ExpiresAt) {
-		return nil, fmt.Errorf("access token expired")
-	}
-
-	return accessToken, nil
-}
-
-func (as *AuthService) validateRefreshToken(token string, clientID uuid.UUID) (*models.OAuthRefreshToken, error) {
-	refreshToken := &models.OAuthRefreshToken{}
-
-	query := `
-		SELECT id, token, access_token_id, user_id, client_id, scopes, expires_at,
-			is_revoked, last_used, created_at
-		FROM oauth_refresh_tokens 
-		WHERE token = $1 AND client_id = $2 AND is_revoked = false`
-
-	err := as.db.QueryRow(query, token, clientID).Scan(
-		&refreshToken.ID, &refreshToken.Token, &refreshToken.AccessTokenID,
-		&refreshToken.UserID, &refreshToken.ClientID, pq.Array(&refreshToken.Scopes),
-		&refreshToken.ExpiresAt, &refreshToken.IsRevoked, &refreshToken.LastUsed,
-		&refreshToken.CreatedAt)
-
-	if err != nil {
-		return nil, fmt.Errorf("invalid refresh token")
-	}
-
-	// Check expiry
-	if time.Now().After(refreshToken.ExpiresAt) {
-		return nil, fmt.Errorf("refresh token expired")
-	}
-
-	return refreshToken, nil
+	return code, nil
 }
 
 // OIDC ID Token generation
 
 func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string, scopes []string) (string, error) {
+	issuer, err := oauthIssuer()
+	if err != nil {
+		return "", err
+	}
 	user, err := as.getUserByID(userID)
 	if err != nil {
 		return "", err
 	}
 
 	now := time.Now()
-	baseURL := platform.Env("BASE_URL", "https://ao3.example.com")
 
 	// Set auth_time to last login or current time if never logged in
 	authTime := now.Unix()
@@ -512,8 +272,8 @@ func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string,
 	}
 
 	claims := models.OIDCClaims{
-		Issuer:    baseURL,
-		Subject:   userID.String(),
+		Issuer:    issuer,
+		Subject:   userID.String(), // TODO(phase 2): replace with a pairwise subject
 		Audience:  clientID.String(),
 		ExpiresAt: now.Add(time.Hour).Unix(),
 		IssuedAt:  now.Unix(),
@@ -525,7 +285,7 @@ func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string,
 	if contains(scopes, "profile") {
 		claims.Name = user.DisplayName
 		claims.PreferredUsername = user.Username
-		claims.Profile = fmt.Sprintf("%s/users/%s", baseURL, user.Username)
+		claims.Profile = fmt.Sprintf("%s/users/%s", issuer, url.PathEscape(user.Username))
 		claims.UpdatedAt = user.UpdatedAt.Unix()
 		claims.AO3Username = user.Username
 		claims.AO3DisplayName = user.DisplayName
@@ -571,37 +331,55 @@ func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string,
 		"ao3_work_count":     claims.AO3WorkCount,
 		"ao3_bookmark_count": claims.AO3BookmarkCount,
 	})
+	// Name the signing key, so apps can pick the right key from the JWKS.
+	token.Header["kid"] = as.jwt.keyID
 
 	return token.SignedString(as.jwt.privateKey)
 }
 
-// Token revocation
+// Revoking access
 
-func (as *AuthService) revokeRefreshToken(tokenID uuid.UUID) {
-	query := `UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = NOW() WHERE id = $1`
-	as.db.Exec(query, tokenID)
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-func (as *AuthService) revokeRefreshTokenByValue(token string) bool {
-	query := `UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = NOW() WHERE token = $1`
-	result, err := as.db.Exec(query, token)
-	if err != nil {
-		return false
+// revokeUserClientAccess ends one person's access for one app: every access
+// and refresh token, every code not yet exchanged, and the approval itself,
+// so the app has to ask again. Removing an app from "my apps" and revoking a
+// consent both use it.
+func revokeUserClientAccess(ctx context.Context, tx execer, userID, clientID uuid.UUID) error {
+	for _, q := range []string{
+		`UPDATE oauth_access_tokens  SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
+		`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
+		`UPDATE authorization_codes  SET used_at = now() WHERE user_id = $1 AND client_id = $2 AND used_at IS NULL`,
+		`UPDATE user_consents        SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, userID, clientID); err != nil {
+			return err
+		}
 	}
-
-	rowsAffected, _ := result.RowsAffected()
-	return rowsAffected > 0
+	return nil
 }
 
-func (as *AuthService) revokeAccessTokenByValue(token string) bool {
-	query := `UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = NOW() WHERE token = $1`
-	result, err := as.db.Exec(query, token)
-	if err != nil {
-		return false
+// revokeClientAccess ends access for everyone who uses an app. Consents are
+// forgotten too when forgetConsents is true (the app is switched off or
+// removed); a secret reset leaves them, since the people did not change
+// their minds.
+func revokeClientAccess(ctx context.Context, tx execer, clientID uuid.UUID, forgetConsents bool) error {
+	qs := []string{
+		`UPDATE oauth_access_tokens  SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked`,
+		`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked`,
+		`UPDATE authorization_codes  SET used_at = now() WHERE client_id = $1 AND used_at IS NULL`,
 	}
-
-	rowsAffected, _ := result.RowsAffected()
-	return rowsAffected > 0
+	if forgetConsents {
+		qs = append(qs, `UPDATE user_consents SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked`)
+	}
+	for _, q := range qs {
+		if _, err := tx.ExecContext(ctx, q, clientID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Utility functions

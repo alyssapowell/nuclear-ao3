@@ -1,10 +1,17 @@
 package auth
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"nuclear-ao3/internal/audit"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -110,6 +117,11 @@ func (as *AuthService) RevokeConsent(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
+	uid, ok := userID.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
 
 	consentID := c.Param("consent_id")
 	consentUUID, err := uuid.Parse(consentID)
@@ -118,35 +130,43 @@ func (as *AuthService) RevokeConsent(c *gin.Context) {
 		return
 	}
 
-	// Revoke consent
-	query := `
-		UPDATE user_consents 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE id = $1 AND user_id = $2`
-
-	result, err := as.db.Exec(query, consentUUID, userID)
+	// Find the app this approval is for; it has to be the caller's own.
+	var clientID uuid.UUID
+	err = as.db.QueryRowContext(c.Request.Context(),
+		`SELECT client_id FROM user_consents WHERE id = $1 AND user_id = $2`, consentUUID, uid).Scan(&clientID)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Consent not found"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke consent"})
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Consent not found"})
+	// Taking back an approval ends everything it allowed: access tokens,
+	// refresh tokens and codes not yet exchanged, the same as removing the
+	// app from "my apps".
+	if err := as.revokeApplicationAccess(c.Request.Context(), uid, clientID); err != nil {
+		log.Printf("revoke consent: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke consent"})
 		return
 	}
 
-	// Also revoke all active tokens for this client
-	var clientID uuid.UUID
-	as.db.QueryRow("SELECT client_id FROM user_consents WHERE id = $1", consentUUID).Scan(&clientID)
-
-	revokeQuery := `
-		UPDATE oauth_access_tokens 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false`
-	as.db.Exec(revokeQuery, userID, clientID)
-
 	c.JSON(http.StatusOK, gin.H{"message": "Consent revoked successfully"})
+}
+
+// revokeApplicationAccess ends one person's access for one app, all or
+// nothing.
+func (as *AuthService) revokeApplicationAccess(ctx context.Context, userID, clientID uuid.UUID) error {
+	tx, err := as.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := revokeUserClientAccess(ctx, tx, userID, clientID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (as *AuthService) GetAuthorizedApplications(c *gin.Context) {
@@ -205,36 +225,21 @@ func (as *AuthService) RevokeApplication(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
+	uid, ok := userID.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
+		return
+	}
 
-	clientID := c.Param("client_id")
-	clientUUID, err := uuid.Parse(clientID)
+	clientUUID, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
 		return
 	}
 
-	// Revoke all tokens for this client and user
-	tokenQuery := `
-		UPDATE oauth_access_tokens 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false`
-
-	refreshQuery := `
-		UPDATE oauth_refresh_tokens 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false`
-
-	// Revoke consent
-	consentQuery := `
-		UPDATE user_consents 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false`
-
-	_, err1 := as.db.Exec(tokenQuery, userID, clientUUID)
-	_, err2 := as.db.Exec(refreshQuery, userID, clientUUID)
-	_, err3 := as.db.Exec(consentQuery, userID, clientUUID)
-
-	if err1 != nil || err2 != nil || err3 != nil {
+	// Revoke all tokens and codes for this client and user, and the consent
+	if err := as.revokeApplicationAccess(c.Request.Context(), uid, clientUUID); err != nil {
+		log.Printf("revoke application: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke application access"})
 		return
 	}
@@ -244,11 +249,30 @@ func (as *AuthService) RevokeApplication(c *gin.Context) {
 
 // Admin OAuth2 management endpoints
 
-func (as *AuthService) AdminListClients(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset := (page - 1) * limit
+// pageParams reads ?page and ?limit and keeps them in range: page 1 or more
+// (and not absurdly large), limit 1 to 100, 50 if missing or wrong.
+func pageParams(c *gin.Context) (page, limit, offset int) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	if page > 100000 {
+		page = 100000
+	}
+	limit, err = strconv.Atoi(c.DefaultQuery("limit", "50"))
+	if err != nil || limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return page, limit, (page - 1) * limit
+}
 
+func (as *AuthService) AdminListClients(c *gin.Context) {
+	page, limit, offset := pageParams(c)
+
+	// Every app is listed, switched off or not.
 	query := `
 		SELECT oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
 			oc.is_active, oc.created_at, oc.updated_at,
@@ -258,7 +282,7 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 		LEFT JOIN oauth_access_tokens at ON oc.client_id = at.client_id
 		GROUP BY oc.client_id, oc.client_name, oc.description, oc.is_public, oc.is_first_party,
 			oc.is_active, oc.created_at, oc.updated_at
-		ORDER BY oc.created_at DESC
+		ORDER BY oc.created_at DESC, oc.client_id
 		LIMIT $1 OFFSET $2`
 
 	rows, err := as.db.Query(query, limit, offset)
@@ -268,10 +292,11 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var clients []gin.H
+	clients := []gin.H{}
 	for rows.Next() {
 		var clientID uuid.UUID
-		var clientName, description string
+		var clientName string
+		var description sql.NullString
 		var isPublic, isFirstParty, isActive bool
 		var createdAt, updatedAt time.Time
 		var uniqueUsers, totalTokens int
@@ -285,7 +310,7 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 		clients = append(clients, gin.H{
 			"client_id":      clientID,
 			"client_name":    clientName,
-			"description":    description,
+			"description":    description.String,
 			"is_public":      isPublic,
 			"is_first_party": isFirstParty,
 			"is_active":      isActive,
@@ -312,14 +337,14 @@ func (as *AuthService) AdminListClients(c *gin.Context) {
 }
 
 func (as *AuthService) AdminGetClient(c *gin.Context) {
-	clientID := c.Param("client_id")
-	clientUUID, err := uuid.Parse(clientID)
+	clientUUID, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
 		return
 	}
 
-	client, err := as.getClientByID(clientUUID.String())
+	// Admins can look at switched-off apps too.
+	client, err := as.getClientForAdmin(clientUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Client not found"})
 		return
@@ -351,54 +376,188 @@ func (as *AuthService) AdminGetClient(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"client": clientData})
 }
 
+// clientUpdate is what an admin may change on an app. A field left out is
+// left alone. Fields not listed here (the secret, is_public, is_first_party)
+// cannot be changed, and a request that names one is refused.
+type clientUpdate struct {
+	Name            *string   `json:"client_name"`
+	Description     *string   `json:"description"`
+	Website         *string   `json:"website"`
+	LogoURL         *string   `json:"logo_url"`
+	RedirectURIs    *[]string `json:"redirect_uris"`
+	Scopes          *[]string `json:"scopes"`
+	GrantTypes      *[]string `json:"grant_types"`
+	ResponseTypes   *[]string `json:"response_types"`
+	AccessTokenTTL  *int      `json:"access_token_ttl"`
+	RefreshTokenTTL *int      `json:"refresh_token_ttl"`
+	IsActive        *bool     `json:"is_active"`
+	IsTrusted       *bool     `json:"is_trusted"`
+}
+
 func (as *AuthService) AdminUpdateClient(c *gin.Context) {
-	clientID := c.Param("client_id")
-	clientUUID, err := uuid.Parse(clientID)
+	clientUUID, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
 		return
 	}
-
-	var updates map[string]interface{}
-	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data"})
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
 		return
 	}
 
-	// Build dynamic update query (simplified - would need proper validation)
-	query := `UPDATE oauth_clients SET updated_at = NOW()`
-	args := []interface{}{}
-	argIndex := 1
-
-	if name, exists := updates["client_name"]; exists {
-		query += fmt.Sprintf(", client_name = $%d", argIndex)
-		args = append(args, name)
-		argIndex++
+	var up clientUpdate
+	dec := json.NewDecoder(http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&up); err != nil {
+		c.JSON(http.StatusBadRequest, problemJSON("invalid_request", "Invalid request data"))
+		return
 	}
 
-	if description, exists := updates["description"]; exists {
-		query += fmt.Sprintf(", description = $%d", argIndex)
-		args = append(args, description)
-		argIndex++
-	}
-
-	if isActive, exists := updates["is_active"]; exists {
-		query += fmt.Sprintf(", is_active = $%d", argIndex)
-		args = append(args, isActive)
-		argIndex++
-	}
-
-	if isTrusted, exists := updates["is_trusted"]; exists {
-		query += fmt.Sprintf(", is_trusted = $%d", argIndex)
-		args = append(args, isTrusted)
-		argIndex++
-	}
-
-	query += fmt.Sprintf(" WHERE client_id = $%d", argIndex)
-	args = append(args, clientUUID)
-
-	_, err = as.db.Exec(query, args...)
+	client, err := as.getClientForAdmin(clientUUID)
 	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Client not found"})
+		return
+	}
+
+	bad := func(code, desc string) { c.JSON(http.StatusBadRequest, problemJSON(code, desc)) }
+	var sets []string
+	var args []interface{}
+	changed := map[string]any{}
+	set := func(column string, value interface{}, field string, shown any) {
+		args = append(args, value)
+		sets = append(sets, fmt.Sprintf("%s = $%d", column, len(args)))
+		changed[field] = shown
+	}
+
+	if up.Name != nil {
+		name := strings.TrimSpace(*up.Name)
+		if n := len([]rune(name)); n == 0 || n > maxClientNameLen {
+			bad("invalid_client_metadata", "client_name must be 1 to 100 characters")
+			return
+		}
+		set("client_name", name, "client_name", name)
+	}
+	if up.Description != nil {
+		if len([]rune(*up.Description)) > maxDescriptionLen {
+			bad("invalid_client_metadata", "description is too long")
+			return
+		}
+		set("description", *up.Description, "description", "changed")
+	}
+	if up.Website != nil {
+		if !validOptionalURL(*up.Website) {
+			bad("invalid_client_metadata", "website must be an https address")
+			return
+		}
+		set("website", *up.Website, "website", *up.Website)
+	}
+	if up.LogoURL != nil {
+		if !validOptionalURL(*up.LogoURL) {
+			bad("invalid_client_metadata", "logo_url must be an https address")
+			return
+		}
+		set("logo_url", *up.LogoURL, "logo_url", *up.LogoURL)
+	}
+	if up.RedirectURIs != nil {
+		uris, problem := cleanRedirectURIs(*up.RedirectURIs, client.IsPublic)
+		if problem != "" {
+			bad("invalid_redirect_uri", problem)
+			return
+		}
+		set("redirect_uris", pq.Array(uris), "redirect_uris", uris)
+	}
+	scopesNow := client.Scopes
+	scopesChanged := false
+	if up.Scopes != nil {
+		scopes, problem := cleanScopes(*up.Scopes)
+		if problem != "" {
+			bad("invalid_scope", problem)
+			return
+		}
+		scopesNow, scopesChanged = scopes, true
+		set("scopes", pq.Array(scopes), "scopes", scopes)
+	}
+	if up.GrantTypes != nil {
+		grants, ok := cleanChoices(*up.GrantTypes, allowedGrantTypes)
+		if !ok || !contains(grants, "authorization_code") {
+			bad("invalid_client_metadata", "grant_types must be authorization_code, optionally with refresh_token")
+			return
+		}
+		set("grant_types", pq.Array(grants), "grant_types", grants)
+	}
+	if up.ResponseTypes != nil {
+		responses, ok := cleanChoices(*up.ResponseTypes, allowedResponseTypes)
+		if !ok {
+			bad("invalid_client_metadata", "response_types must be code")
+			return
+		}
+		set("response_types", pq.Array(responses), "response_types", responses)
+	}
+	if up.AccessTokenTTL != nil {
+		v := clampAccessTTL(*up.AccessTokenTTL)
+		set("access_token_ttl", v, "access_token_ttl", v)
+	}
+	if up.RefreshTokenTTL != nil {
+		v := clampRefreshTTL(*up.RefreshTokenTTL)
+		set("refresh_token_ttl", v, "refresh_token_ttl", v)
+	}
+	if up.IsActive != nil {
+		set("is_active", *up.IsActive, "is_active", *up.IsActive)
+	}
+	if up.IsTrusted != nil {
+		set("is_trusted", *up.IsTrusted, "is_trusted", *up.IsTrusted)
+	}
+	if len(sets) == 0 {
+		bad("invalid_request", "Nothing to change")
+		return
+	}
+
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update client"})
+		return
+	}
+	defer tx.Rollback()
+
+	args = append(args, clientUUID)
+	_, err = tx.ExecContext(ctx, "UPDATE oauth_clients SET "+strings.Join(sets, ", ")+
+		fmt.Sprintf(", updated_at = now() WHERE client_id = $%d", len(args)), args...)
+
+	// Switching an app off ends everything it was given.
+	if err == nil && up.IsActive != nil && !*up.IsActive {
+		err = revokeClientAccess(ctx, tx, clientUUID, true)
+	}
+	// Taking a scope away from an app takes it from tokens already issued.
+	if err == nil && scopesChanged {
+		for _, q := range []string{
+			`UPDATE oauth_access_tokens  SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked AND NOT (scopes <@ $2::text[])`,
+			`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked AND NOT (scopes <@ $2::text[])`,
+		} {
+			if _, err = tx.ExecContext(ctx, q, clientUUID, pq.Array(scopesNow)); err != nil {
+				break
+			}
+		}
+	}
+	if err == nil {
+		err = audit.Record(ctx, tx, actor, "oauth_client.update", "oauth_client", clientUUID.String(), "",
+			map[string]any{"client_name": client.Name, "changed": changed})
+	}
+	// A change of trust gets a row of its own, so it is easy to find.
+	if err == nil && up.IsTrusted != nil && *up.IsTrusted != client.IsTrusted {
+		action := "oauth_client.untrust"
+		if *up.IsTrusted {
+			action = "oauth_client.trust"
+		}
+		err = audit.Record(ctx, tx, actor, action, "oauth_client", clientUUID.String(), "",
+			map[string]any{"client_name": client.Name})
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		log.Printf("update client: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update client"})
 		return
 	}
@@ -407,30 +566,50 @@ func (as *AuthService) AdminUpdateClient(c *gin.Context) {
 }
 
 func (as *AuthService) AdminDeleteClient(c *gin.Context) {
-	clientID := c.Param("client_id")
-	clientUUID, err := uuid.Parse(clientID)
+	clientUUID, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
 		return
 	}
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
+	}
 
-	// Check if client is first-party (can't delete)
-	var isFirstParty bool
-	err = as.db.QueryRow("SELECT is_first_party FROM oauth_clients WHERE client_id = $1", clientUUID).Scan(&isFirstParty)
+	client, err := as.getClientForAdmin(clientUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Client not found"})
 		return
 	}
-
-	if isFirstParty {
+	if client.IsFirstParty {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete first-party clients"})
 		return
 	}
 
-	// Soft delete (deactivate) instead of hard delete to preserve audit trail
-	query := `UPDATE oauth_clients SET is_active = false, updated_at = NOW() WHERE client_id = $1`
-	_, err = as.db.Exec(query, clientUUID)
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete client"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Soft delete (deactivate) instead of hard delete to preserve audit trail,
+	// and take back everything the app was given.
+	_, err = tx.ExecContext(ctx, `UPDATE oauth_clients SET is_active = false, updated_at = NOW() WHERE client_id = $1`, clientUUID)
+	if err == nil {
+		err = revokeClientAccess(ctx, tx, clientUUID, true)
+	}
+	if err == nil {
+		err = audit.Record(ctx, tx, actor, "oauth_client.delete", "oauth_client", clientUUID.String(), "",
+			map[string]any{"client_name": client.Name})
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		log.Printf("delete client: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete client"})
 		return
 	}
@@ -439,22 +618,23 @@ func (as *AuthService) AdminDeleteClient(c *gin.Context) {
 }
 
 func (as *AuthService) AdminResetClientSecret(c *gin.Context) {
-	clientID := c.Param("client_id")
-	clientUUID, err := uuid.Parse(clientID)
+	clientUUID, err := uuid.Parse(c.Param("client_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
 		return
 	}
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
+	}
 
-	// Check if client is confidential
-	var isPublic bool
-	err = as.db.QueryRow("SELECT is_public FROM oauth_clients WHERE client_id = $1", clientUUID).Scan(&isPublic)
+	client, err := as.getClientForAdmin(clientUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Client not found"})
 		return
 	}
-
-	if isPublic {
+	if client.IsPublic {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Public clients don't have secrets"})
 		return
 	}
@@ -473,20 +653,35 @@ func (as *AuthService) AdminResetClientSecret(c *gin.Context) {
 		return
 	}
 
-	query := `UPDATE oauth_clients SET client_secret = $1, updated_at = NOW() WHERE client_id = $2`
-	_, err = as.db.Exec(query, string(hashedSecret), clientUUID)
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update secret"})
 		return
 	}
+	defer tx.Rollback()
 
-	// Revoke all existing tokens for this client
-	revokeQuery := `
-		UPDATE oauth_access_tokens 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE client_id = $1 AND is_revoked = false`
-	as.db.Exec(revokeQuery, clientUUID)
+	_, err = tx.ExecContext(ctx, `UPDATE oauth_clients SET client_secret = $1, updated_at = NOW() WHERE client_id = $2`,
+		string(hashedSecret), clientUUID)
+	// Revoke all existing tokens for this client: access and refresh, and any
+	// code not yet exchanged. People's approvals stay.
+	if err == nil {
+		err = revokeClientAccess(ctx, tx, clientUUID, false)
+	}
+	if err == nil {
+		err = audit.Record(ctx, tx, actor, "oauth_client.reset_secret", "oauth_client", clientUUID.String(), "",
+			map[string]any{"client_name": client.Name})
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		log.Printf("reset client secret: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update secret"})
+		return
+	}
 
+	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "Client secret reset successfully",
 		"client_secret": newSecret, // Return new secret only once
@@ -494,9 +689,7 @@ func (as *AuthService) AdminResetClientSecret(c *gin.Context) {
 }
 
 func (as *AuthService) AdminListTokens(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset := (page - 1) * limit
+	_, limit, offset := pageParams(c)
 
 	clientID := c.Query("client_id")
 	userID := c.Query("user_id")
@@ -513,18 +706,28 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 	argIndex := 1
 
 	if clientID != "" {
+		id, err := uuid.Parse(clientID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid client ID"})
+			return
+		}
 		query += fmt.Sprintf(" AND at.client_id = $%d", argIndex)
-		args = append(args, clientID)
+		args = append(args, id)
 		argIndex++
 	}
 
 	if userID != "" {
+		id, err := uuid.Parse(userID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			return
+		}
 		query += fmt.Sprintf(" AND at.user_id = $%d", argIndex)
-		args = append(args, userID)
+		args = append(args, id)
 		argIndex++
 	}
 
-	query += fmt.Sprintf(" ORDER BY at.created_at DESC LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
+	query += fmt.Sprintf(" ORDER BY at.created_at DESC, at.id LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
 	args = append(args, limit, offset)
 
 	rows, err := as.db.Query(query, args...)
@@ -534,7 +737,7 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	var tokens []gin.H
+	tokens := []gin.H{}
 	for rows.Next() {
 		var tokenID, tokenUserID, tokenClientID uuid.UUID
 		var username, clientName string
@@ -568,27 +771,49 @@ func (as *AuthService) AdminListTokens(c *gin.Context) {
 }
 
 func (as *AuthService) AdminRevokeToken(c *gin.Context) {
-	tokenID := c.Param("token_id")
-	tokenUUID, err := uuid.Parse(tokenID)
+	tokenUUID, err := uuid.Parse(c.Param("token_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid token ID"})
 		return
 	}
+	actor, ok := as.adminActor(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "login required"})
+		return
+	}
 
-	query := `
-		UPDATE oauth_access_tokens 
-		SET is_revoked = true, revoked_at = NOW() 
-		WHERE id = $1`
-
-	result, err := as.db.Exec(query, tokenUUID)
+	ctx := c.Request.Context()
+	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
 		return
 	}
+	defer tx.Rollback()
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
+	var clientID, ownerID uuid.UUID
+	err = tx.QueryRowContext(ctx, `
+		UPDATE oauth_access_tokens SET is_revoked = true, revoked_at = NOW()
+		WHERE id = $1 RETURNING client_id, user_id`, tokenUUID).Scan(&clientID, &ownerID)
+	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Token not found"})
+		return
+	}
+	// The refresh token that could mint a new one goes too.
+	if err == nil {
+		_, err = tx.ExecContext(ctx, `
+			UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = NOW()
+			WHERE access_token_id = $1 AND NOT is_revoked`, tokenUUID)
+	}
+	if err == nil {
+		err = audit.Record(ctx, tx, actor, "oauth_token.revoke", "oauth_token", tokenUUID.String(), "",
+			map[string]any{"client_id": clientID.String(), "user_id": ownerID.String()})
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		log.Printf("admin revoke token: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke token"})
 		return
 	}
 

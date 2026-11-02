@@ -73,25 +73,25 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 	oauth := r.Group("/auth")
 	{
 		// Authorization endpoint (GET and POST for different flows)
-		oauth.GET("/authorize", authService.Authorize)
-		oauth.POST("/authorize", authService.Authorize)
+		oauth.GET("/authorize", authService.oauthLimit("authorize"), authService.Authorize)
+		oauth.POST("/authorize", authService.oauthLimit("authorize"), authService.Authorize)
 
 		// Token endpoint
-		oauth.POST("/token", authService.Token)
+		oauth.POST("/token", authService.oauthLimit("token"), authService.Token)
 
 		// User info endpoint (OIDC)
 		oauth.GET("/userinfo", authService.UserInfo)
 		oauth.POST("/userinfo", authService.UserInfo)
 
 		// Token introspection (RFC 7662)
-		oauth.POST("/introspect", authService.Introspect)
+		oauth.POST("/introspect", authService.oauthLimit("introspect"), authService.Introspect)
 
 		// Token revocation (RFC 7009)
-		oauth.POST("/revoke", authService.Revoke)
+		oauth.POST("/revoke", authService.oauthLimit("revoke"), authService.Revoke)
 
-		// Client registration (Dynamic Client Registration)
-		// Only admins register apps: an open registration would let anyone
-		// create a client with any scope (including admin) or grant type.
+		// Client registration. Only admins register apps (and discovery does
+		// not advertise this address): an open registration would let anyone
+		// create a client.
 		oauth.POST("/register-client", d.RequireUser, d.ActiveAccount, d.RequireRole(), authService.RegisterClient)
 
 		// JWKS endpoint for token verification
@@ -120,6 +120,10 @@ type AuthService struct {
 	mail *email.Config // nil until SetMail: no emails are sent
 	// guard holds the in-memory counters against password guessing.
 	guard loginGuard
+	// oauth holds the counters for the OAuth endpoints (oauth_limits.go).
+	oauth oauthGuard
+	// oauthRates replaces the default OAuth limits per endpoint. Tests use it.
+	oauthRates map[string]oauthRate
 }
 
 // New builds the auth service on top of the shared database. The
