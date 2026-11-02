@@ -33,9 +33,3 @@ func (as *AuthService) getUserByID(userID uuid.UUID) (*models.User, error) {
 
 	return &user, nil
 }
-
-// UserStats represents user statistics
-type UserStats struct {
-	WorkCount     int `json:"work_count"`
-	BookmarkCount int `json:"bookmark_count"`
-}

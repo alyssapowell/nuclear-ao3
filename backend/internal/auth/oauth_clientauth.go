@@ -19,11 +19,12 @@ import (
 type clientAuthMode int
 
 const (
-	// authAllowPublic is for the token endpoint: a public app may identify
-	// itself without a secret (its proof is PKCE or its refresh token).
+	// authAllowPublic is for the token and revocation endpoints: a public app
+	// may identify itself without a secret (its proof is PKCE or the token
+	// itself, and it can only reach its own tokens).
 	authAllowPublic clientAuthMode = iota
-	// authConfidentialOnly is for introspection and revocation: the app must
-	// prove it holds its secret.
+	// authConfidentialOnly is for introspection: the app must prove it holds
+	// its secret.
 	authConfidentialOnly
 )
 

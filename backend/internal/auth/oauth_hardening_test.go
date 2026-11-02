@@ -557,9 +557,6 @@ func TestDiscoveryDocumentsAreTrimmed(t *testing.T) {
 	json.Unmarshal(uw.Body.Bytes(), &info)
 	claims := oidc["claims_supported"].([]any)
 	for k := range info {
-		if strings.HasPrefix(k, "ao3_") {
-			continue // removed in the next phase, and not promised
-		}
 		assert.Contains(t, claims, k, "userinfo returns %s but discovery does not list it", k)
 	}
 	for _, c := range claims {
@@ -612,7 +609,7 @@ func TestIssuerComesFromSiteURL(t *testing.T) {
 	// Userinfo no longer names a made-up host.
 	uw := e.do("GET", "/auth/userinfo", nil, func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+tr.AccessToken) })
 	assert.NotContains(t, uw.Body.String(), "ao3.example.com")
-	assert.Contains(t, uw.Body.String(), "https://archive.example.org/users/")
+	assert.NotContains(t, uw.Body.String(), "/users/") // no link to an account page
 
 	// In development, http to this machine is fine.
 	t.Setenv("ENVIRONMENT", "development")
@@ -1031,10 +1028,12 @@ func TestRevokeIsScopedToTheCallingClientAndTakesItsSibling(t *testing.T) {
 	assert.Equal(t, http.StatusOK, revoke(a, tr3.RefreshToken).Code)
 	assert.Equal(t, http.StatusUnauthorized, e.userinfoStatus(tr3.AccessToken))
 
-	// A public app has no secret to prove, so it cannot use this endpoint.
+	// A public app has no secret and may revoke its own tokens with just its
+	// client_id (see TestPublicAppsCanRevokeTheirOwnTokens).
 	pub := e.newApp(appOpts{public: true})
 	ptr := e.signedIn(pub, u, "read")
-	assert.Equal(t, http.StatusUnauthorized, revoke(pub, ptr.AccessToken).Code)
+	assert.Equal(t, http.StatusOK, revoke(pub, ptr.AccessToken).Code)
+	assert.Equal(t, http.StatusUnauthorized, e.userinfoStatus(ptr.AccessToken))
 }
 
 // ---------------------------------------------------------------------
@@ -1209,7 +1208,7 @@ func TestIntrospectionOnlyAnswersForTheOwningClient(t *testing.T) {
 	assert.Equal(t, true, own["active"])
 	assert.Equal(t, a.id, own["client_id"])
 	assert.NotContains(t, own, "username")
-	assert.Equal(t, u.ID.String(), own["sub"]) // pairwise in phase 2
+	assert.NotEqual(t, u.ID.String(), own["sub"]) // pairwise: see oauth_identity_test.go
 
 	other := introspect(b, tr.AccessToken)
 	assert.Equal(t, map[string]any{"active": false}, other)
@@ -1569,10 +1568,11 @@ func TestTrustedAppsStillLeaveARecordedConsent(t *testing.T) {
 
 	// No consent screen, but the person's approval is on record, so they can
 	// see and revoke it and a refresh needs it.
-	w := e.do("GET", a.authorizeURL("read", ""), nil, e.asUser(u.ID))
+	// (Only for openid alone; see TestTrustedAppsStillNeedConsentForProfileAndEmail.)
+	w := e.do("GET", a.authorizeURL("openid", ""), nil, e.asUser(u.ID))
 	require.Equal(t, http.StatusFound, w.Code)
 	assert.Equal(t, 1, e.count(`SELECT count(*) FROM user_consents WHERE user_id = $1 AND NOT is_revoked`, u.ID))
-	tr := e.signedIn(a, u, "read")
+	tr := e.signedIn(a, u, "openid")
 	rw, _ := e.refresh(a, tr.RefreshToken, "")
 	assert.Equal(t, http.StatusOK, rw.Code)
 }

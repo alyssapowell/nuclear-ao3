@@ -1,7 +1,7 @@
 # Nuclear AO3 Development Makefile
 # Provides convenient commands for database management, testing, and development
 
-.PHONY: ops-diagnose ops-emails ops-backup ops-upgrade ops-restore ops-logout-everyone ops-logout-user backup-db restore-db help keys keys-show keys-setup migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
+.PHONY: ops-diagnose ops-emails ops-backup ops-upgrade ops-restore ops-logout-everyone ops-logout-user backup-db restore-db help keys keys-oidc keys-show keys-setup migrate migrate-status seed grant jobs jobs-retry db-flush db-populate db-reset db-status test-data dev-setup clean build test services logs
 
 # Default target
 help: ## Show this help message
@@ -53,6 +53,10 @@ seed: ## Load sample accounts and works for development (password: password123)
 keys: ## Create a new login signing key in ./secrets (then see docs/RUNBOOK.md)
 	@mkdir -p secrets && chmod 700 secrets
 	@docker-compose run --rm --no-deps -u "$$(id -u):$$(id -g)" -v "$$(pwd)/secrets:/secrets" app nuclear keys generate /secrets/signing-key-$$(date +%Y-%m-%d).pem
+
+keys-oidc: ## Create the separate key for ID tokens given to other apps (OIDC_SIGNING_KEY_FILE)
+	@mkdir -p secrets && chmod 700 secrets
+	@docker-compose run --rm --no-deps -u "$$(id -u):$$(id -g)" -v "$$(pwd)/secrets:/secrets" app nuclear keys generate /secrets/oidc-signing-key-$$(date +%Y-%m-%d).pem
 
 keys-show: ## Show the ID of the signing key in use and of the previous keys
 	@docker-compose run --rm --no-deps app nuclear keys show

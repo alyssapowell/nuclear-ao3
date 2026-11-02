@@ -21,33 +21,15 @@ import (
 
 // JWKS endpoint for token verification
 func (as *AuthService) GetJWKS(c *gin.Context) {
-	// Return public keys in JWKS format for token verification
-	jwks := as.jwt.GetJWKS()
+	// Only the key that signs ID tokens is published. When no separate OIDC
+	// key is set that is the login key; with one, the login key stays private.
+	jwks := as.oidcSigner().GetJWKS()
 
 	c.Header("Cache-Control", "public, max-age=3600")
 	c.JSON(http.StatusOK, jwks)
 }
 
-// Consent handling
-func (as *AuthService) ShowConsent(c *gin.Context) {
-	consentID := c.Param("consent_id")
-
-	// Get consent data
-	consentJSON, err := as.getPending(c.Request.Context(), "consent:"+consentID)
-	if err != nil {
-		c.HTML(http.StatusNotFound, "error.html", gin.H{
-			"Error": "Consent request not found or expired",
-		})
-		return
-	}
-
-	// Render consent screen (this would be a proper HTML template)
-	c.HTML(http.StatusOK, "consent.html", gin.H{
-		"ConsentID": consentID,
-		"Data":      string(consentJSON),
-	})
-}
-
+// Consent handling (ShowConsent is in oauth_identity.go)
 func (as *AuthService) ProcessConsent(c *gin.Context) {
 	consentID := c.Param("consent_id")
 	approved := c.PostForm("approved") == "true"
@@ -600,6 +582,10 @@ func (as *AuthService) AdminDeleteClient(c *gin.Context) {
 	_, err = tx.ExecContext(ctx, `UPDATE oauth_clients SET is_active = false, updated_at = NOW() WHERE client_id = $1`, clientUUID)
 	if err == nil {
 		err = revokeClientAccess(ctx, tx, clientUUID, true)
+	}
+	// The app's subjects go with it (a hard delete does the same by cascade).
+	if err == nil {
+		_, err = tx.ExecContext(ctx, `DELETE FROM oauth_subjects WHERE client_id = $1`, clientUUID)
 	}
 	if err == nil {
 		err = audit.Record(ctx, tx, actor, "oauth_client.delete", "oauth_client", clientUUID.String(), "",

@@ -189,13 +189,14 @@ func (as *AuthService) exchangeCode(ctx context.Context, client *models.OAuthCli
 		nonce     string
 		challenge string
 		method    string
+		authTime  time.Time
 	)
 	err := as.db.QueryRowContext(ctx, `
-		SELECT user_id, scopes, COALESCE(nonce, ''), code_challenge, code_challenge_method
+		SELECT user_id, scopes, COALESCE(nonce, ''), code_challenge, code_challenge_method, created_at
 		FROM authorization_codes
 		WHERE code_hash = $1 AND client_id = $2 AND redirect_uri = $3
 		  AND used_at IS NULL AND expires_at > now()`,
-		codeHash, client.ID, redirectURI).Scan(&userID, pq.Array(&scopes), &nonce, &challenge, &method)
+		codeHash, client.ID, redirectURI).Scan(&userID, pq.Array(&scopes), &nonce, &challenge, &method, &authTime)
 	if err == sql.ErrNoRows {
 		// Unknown, expired, for another client or address, or already used.
 		// If it was used, whatever it produced must stop working.
@@ -215,13 +216,6 @@ func (as *AuthService) exchangeCode(ctx context.Context, client *models.OAuthCli
 		return nil, serverFailure("check account", err)
 	} else if !ok {
 		return nil, invalidGrant("This account can't be used with apps right now")
-	}
-
-	idToken := ""
-	if contains(scopes, "openid") {
-		if idToken, err = as.generateIDToken(userID, client.ID, nonce, scopes); err != nil {
-			return nil, serverFailure("sign id token", err)
-		}
 	}
 
 	accessTTL := clampAccessTTL(client.AccessTokenTTL)
@@ -257,6 +251,18 @@ func (as *AuthService) exchangeCode(ctx context.Context, client *models.OAuthCli
 	})
 	if err != nil {
 		return nil, serverFailure("store tokens", err)
+	}
+	// The ID token carries a hash of the access token, so it is signed once
+	// that exists. If signing fails nothing is committed and the code stays
+	// unused.
+	idToken := ""
+	if contains(scopes, "openid") {
+		if idToken, err = as.generateIDToken(ctx, idTokenParams{
+			userID: userID, clientID: client.ID, scopes: scopes,
+			nonce: nonce, accessToken: access, authTime: authTime,
+		}); err != nil {
+			return nil, serverFailure("sign id token", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, serverFailure("commit", err)
@@ -324,13 +330,6 @@ func (as *AuthService) refreshTokens(ctx context.Context, client *models.OAuthCl
 		return nil, invalidGrant("The user no longer allows this app")
 	}
 
-	idToken := ""
-	if contains(granted, "openid") {
-		if idToken, err = as.generateIDToken(userID, client.ID, "", granted); err != nil {
-			return nil, serverFailure("sign id token", err)
-		}
-	}
-
 	accessTTL := clampAccessTTL(client.AccessTokenTTL)
 	tx, err := as.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -367,6 +366,16 @@ func (as *AuthService) refreshTokens(ctx context.Context, client *models.OAuthCl
 	})
 	if err != nil {
 		return nil, serverFailure("store tokens", err)
+	}
+	idToken := ""
+	if contains(granted, "openid") {
+		// auth_time stays the time of the original sign-in with this app.
+		if idToken, err = as.generateIDToken(ctx, idTokenParams{
+			userID: userID, clientID: client.ID, scopes: granted,
+			accessToken: access, authTime: familyCreated,
+		}); err != nil {
+			return nil, serverFailure("sign id token", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, serverFailure("commit", err)

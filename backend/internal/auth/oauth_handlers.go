@@ -31,12 +31,13 @@ func discoveryUnavailable(c *gin.Context, err error) {
 	})
 }
 
-// userinfoClaims are the claims the userinfo endpoint and the ID token
-// return today. The ao3_* extras are left out on purpose: they are removed
-// in the next phase and are not promised to apps.
+// userinfoClaims are the claims an app can receive, from the ID token or
+// userinfo. "pseud" and "name" come with the profile scope (the one pseud the
+// person chose), "email" and "email_verified" with the email scope. Nothing
+// here names the account, and no claim is the same in two apps.
 var userinfoClaims = []string{
-	"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce",
-	"name", "preferred_username", "profile", "updated_at",
+	"sub", "iss", "aud", "azp", "exp", "iat", "auth_time", "nonce", "at_hash",
+	"name", "pseud",
 	"email", "email_verified",
 }
 
@@ -60,11 +61,12 @@ func (as *AuthService) WellKnownOIDC(c *gin.Context) {
 		ResponseTypesSupported:            []string{"code"},
 		ResponseModesSupported:            []string{"query"},
 		GrantTypesSupported:               append([]string(nil), allowedGrantTypes...),
-		SubjectTypesSupported:             []string{"public"},
+		SubjectTypesSupported:             []string{"pairwise"},
 		IDTokenSigningAlgValuesSupported:  []string{"RS256"},
 		TokenEndpointAuthMethodsSupported: []string{"client_secret_basic", "client_secret_post", "none"},
-		// Revocation and introspection are for confidential apps only.
-		RevocationEndpointAuthMethodsSupported:    []string{"client_secret_basic", "client_secret_post"},
+		// Introspection is for confidential apps only. A public app may
+		// revoke its own tokens with just its client_id (RFC 7009).
+		RevocationEndpointAuthMethodsSupported:    []string{"client_secret_basic", "client_secret_post", "none"},
 		IntrospectionEndpointAuthMethodsSupported: []string{"client_secret_basic", "client_secret_post"},
 		CodeChallengeMethodsSupported:             []string{"S256"},
 		ClaimsSupported:                           userinfoClaims,
@@ -95,7 +97,7 @@ func (as *AuthService) WellKnownOAuth2(c *gin.Context) {
 		"response_modes_supported":                      []string{"query"},
 		"grant_types_supported":                         allowedGrantTypes,
 		"token_endpoint_auth_methods_supported":         []string{"client_secret_basic", "client_secret_post", "none"},
-		"revocation_endpoint_auth_methods_supported":    []string{"client_secret_basic", "client_secret_post"},
+		"revocation_endpoint_auth_methods_supported":    []string{"client_secret_basic", "client_secret_post", "none"},
 		"introspection_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
 		"code_challenge_methods_supported":              []string{"S256"},
 	}
@@ -332,15 +334,20 @@ func (as *AuthService) Authorize(c *gin.Context) {
 		return
 	}
 
-	// Check consent. A trusted app skips the screen, but the approval is
-	// still recorded, so the person can see it and take it back.
-	if client.IsTrusted {
+	// Check consent. A trusted app may skip the screen only when it asks for
+	// nothing but openid (a stable id that means nothing outside the app). A
+	// request for profile, email or anything else needs the person's explicit
+	// yes, trusted or not. prompt=consent always shows the screen, which is
+	// how a person changes the pseud they share.
+	openidOnly := len(requestedScopes) == 1 && requestedScopes[0] == "openid"
+	if client.IsTrusted && openidOnly && req.Prompt != "consent" {
+		// The approval is still recorded, so the person can see and take it back.
 		if err := as.storeUserConsent(*userID, client.ID, requestedScopes); err != nil {
 			log.Printf("oauth: record trusted consent: %v", err)
 			as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to record consent")
 			return
 		}
-	} else if !as.hasValidConsent(*userID, client.ID, requestedScopes) {
+	} else if req.Prompt == "consent" || !as.hasValidConsent(*userID, client.ID, requestedScopes) {
 		// Show consent screen
 		as.showConsentScreen(c, client, requestedScopes, req)
 		return
@@ -454,48 +461,15 @@ func (as *AuthService) UserInfo(c *gin.Context) {
 		return
 	}
 
-	user, err := as.getUserByID(*accessToken.UserID)
+	// Only the subject for this app and what the person chose to share.
+	userInfo, err := as.identityFor(c.Request.Context(), *accessToken.UserID, accessToken.ClientID, accessToken.Scopes)
 	if err != nil {
+		log.Printf("oauth: build userinfo: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":             "server_error",
 			"error_description": "Failed to retrieve user info",
 		})
 		return
-	}
-
-	// Build user info response based on scopes
-	userInfo := models.UserInfoResponse{
-		Subject: accessToken.UserID.String(), // TODO(phase 2): replace with a pairwise subject
-	}
-
-	if contains(accessToken.Scopes, "profile") {
-		userInfo.Name = user.DisplayName
-		userInfo.PreferredUsername = user.Username
-		// The profile address is built on the archive's own address. Without
-		// a usable SITE_URL there is nothing true to say, so it is left out.
-		if issuer, err := oauthIssuer(); err == nil {
-			userInfo.Profile = fmt.Sprintf("%s/users/%s", issuer, url.PathEscape(user.Username))
-		}
-		userInfo.UpdatedAt = user.UpdatedAt.Unix()
-		userInfo.AO3Username = user.Username
-		userInfo.AO3DisplayName = user.DisplayName
-		userInfo.AO3JoinDate = user.CreatedAt.Unix()
-
-		// Get user roles
-		if roles, err := as.getUserRoles(user.ID); err == nil {
-			userInfo.AO3Roles = roles
-		}
-
-		// Get user statistics
-		if stats, err := as.getUserStats(user.ID); err == nil {
-			userInfo.AO3WorkCount = stats.WorkCount
-			userInfo.AO3BookmarkCount = stats.BookmarkCount
-		}
-	}
-
-	if contains(accessToken.Scopes, "email") {
-		userInfo.Email = user.Email
-		userInfo.EmailVerified = user.IsVerified
 	}
 
 	// Update last used timestamp
@@ -536,6 +510,13 @@ func (as *AuthService) Introspect(c *gin.Context) {
 		return
 	}
 
+	// The subject is the one this app sees, never the account id.
+	sub, err := as.subjectFor(c.Request.Context(), accessToken.ClientID, *accessToken.UserID)
+	if err != nil {
+		log.Printf("oauth: introspect subject: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
+		return
+	}
 	response := models.IntrospectResponse{
 		Active:    true,
 		Scope:     strings.Join(accessToken.Scopes, " "),
@@ -544,8 +525,7 @@ func (as *AuthService) Introspect(c *gin.Context) {
 		ExpiresAt: accessToken.ExpiresAt.Unix(),
 		IssuedAt:  accessToken.CreatedAt.Unix(),
 		JWTID:     accessToken.ID.String(),
-		// TODO(phase 2): replace with the pairwise subject for this app.
-		Subject: accessToken.UserID.String(),
+		Subject:   sub,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -559,8 +539,9 @@ func (as *AuthService) Revoke(c *gin.Context) {
 		return
 	}
 
-	// Revocation is for apps that can keep a secret.
-	client, err := as.authenticateClient(c, authConfidentialOnly)
+	// A public app may revoke with just its client_id (RFC 7009), and can
+	// only reach its own tokens. A confidential app proves its secret.
+	client, err := as.authenticateClient(c, authAllowPublic)
 	if err != nil {
 		clientAuthFailed(c, err)
 		return

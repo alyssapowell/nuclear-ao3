@@ -233,25 +233,28 @@ func (suite *OIDCTestSuite) TestIDToken_ClaimsValidation() {
 	claims := token.Claims.(jwt.MapClaims)
 
 	// Validate standard OIDC claims
-	assert.Equal(suite.T(), user.ID.String(), claims["sub"])
+	assert.NotEmpty(suite.T(), claims["sub"])
+	assert.NotEqual(suite.T(), user.ID.String(), claims["sub"], "the subject is pairwise, never the account id")
 	assert.Equal(suite.T(), client.ID.String(), claims["aud"])
 	assert.NotEmpty(suite.T(), claims["iss"])
 	assert.NotEmpty(suite.T(), claims["iat"])
 	assert.NotEmpty(suite.T(), claims["exp"])
 	assert.Equal(suite.T(), "nonce123", claims["nonce"])
 
-	// Validate profile claims
-	assert.Equal(suite.T(), user.Username, claims["preferred_username"])
+	// Validate profile claims: the chosen pseud, and nothing about the account
 	assert.NotEmpty(suite.T(), claims["name"])
-	assert.NotEmpty(suite.T(), claims["updated_at"])
+	assert.NotEmpty(suite.T(), claims["pseud"])
+	assert.NotContains(suite.T(), claims, "preferred_username")
+	assert.NotContains(suite.T(), claims, "updated_at")
 
 	// Validate email claims
 	assert.Equal(suite.T(), user.Email, claims["email"])
 	assert.Equal(suite.T(), true, claims["email_verified"])
 
-	// Validate AO3-specific claims
-	assert.Equal(suite.T(), user.Username, claims["ao3_username"])
-	assert.NotEmpty(suite.T(), claims["ao3_join_date"])
+	// No AO3-specific account claims
+	for k := range claims {
+		assert.False(suite.T(), strings.HasPrefix(k, "ao3_"), k)
+	}
 }
 
 func (suite *OIDCTestSuite) TestIDToken_ExpirationValidation() {
@@ -453,7 +456,8 @@ func (suite *OIDCTestSuite) validateIDToken(idToken string, clientID, userID uui
 	claims := token.Claims.(jwt.MapClaims)
 
 	// Validate required OIDC claims
-	assert.Equal(suite.T(), userID.String(), claims["sub"])
+	assert.NotEmpty(suite.T(), claims["sub"])
+	assert.NotEqual(suite.T(), userID.String(), claims["sub"])
 	assert.Equal(suite.T(), clientID.String(), claims["aud"])
 
 	if expectedNonce != "" {

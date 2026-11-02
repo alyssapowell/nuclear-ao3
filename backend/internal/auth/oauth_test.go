@@ -333,7 +333,7 @@ func (suite *OAuth2TestSuite) TestOIDCDiscovery_WellKnownEndpoint() {
 	assert.Contains(suite.T(), discovery.ScopesSupported, "openid")
 	assert.Contains(suite.T(), discovery.ResponseTypesSupported, "code")
 	assert.Contains(suite.T(), discovery.GrantTypesSupported, "authorization_code")
-	assert.Contains(suite.T(), discovery.SubjectTypesSupported, "public")
+	assert.Equal(suite.T(), []string{"pairwise"}, discovery.SubjectTypesSupported)
 	assert.Contains(suite.T(), discovery.IDTokenSigningAlgValuesSupported, "RS256")
 }
 
@@ -646,10 +646,10 @@ func (suite *OAuth2TestSuite) TestUserInfo_ValidToken_ProfileScope() {
 	var userInfo models.UserInfoResponse
 	err := json.Unmarshal(w.Body.Bytes(), &userInfo)
 	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), suite.testUsers["oauth_user"].ID.String(), userInfo.Subject)
-	assert.Equal(suite.T(), "oauth_user", userInfo.PreferredUsername)
-	assert.NotEmpty(suite.T(), userInfo.Name)
-	assert.Greater(suite.T(), userInfo.UpdatedAt, int64(0))
+	assert.NotEmpty(suite.T(), userInfo.Subject)
+	assert.NotEqual(suite.T(), suite.testUsers["oauth_user"].ID.String(), userInfo.Subject)
+	require.NotNil(suite.T(), userInfo.Pseud)
+	assert.Equal(suite.T(), userInfo.Pseud.Name, userInfo.Name)
 	assert.Empty(suite.T(), userInfo.Email) // Email scope not requested
 }
 
@@ -669,7 +669,8 @@ func (suite *OAuth2TestSuite) TestUserInfo_ValidToken_EmailScope() {
 	err := json.Unmarshal(w.Body.Bytes(), &userInfo)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "oauth@nuclear-ao3.test", userInfo.Email)
-	assert.True(suite.T(), userInfo.EmailVerified)
+	require.NotNil(suite.T(), userInfo.EmailVerified)
+	assert.True(suite.T(), *userInfo.EmailVerified)
 }
 
 func (suite *OAuth2TestSuite) TestUserInfo_InsufficientScope() {

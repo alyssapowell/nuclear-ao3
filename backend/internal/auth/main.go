@@ -115,8 +115,11 @@ func Mount(r *gin.Engine, authService *AuthService, d *platform.Deps) {
 
 // AuthService holds all dependencies for authentication
 type AuthService struct {
-	db   *sql.DB
-	jwt  *JWTManager
+	db  *sql.DB
+	jwt *JWTManager
+	// oidc signs ID tokens. nil means the login key does it (not
+	// recommended); see OIDC_SIGNING_KEY_FILE.
+	oidc *JWTManager
 	mail *email.Config // nil until SetMail: no emails are sent
 	// guard holds the in-memory counters against password guessing.
 	guard loginGuard
@@ -128,7 +131,8 @@ type AuthService struct {
 
 // New builds the auth service on top of the shared database. The
 // login signing key is read from the files named by SIGNING_KEY_FILE and
-// SIGNING_KEY_PREVIOUS_FILES; without a valid key it returns an error.
+// SIGNING_KEY_PREVIOUS_FILES; without a valid key it returns an error. The
+// key for OIDC ID tokens comes from OIDC_SIGNING_KEY_FILE.
 func New(db *sql.DB) (*AuthService, error) {
 	jwtManager, err := LoadJWTManager(
 		platform.Env("JWT_ISSUER", "nuclear-ao3"),
@@ -138,7 +142,11 @@ func New(db *sql.DB) (*AuthService, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &AuthService{db: db, jwt: jwtManager}, nil
+	oidc, err := LoadOIDCManager(jwtManager, platform.Env("JWT_ISSUER", "nuclear-ao3"), os.Getenv("OIDC_SIGNING_KEY_FILE"))
+	if err != nil {
+		return nil, err
+	}
+	return &AuthService{db: db, jwt: jwtManager, oidc: oidc}, nil
 }
 
 // SetMail turns on account emails (activation and password reset), sent from

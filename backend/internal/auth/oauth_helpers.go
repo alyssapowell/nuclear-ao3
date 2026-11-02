@@ -4,16 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
-	"time"
+	"strings"
 
 	"nuclear-ao3/shared/models"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
@@ -71,15 +70,18 @@ func (as *AuthService) getAuthenticatedUser(c *gin.Context) *uuid.UUID {
 // Consent management
 
 // hasValidConsent says whether the user has a live approval for this app
-// that covers every one of the scopes.
+// that covers every one of the scopes. The profile scope also needs a chosen
+// pseud that still exists, and the email scope needs an explicit yes to
+// email; without them the app has to ask again.
 func (as *AuthService) hasValidConsent(userID, clientID uuid.UUID, scopes []string) bool {
 	query := `
-		SELECT scopes FROM user_consents 
-		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false 
+		SELECT scopes, pseud_id IS NOT NULL, share_email FROM user_consents
+		WHERE user_id = $1 AND client_id = $2 AND is_revoked = false
 		AND (expires_at IS NULL OR expires_at > NOW())`
 
 	var consentedScopes []string
-	err := as.db.QueryRow(query, userID, clientID).Scan(pq.Array(&consentedScopes))
+	var hasPseud, shareEmail bool
+	err := as.db.QueryRow(query, userID, clientID).Scan(pq.Array(&consentedScopes), &hasPseud, &shareEmail)
 	if err != nil {
 		return false
 	}
@@ -90,71 +92,78 @@ func (as *AuthService) hasValidConsent(userID, clientID uuid.UUID, scopes []stri
 			return false
 		}
 	}
+	if contains(scopes, "profile") && !hasPseud {
+		return false
+	}
+	if contains(scopes, "email") && !shareEmail {
+		return false
+	}
 	return as.isScopeSubset(scopes, consentedScopes)
 }
 
-func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthClient, scopes []string, req models.AuthorizeRequest) {
-	// Build scope descriptions
-	scopeDescriptions := make(map[string]string)
-	for _, scope := range scopes {
-		if scopeInfo, exists := models.AO3OAuthScopes[scope]; exists {
-			scopeDescriptions[scope] = scopeInfo.Description
-		}
-	}
+// pendingConsent is a consent request waiting for the person's answer. It
+// names the person and the app by id only.
+type pendingConsent struct {
+	UserID           string                  `json:"user_id"`
+	ClientID         string                  `json:"client_id"`
+	Scopes           []string                `json:"scopes"`
+	AuthorizeRequest models.AuthorizeRequest `json:"authorize_request"`
+}
 
+func (as *AuthService) readPendingConsent(ctx context.Context, consentID string) (*pendingConsent, error) {
+	raw, err := as.getPending(ctx, "consent:"+consentID)
+	if err != nil {
+		return nil, err
+	}
+	var p pendingConsent
+	if err := json.Unmarshal(raw, &p); err != nil || p.ClientID == "" {
+		return nil, errors.New("invalid consent data")
+	}
+	return &p, nil
+}
+
+func (as *AuthService) showConsentScreen(c *gin.Context, client *models.OAuthClient, scopes []string, req models.AuthorizeRequest) {
 	// Store the consent request, tied to the user who is looking at it, so a
-	// consent ID can't be approved by anyone else.
+	// consent ID can't be approved by anyone else. Only ids are kept, never
+	// the app's record (which holds its secret hash).
 	viewer := as.getAuthenticatedUser(c)
 	if viewer == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		return
 	}
 	consentID := uuid.New().String()
-	consentData := map[string]interface{}{
-		"user_id":            viewer.String(),
-		"client":             client,
-		"scopes":             scopes,
-		"scope_descriptions": scopeDescriptions,
-		"authorize_request":  req,
-	}
-
-	consentJSON, _ := json.Marshal(consentData)
-	if err := as.putPending(context.Background(), "consent:"+consentID, consentJSON); err != nil {
+	consentJSON, _ := json.Marshal(pendingConsent{
+		UserID:           viewer.String(),
+		ClientID:         client.ID.String(),
+		Scopes:           scopes,
+		AuthorizeRequest: req,
+	})
+	if err := as.putPending(c.Request.Context(), "consent:"+consentID, consentJSON); err != nil {
 		log.Printf("oauth: store consent request: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start consent"})
 		return
 	}
 
+	view, err := as.consentView(c.Request.Context(), consentID, client, scopes, *viewer)
+	if err != nil {
+		log.Printf("oauth: build consent screen: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not start consent"})
+		return
+	}
 	// The website shows the consent screen from this answer
-	c.JSON(http.StatusOK, gin.H{
-		"consent_required":   true,
-		"consent_id":         consentID,
-		"client_name":        client.Name,
-		"scopes":             scopes,
-		"scope_descriptions": scopeDescriptions,
-		"consent_url":        fmt.Sprintf("/auth/consent/%s", consentID),
-		// Built with the URL parser, so a hostile state value can't add
-		// parameters or change where it points.
-		"cancel_url": errorRedirectURL(req.RedirectURI, req.State, "access_denied", ""),
-	})
+	view["consent_required"] = true
+	view["consent_url"] = fmt.Sprintf("/auth/consent/%s", consentID)
+	// Built with the URL parser, so a hostile state value can't add
+	// parameters or change where it points.
+	view["cancel_url"] = errorRedirectURL(req.RedirectURI, req.State, "access_denied", "")
+	c.JSON(http.StatusOK, view)
 }
 
 func (as *AuthService) processConsent(c *gin.Context, consentID string, approved bool) {
-	// Get consent data
-	consentJSON, err := as.getPending(context.Background(), "consent:"+consentID)
+	ctx := c.Request.Context()
+	consentData, err := as.readPendingConsent(ctx, consentID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent request"})
-		return
-	}
-
-	var consentData struct {
-		UserID           string                  `json:"user_id"`
-		Client           *models.OAuthClient     `json:"client"`
-		Scopes           []string                `json:"scopes"`
-		AuthorizeRequest models.AuthorizeRequest `json:"authorize_request"`
-	}
-	if err := json.Unmarshal(consentJSON, &consentData); err != nil || consentData.Client == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent data"})
 		return
 	}
 
@@ -167,9 +176,32 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 		c.JSON(http.StatusForbidden, gin.H{"error": "This consent request belongs to another user"})
 		return
 	}
+
+	// The pseud the person chose to share. It has to be one of their own;
+	// this is checked before the request is used up, so a mistake can be
+	// fixed. Left out, it is their default pseud.
+	var chosen *uuid.UUID
+	if raw := strings.TrimSpace(c.PostForm("pseud_id")); raw != "" && approved {
+		id, perr := uuid.Parse(raw)
+		if perr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pseud_id"})
+			return
+		}
+		own, perr := as.userOwnsPseud(ctx, *userID, id)
+		if perr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not check the pseud"})
+			return
+		}
+		if !own {
+			c.JSON(http.StatusForbidden, gin.H{"error": "That pseud is not yours"})
+			return
+		}
+		chosen = &id
+	}
+
 	// Each consent request can be answered once. If a second answer got here
 	// first, there is nothing left to take.
-	if _, err := as.takePending(context.Background(), "consent:"+consentID); err != nil {
+	if _, err := as.takePending(ctx, "consent:"+consentID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid consent request"})
 		return
 	}
@@ -177,7 +209,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 	// The app may have been switched off or changed since the screen was
 	// shown, so check the request again against the app as it is now.
 	req := consentData.AuthorizeRequest
-	client, err := as.getClientByID(consentData.Client.ID.String())
+	client, err := as.getClientByID(consentData.ClientID)
 	if err != nil || !contains(client.RedirectURIs, req.RedirectURI) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_client", "error_description": "This app is no longer available"})
 		return
@@ -195,7 +227,7 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 	}
 
 	// Store consent
-	if err := as.storeUserConsent(*userID, client.ID, scopes); err != nil {
+	if err := as.storeUserConsentWithPseud(ctx, *userID, client.ID, scopes, chosen); err != nil {
 		log.Printf("oauth: store consent: %v", err)
 		as.redirectWithError(c, req.RedirectURI, req.State, "server_error", "Failed to record consent")
 		return
@@ -211,20 +243,44 @@ func (as *AuthService) processConsent(c *gin.Context, consentID string, approved
 	c.Redirect(http.StatusFound, as.buildCallbackURL(req.RedirectURI, code, req.State))
 }
 
-// storeUserConsent records that the user allows an app these scopes. A new
-// approval adds to what was approved before; after a revocation it starts
-// again from only what was just approved.
+// storeUserConsent records that the user allows an app these scopes, sharing
+// their default pseud if the scopes include profile.
 func (as *AuthService) storeUserConsent(userID, clientID uuid.UUID, scopes []string) error {
+	return as.storeUserConsentWithPseud(context.Background(), userID, clientID, scopes, nil)
+}
+
+// storeUserConsentWithPseud records that the user allows an app these scopes.
+// A new approval adds to what was approved before; after a revocation it
+// starts again from only what was just approved. When the scopes include
+// profile, pseudID (which the caller has checked belongs to the user; nil
+// means their default pseud) becomes the one pseud the app sees, replacing
+// an earlier choice. Email is shared only if this approval includes the
+// email scope.
+func (as *AuthService) storeUserConsentWithPseud(ctx context.Context, userID, clientID uuid.UUID, scopes []string, pseudID *uuid.UUID) error {
+	var pseud interface{} // NULL unless the app is to see a pseud
+	if contains(scopes, "profile") {
+		if pseudID == nil {
+			def, err := as.defaultPseudID(ctx, userID)
+			if err != nil {
+				return fmt.Errorf("find default pseud: %w", err)
+			}
+			pseudID = &def
+		}
+		pseud = *pseudID
+	}
 	query := `
-		INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at, is_revoked)
-		VALUES ($1, $2, $3, $4, now(), false)
-		ON CONFLICT (user_id, client_id) 
+		INSERT INTO user_consents (id, user_id, client_id, scopes, granted_at, is_revoked, pseud_id, share_email)
+		VALUES ($1, $2, $3, $4, now(), false, $5, $6)
+		ON CONFLICT (user_id, client_id)
 		DO UPDATE SET
 			scopes = CASE WHEN user_consents.is_revoked THEN EXCLUDED.scopes
 				ELSE ARRAY(SELECT DISTINCT s FROM unnest(user_consents.scopes || EXCLUDED.scopes) s) END,
+			pseud_id = CASE WHEN user_consents.is_revoked THEN EXCLUDED.pseud_id
+				ELSE COALESCE(EXCLUDED.pseud_id, user_consents.pseud_id) END,
+			share_email = EXCLUDED.share_email OR (NOT user_consents.is_revoked AND user_consents.share_email),
 			granted_at = now(), is_revoked = false, revoked_at = NULL`
 
-	_, err := as.db.Exec(query, uuid.New(), userID, clientID, pq.Array(scopes))
+	_, err := as.db.ExecContext(ctx, query, uuid.New(), userID, clientID, pq.Array(scopes), pseud, contains(scopes, "email"))
 	return err
 }
 
@@ -251,92 +307,6 @@ func (as *AuthService) generateAuthorizationCode(userID, clientID uuid.UUID, req
 	return code, nil
 }
 
-// OIDC ID Token generation
-
-func (as *AuthService) generateIDToken(userID, clientID uuid.UUID, nonce string, scopes []string) (string, error) {
-	issuer, err := oauthIssuer()
-	if err != nil {
-		return "", err
-	}
-	user, err := as.getUserByID(userID)
-	if err != nil {
-		return "", err
-	}
-
-	now := time.Now()
-
-	// Set auth_time to last login or current time if never logged in
-	authTime := now.Unix()
-	if user.LastLoginAt != nil {
-		authTime = user.LastLoginAt.Unix()
-	}
-
-	claims := models.OIDCClaims{
-		Issuer:    issuer,
-		Subject:   userID.String(), // TODO(phase 2): replace with a pairwise subject
-		Audience:  clientID.String(),
-		ExpiresAt: now.Add(time.Hour).Unix(),
-		IssuedAt:  now.Unix(),
-		AuthTime:  authTime,
-		Nonce:     nonce,
-	}
-
-	// Add profile claims if scope is present
-	if contains(scopes, "profile") {
-		claims.Name = user.DisplayName
-		claims.PreferredUsername = user.Username
-		claims.Profile = fmt.Sprintf("%s/users/%s", issuer, url.PathEscape(user.Username))
-		claims.UpdatedAt = user.UpdatedAt.Unix()
-		claims.AO3Username = user.Username
-		claims.AO3DisplayName = user.DisplayName
-		claims.AO3JoinDate = user.CreatedAt.Unix()
-
-		// Get user roles
-		if roles, err := as.getUserRoles(user.ID); err == nil {
-			claims.AO3Roles = roles
-		}
-
-		// Get user statistics
-		if stats, err := as.getUserStats(user.ID); err == nil {
-			claims.AO3WorkCount = stats.WorkCount
-			claims.AO3BookmarkCount = stats.BookmarkCount
-		}
-	}
-
-	// Add email claims if scope is present
-	if contains(scopes, "email") {
-		claims.Email = user.Email
-		claims.EmailVerified = user.IsVerified
-	}
-
-	// Create and sign JWT
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss":                claims.Issuer,
-		"sub":                claims.Subject,
-		"aud":                claims.Audience,
-		"exp":                claims.ExpiresAt,
-		"iat":                claims.IssuedAt,
-		"auth_time":          claims.AuthTime,
-		"nonce":              claims.Nonce,
-		"name":               claims.Name,
-		"preferred_username": claims.PreferredUsername,
-		"profile":            claims.Profile,
-		"email":              claims.Email,
-		"email_verified":     claims.EmailVerified,
-		"updated_at":         claims.UpdatedAt,
-		"ao3_username":       claims.AO3Username,
-		"ao3_display_name":   claims.AO3DisplayName,
-		"ao3_roles":          claims.AO3Roles,
-		"ao3_join_date":      claims.AO3JoinDate,
-		"ao3_work_count":     claims.AO3WorkCount,
-		"ao3_bookmark_count": claims.AO3BookmarkCount,
-	})
-	// Name the signing key, so apps can pick the right key from the JWKS.
-	token.Header["kid"] = as.jwt.keyID
-
-	return token.SignedString(as.jwt.privateKey)
-}
-
 // Revoking access
 
 type execer interface {
@@ -352,7 +322,7 @@ func revokeUserClientAccess(ctx context.Context, tx execer, userID, clientID uui
 		`UPDATE oauth_access_tokens  SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
 		`UPDATE oauth_refresh_tokens SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
 		`UPDATE authorization_codes  SET used_at = now() WHERE user_id = $1 AND client_id = $2 AND used_at IS NULL`,
-		`UPDATE user_consents        SET is_revoked = true, revoked_at = now() WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
+		`UPDATE user_consents        SET is_revoked = true, revoked_at = now(), pseud_id = NULL, share_email = false WHERE user_id = $1 AND client_id = $2 AND NOT is_revoked`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, userID, clientID); err != nil {
 			return err
@@ -372,7 +342,7 @@ func revokeClientAccess(ctx context.Context, tx execer, clientID uuid.UUID, forg
 		`UPDATE authorization_codes  SET used_at = now() WHERE client_id = $1 AND used_at IS NULL`,
 	}
 	if forgetConsents {
-		qs = append(qs, `UPDATE user_consents SET is_revoked = true, revoked_at = now() WHERE client_id = $1 AND NOT is_revoked`)
+		qs = append(qs, `UPDATE user_consents SET is_revoked = true, revoked_at = now(), pseud_id = NULL, share_email = false WHERE client_id = $1 AND NOT is_revoked`)
 	}
 	for _, q := range qs {
 		if _, err := tx.ExecContext(ctx, q, clientID); err != nil {
@@ -387,38 +357,4 @@ func revokeClientAccess(ctx context.Context, tx execer, clientID uuid.UUID, forg
 func (as *AuthService) updateTokenLastUsed(tokenID uuid.UUID) {
 	query := `UPDATE oauth_access_tokens SET last_used = NOW() WHERE id = $1`
 	as.db.Exec(query, tokenID)
-}
-
-func (as *AuthService) getUserRoles(userID uuid.UUID) ([]string, error) {
-	query := `SELECT role FROM user_roles WHERE user_id = $1`
-	rows, err := as.db.Query(query, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var roles []string
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			continue
-		}
-		roles = append(roles, role)
-	}
-
-	return roles, nil
-}
-
-func (as *AuthService) getUserStats(userID uuid.UUID) (*UserStats, error) {
-	stats := &UserStats{}
-
-	// Get work count
-	workQuery := `SELECT COUNT(*) FROM works WHERE user_id = $1 AND status = 'published'`
-	as.db.QueryRow(workQuery, userID).Scan(&stats.WorkCount)
-
-	// Get bookmark count
-	bookmarkQuery := `SELECT COUNT(*) FROM bookmarks WHERE user_id = $1`
-	as.db.QueryRow(bookmarkQuery, userID).Scan(&stats.BookmarkCount)
-
-	return stats, nil
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -157,6 +158,32 @@ func LoadJWTManager(issuer, currentFile, previousFiles string) (*JWTManager, err
 			"then set SIGNING_KEY_FILE to it (see docs/RUNBOOK.md, \"Set up the signing key\")", err)
 	}
 	return NewJWTManager(issuer, priv, prev...)
+}
+
+// LoadOIDCManager builds the manager that signs OIDC ID tokens. They go to
+// other people's apps, so they should have a key of their own: the login key
+// can make a login for any account and must never be shared. The key comes
+// from file (OIDC_SIGNING_KEY_FILE), made the same way as the login key. With
+// no file it returns nil and ID tokens use the login key, with a warning.
+func LoadOIDCManager(login *JWTManager, issuer, file string) (*JWTManager, error) {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		log.Printf("warning: OIDC_SIGNING_KEY_FILE is not set, so ID tokens for apps are signed with the login key. " +
+			"A separate key is recommended: run \"nuclear keys generate\" and set OIDC_SIGNING_KEY_FILE (see docs/RUNBOOK.md)")
+		return nil, nil
+	}
+	priv, err := LoadPrivateKeyFile(file)
+	if err != nil {
+		return nil, fmt.Errorf("OIDC_SIGNING_KEY_FILE (%s): %w\nCreate a key with: nuclear keys generate", file, err)
+	}
+	jm, err := NewJWTManager(issuer, priv)
+	if err != nil {
+		return nil, fmt.Errorf("OIDC_SIGNING_KEY_FILE (%s): %w", file, err)
+	}
+	if login != nil && jm.keyID == login.keyID {
+		log.Printf("warning: OIDC_SIGNING_KEY_FILE is the same key as SIGNING_KEY_FILE; use a separate key")
+	}
+	return jm, nil
 }
 
 // GenerateKeyFile creates a new 3072-bit RSA signing key at path (PKCS#8 PEM,

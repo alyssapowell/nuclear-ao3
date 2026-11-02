@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"nuclear-ao3/internal/auth"
@@ -44,7 +45,8 @@ Do these now:
    backups: they deliberately do not contain it. If you lose every copy, the
    only fix is another new key, which logs everyone out.
 2. Set SIGNING_KEY_FILE to the file's path as the app sees it (with Docker
-   Compose that is /secrets/%s) and restart the app.
+   Compose that is /secrets/%s) and restart the app. (To sign the ID tokens
+   given to other apps, make a second key and set OIDC_SIGNING_KEY_FILE.)
 
 To change keys later: generate a new key, set SIGNING_KEY_FILE to it, and put
 the old file in SIGNING_KEY_PREVIOUS_FILES so current logins keep working
@@ -68,6 +70,17 @@ func showKeys() int {
 	fmt.Println("current: ", auth.KeyID(&priv.PublicKey))
 	for _, p := range prev {
 		fmt.Println("previous:", auth.KeyID(p))
+	}
+	// The key that signs ID tokens for other apps, if it has its own file.
+	if f := strings.TrimSpace(os.Getenv("OIDC_SIGNING_KEY_FILE")); f != "" {
+		oidc, err := auth.LoadPrivateKeyFile(f)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "keys show: OIDC_SIGNING_KEY_FILE (%s): %v\n", f, err)
+			return 1
+		}
+		fmt.Println("oidc:    ", auth.KeyID(&oidc.PublicKey))
+	} else {
+		fmt.Println("oidc:     (not set: ID tokens use the current key; a separate key is recommended)")
 	}
 	return 0
 }

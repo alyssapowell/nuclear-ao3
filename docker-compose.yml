@@ -59,6 +59,7 @@ services:
       - JWT_ISSUER=nuclear-ao3
       - SIGNING_KEY_FILE=${SIGNING_KEY_FILE:-}
       - SIGNING_KEY_PREVIOUS_FILES=${SIGNING_KEY_PREVIOUS_FILES:-}
+      - OIDC_SIGNING_KEY_FILE=${OIDC_SIGNING_KEY_FILE:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       - SMTP_HOST=${SMTP_HOST:-smtp}
       - SMTP_PORT=${SMTP_PORT:-1025}

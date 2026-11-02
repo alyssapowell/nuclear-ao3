@@ -67,6 +67,8 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - **Apps are vetted.** Anyone can register an app, but it stays inactive until an admin approves it. Self-registered apps can't use the client-credentials grant, and public apps must use PKCE.
 - **Everything an app does can be undone:** people can see and revoke every app they've approved, and a password change or reset revokes all of them (done).
 
+**How the first two rules were met (2026-11-02, audit phase 2):** each app gets its own random subject for a person (`oauth_subjects`), not one derived from the account id, so there is nothing to compute or compare; times in the tokens are per app too (`auth_time` is the sign-in with that app, not the person's last login). Under `profile` an app gets the one pseud the person chose at consent, as `{id, name}` (its real id; pseud ids are public). If that pseud is deleted the app gets none rather than another, since a fallback could show two pseuds are one person. Email needs the scope and a recorded yes. Trusted apps skip consent only for `openid` alone. ID tokens are signed with a separate key (`OIDC_SIGNING_KEY_FILE`) published at `/auth/jwks`, so the login key, which can make a login for any account, is never given to apps; without that setting the login key is used and a warning is logged. If a person shares the same pseud with two apps, those apps can match them by that public pseud, which is their choice.
+
 ## 2026-10-30: The public API names people by pseud only, and drops the account pages
 
 **Decision:**

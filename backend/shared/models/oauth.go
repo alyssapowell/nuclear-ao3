@@ -102,62 +102,6 @@ type OAuthScope struct {
 	CreatedAt       time.Time `json:"created_at" db:"created_at"`
 }
 
-// OIDC Claims for ID tokens
-type OIDCClaims struct {
-	// Standard JWT claims
-	Issuer    string `json:"iss"`
-	Subject   string `json:"sub"`
-	Audience  string `json:"aud"`
-	ExpiresAt int64  `json:"exp"`
-	IssuedAt  int64  `json:"iat"`
-	AuthTime  int64  `json:"auth_time,omitempty"`
-	Nonce     string `json:"nonce,omitempty"`
-
-	// Standard OIDC profile claims
-	Name              string `json:"name,omitempty"`
-	GivenName         string `json:"given_name,omitempty"`
-	FamilyName        string `json:"family_name,omitempty"`
-	MiddleName        string `json:"middle_name,omitempty"`
-	Nickname          string `json:"nickname,omitempty"`
-	PreferredUsername string `json:"preferred_username,omitempty"`
-	Profile           string `json:"profile,omitempty"`
-	Picture           string `json:"picture,omitempty"`
-	Website           string `json:"website,omitempty"`
-	Gender            string `json:"gender,omitempty"`
-	Birthdate         string `json:"birthdate,omitempty"`
-	Zoneinfo          string `json:"zoneinfo,omitempty"`
-	Locale            string `json:"locale,omitempty"`
-	UpdatedAt         int64  `json:"updated_at,omitempty"`
-
-	// Standard OIDC email claims
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-
-	// Standard OIDC phone claims
-	PhoneNumber         string `json:"phone_number,omitempty"`
-	PhoneNumberVerified bool   `json:"phone_number_verified,omitempty"`
-
-	// Standard OIDC address claims
-	Address *OIDCAddress `json:"address,omitempty"`
-
-	// AO3-specific claims
-	AO3Username      string   `json:"ao3_username,omitempty"`
-	AO3DisplayName   string   `json:"ao3_display_name,omitempty"`
-	AO3Roles         []string `json:"ao3_roles,omitempty"`
-	AO3JoinDate      int64    `json:"ao3_join_date,omitempty"`
-	AO3WorkCount     int      `json:"ao3_work_count,omitempty"`
-	AO3BookmarkCount int      `json:"ao3_bookmark_count,omitempty"`
-}
-
-type OIDCAddress struct {
-	Formatted     string `json:"formatted,omitempty"`
-	StreetAddress string `json:"street_address,omitempty"`
-	Locality      string `json:"locality,omitempty"`
-	Region        string `json:"region,omitempty"`
-	PostalCode    string `json:"postal_code,omitempty"`
-	Country       string `json:"country,omitempty"`
-}
-
 // Request/Response types
 
 type ClientRegistrationRequest struct {
@@ -254,35 +198,22 @@ type IntrospectResponse struct {
 	JWTID     string `json:"jti,omitempty"`
 }
 
-type UserInfoResponse struct {
-	Subject             string       `json:"sub"`
-	Name                string       `json:"name,omitempty"`
-	GivenName           string       `json:"given_name,omitempty"`
-	FamilyName          string       `json:"family_name,omitempty"`
-	MiddleName          string       `json:"middle_name,omitempty"`
-	Nickname            string       `json:"nickname,omitempty"`
-	PreferredUsername   string       `json:"preferred_username,omitempty"`
-	Profile             string       `json:"profile,omitempty"`
-	Picture             string       `json:"picture,omitempty"`
-	Website             string       `json:"website,omitempty"`
-	Email               string       `json:"email,omitempty"`
-	EmailVerified       bool         `json:"email_verified,omitempty"`
-	Gender              string       `json:"gender,omitempty"`
-	Birthdate           string       `json:"birthdate,omitempty"`
-	Zoneinfo            string       `json:"zoneinfo,omitempty"`
-	Locale              string       `json:"locale,omitempty"`
-	PhoneNumber         string       `json:"phone_number,omitempty"`
-	PhoneNumberVerified bool         `json:"phone_number_verified,omitempty"`
-	Address             *OIDCAddress `json:"address,omitempty"`
-	UpdatedAt           int64        `json:"updated_at,omitempty"`
+// PseudClaim is the one pseud a person chose to share with an app. A pseud's
+// id is public anyway (pseud pages are keyed by it), so the real one is used.
+type PseudClaim struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
 
-	// AO3-specific claims
-	AO3Username      string   `json:"ao3_username,omitempty"`
-	AO3DisplayName   string   `json:"ao3_display_name,omitempty"`
-	AO3Roles         []string `json:"ao3_roles,omitempty"`
-	AO3JoinDate      int64    `json:"ao3_join_date,omitempty"`
-	AO3WorkCount     int      `json:"ao3_work_count,omitempty"`
-	AO3BookmarkCount int      `json:"ao3_bookmark_count,omitempty"`
+// UserInfoResponse is everything an app can learn about a person. There is
+// deliberately nothing else: no account id, username, other pseuds, roles,
+// counts or dates. Sub is different for every app (see oauth_subjects).
+type UserInfoResponse struct {
+	Subject       string      `json:"sub"`
+	Name          string      `json:"name,omitempty"`  // the shared pseud's name (scope profile)
+	Pseud         *PseudClaim `json:"pseud,omitempty"` // scope profile
+	Email         string      `json:"email,omitempty"` // scope email, with explicit consent
+	EmailVerified *bool       `json:"email_verified,omitempty"`
 }
 
 // OIDC Discovery document
@@ -343,7 +274,7 @@ var AO3OAuthScopes = map[string]OAuthScope{
 	},
 	"profile": {
 		Name:            "profile",
-		Description:     "Access your basic profile information",
+		Description:     "See the one pseud (name and id) you choose to share with this app",
 		Category:        "profile",
 		IsDefault:       true,
 		RequiresConsent: true,
@@ -351,7 +282,7 @@ var AO3OAuthScopes = map[string]OAuthScope{
 	},
 	"email": {
 		Name:            "email",
-		Description:     "Access your email address",
+		Description:     "See the email address of your account",
 		Category:        "profile",
 		IsDefault:       false,
 		RequiresConsent: true,

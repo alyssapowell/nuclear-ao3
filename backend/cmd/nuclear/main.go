@@ -17,6 +17,9 @@
 //	SIGNING_KEY_PREVIOUS_FILES
 //	                   optional comma-separated list of old key files, accepted
 //	                   only to check logins made before a planned key change
+//	OIDC_SIGNING_KEY_FILE
+//	                   optional separate key for the ID tokens given to other
+//	                   apps (recommended; without it the login key is used)
 //	JOB_WORKERS        how many background jobs run at once (default 2)
 //	MIGRATE_ON_START   set to "false" to skip applying database migrations
 //	                   at startup (then run "nuclear migrate" yourself)

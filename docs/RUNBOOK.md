@@ -33,6 +33,8 @@ The signing key is what proves a login is real. You make it once, and you keep i
 
 If the app says "SIGNING_KEY_FILE is not set" or can't read the key, one of these steps is missing. There is no automatic fallback.
 
+**ID-token key (only if you offer "Sign in with the archive" to other apps):** run `make keys-oidc` and set `OIDC_SIGNING_KEY_FILE=/secrets/oidc-signing-key-DATE.pem` (save a copy of it too). It signs the ID tokens given to other apps and is published at `/auth/jwks`; the login key never is. If it is left empty the login key is used and the app logs a warning; `make keys-show` prints the `oidc:` key ID.
+
 ### Change the signing key (planned)
 
 Do this now and then, or when someone who held a copy of the key leaves. People stay logged in.
