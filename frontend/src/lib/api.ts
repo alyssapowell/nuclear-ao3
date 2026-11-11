@@ -2174,7 +2174,7 @@ export async function getMyProfile(authToken?: string) {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile`, {
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/auth/me`, {
       method: 'GET',
       headers,
     });
@@ -2203,7 +2203,7 @@ export async function updateProfile(profileData: UpdateProfileRequest, authToken
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile`, {
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/auth/me`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(profileData),
@@ -2350,30 +2350,19 @@ export async function updatePrivacySettings(settingsData: PrivacySettingsRequest
 
 // Get user pseudonyms
 export async function getPseudonyms(authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/pseudonyms`, {
-      method: 'GET',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Get pseudonyms error:', error instanceof Error ? error.message : String(error));
-    throw error;
+  // The signed-in person's own pseuds. Answered as { pseudonyms } for the
+  // pages that call this.
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
   }
+  const response = await fetch(`${API_GATEWAY_URL}/api/v1/my/pseuds`, { method: 'GET', headers });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return { pseudonyms: (data.pseuds ?? []) as UserPseudonym[] };
 }
 
 // The signed-in user's own pseuds (GET /my/pseuds), as {id, name}. Used to tell
