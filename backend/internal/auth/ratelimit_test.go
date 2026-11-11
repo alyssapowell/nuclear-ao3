@@ -115,16 +115,16 @@ func TestFullTableSharesOneBucketInsteadOfForgettingClients(t *testing.T) {
 }
 
 func TestIPv6IsCountedPerNetwork(t *testing.T) {
-	a := clientNetwork("2001:db8:1:2:aaaa::1")
-	b := clientNetwork("2001:db8:1:2:ffff:ffff:ffff:ffff")
-	c := clientNetwork("2001:db8:1:3::1")
+	a := ClientNetwork("2001:db8:1:2:aaaa::1")
+	b := ClientNetwork("2001:db8:1:2:ffff:ffff:ffff:ffff")
+	c := ClientNetwork("2001:db8:1:3::1")
 	if a != b {
 		t.Errorf("two addresses in one /64 counted apart: %s %s", a, b)
 	}
 	if a == c {
 		t.Errorf("different /64 networks counted together: %s", a)
 	}
-	if got := clientNetwork("203.0.113.7"); got != "203.0.113.7" {
+	if got := ClientNetwork("203.0.113.7"); got != "203.0.113.7" {
 		t.Errorf("IPv4 changed: %s", got)
 	}
 }

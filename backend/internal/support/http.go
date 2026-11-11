@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -73,11 +74,16 @@ func (h *handlers) submit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "The message could not be read."})
 		return
 	}
-	// Count the attempt before doing any work. Both the address and the
-	// account count, so neither can be used to get round the other.
-	keys := []string{"support:ip:" + c.ClientIP()}
+	// Count the attempt before doing any work. The visitor's network, the
+	// account and the address a guest gives all count, so none can be used to
+	// get round the others, and nobody can have the confirmation email sent
+	// to one stranger over and over. IPv6 is counted per /64 network, as the
+	// login limits are.
+	keys := []string{"support:ip:" + auth.ClientNetwork(c.ClientIP())}
 	if user != nil {
 		keys = append(keys, "support:user:"+user.String())
+	} else if to := strings.ToLower(strings.TrimSpace(sub.Email)); to != "" {
+		keys = append(keys, "support:to:"+to)
 	}
 	for _, k := range keys {
 		if ok, wait := h.limiter.Allow(k, h.limit, h.window); !ok {

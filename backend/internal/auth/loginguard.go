@@ -127,7 +127,7 @@ func (as *AuthService) attemptLimit() gin.HandlerFunc {
 	g.init()
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
-		key := "attempt:" + clientNetwork(ip)
+		key := "attempt:" + ClientNetwork(ip)
 		counter := g.byIP
 		if !g.byIP.tracking(key) {
 			key, counter = "attempt:"+wideNetwork(ip), g.byNetwork

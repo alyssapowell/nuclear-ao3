@@ -61,7 +61,7 @@ func (as *AuthService) oauthLimit(endpoint string) gin.HandlerFunc {
 		rate := as.oauthRateFor(endpoint)
 		l := as.oauth.counter()
 
-		if ok, retry := l.Allow("oauth:"+endpoint+":ip:"+clientNetwork(c.ClientIP()), rate.PerIP, oauthLimitWindow); !ok {
+		if ok, retry := l.Allow("oauth:"+endpoint+":ip:"+ClientNetwork(c.ClientIP()), rate.PerIP, oauthLimitWindow); !ok {
 			denyOAuth(c, retry)
 			return
 		}

@@ -214,11 +214,14 @@ func (s *Service) Submit(ctx context.Context, user *uuid.UUID, sub Submission) (
 			return uuid.Nil, err
 		}
 	}
+	// The confirmation repeats nothing the sender wrote. A guest's address
+	// isn't checked, so anything copied in here could be sent to a stranger
+	// in the archive's name.
 	err = jobs.Enqueue(ctx, tx, "email", email.Message{
 		To:      to,
-		Subject: "We received your message: " + sub.Subject,
-		Text: "Thank you for writing to us. We have received your " + label + " request and a volunteer will read it.\n" +
-			"Please do not share this message with anyone else.\n\nYour message:\n\n" + sub.Body + "\n",
+		Subject: "We received your message",
+		Text: "Thank you for writing to us. We have received your " + label + " request and a volunteer will read it.\n\n" +
+			"If you didn't send a message to us, you can ignore this email.\n",
 	})
 	if err != nil {
 		return uuid.Nil, err

@@ -346,3 +346,48 @@ func TestDeletingTheAccountKeepsTheTicket(t *testing.T) {
 		t.Error("ticket should remain, without the account")
 	}
 }
+
+// The confirmation goes to an address nobody has checked, so it must not
+// carry anything the sender wrote.
+func TestConfirmationRepeatsNothingTheSenderWrote(t *testing.T) {
+	e := newEnv(t, "help@archive.example")
+	e.expect(201, "POST", "/api/v1/support", "", map[string]any{
+		"subject": "Cheap pills at spam.example", "body": "Visit spam.example today", "email": "stranger@example.org",
+	})
+	got := e.emails()["stranger@example.org"]
+	if len(got) != 1 {
+		t.Fatalf("confirmation: %v", got)
+	}
+	if strings.Contains(got[0], "spam.example") || strings.Contains(got[0], "pills") {
+		t.Errorf("the confirmation repeats the message:\n%s", got[0])
+	}
+}
+
+func TestRateLimitCannotBeDodged(t *testing.T) {
+	e := newEnv(t, "", support.WithSendLimit(2, time.Hour))
+	from := func(addr, to string) int {
+		var buf bytes.Buffer
+		json.NewEncoder(&buf).Encode(map[string]any{"subject": "S", "body": "B", "email": to})
+		req := httptest.NewRequest("POST", "/api/v1/support", &buf)
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = addr
+		w := httptest.NewRecorder()
+		e.router.ServeHTTP(w, req)
+		return w.Code
+	}
+	// One IPv6 connection has a whole /64 to itself: new addresses in it
+	// are the same visitor.
+	if from("[2001:db8:1:2::1]:1000", "a@example.org") != 201 || from("[2001:db8:1:2::2]:1000", "b@example.org") != 201 {
+		t.Fatal("first two refused")
+	}
+	if code := from("[2001:db8:1:2:ffff::9]:1000", "c@example.org"); code != 429 {
+		t.Errorf("a third address in the same /64 got %d, want 429", code)
+	}
+	// One recipient can't be sent confirmations from many places.
+	if from("198.51.100.1:1000", "target@example.org") != 201 || from("198.51.100.2:1000", "target@example.org") != 201 {
+		t.Fatal("first two to the target refused")
+	}
+	if code := from("198.51.100.3:1000", "Target@Example.org"); code != 429 {
+		t.Errorf("a third message to the same address got %d, want 429", code)
+	}
+}

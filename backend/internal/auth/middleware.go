@@ -81,10 +81,10 @@ func wideNetwork(ip string) string {
 	return parsed.Mask(net.CIDRMask(48, 128)).String() + "/48"
 }
 
-// clientNetwork is the address a visitor is counted under. IPv6 addresses
+// ClientNetwork is the address a visitor is counted under. IPv6 addresses
 // are grouped by their /64 network, because one connection usually has a
 // whole /64 to itself and could otherwise pose as countless clients.
-func clientNetwork(ip string) string {
+func ClientNetwork(ip string) string {
 	parsed := net.ParseIP(ip)
 	if parsed == nil || parsed.To4() != nil {
 		return ip
@@ -187,7 +187,7 @@ func (rlm *RateLimitManager) CheckRateLimit(clientInfo *ClientRateLimitInfo, cli
 	config := clientInfo.GetRateLimitConfig()
 
 	if clientInfo.DetermineRateLimitTier() == RateLimitTierAnonymous {
-		key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), clientNetwork(clientIP))
+		key := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), ClientNetwork(clientIP))
 		if !rlm.anonymous.tracking(key) {
 			wide := fmt.Sprintf("rate_limit:%s:%s:%s", rlm.serviceName, string(config.Tier), wideNetwork(clientIP))
 			return rlm.checkLimitWithConfig(rlm.networks, wide, config)
