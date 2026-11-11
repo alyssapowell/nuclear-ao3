@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -160,6 +161,50 @@ func TestKeySettingsRefuseMistakes(t *testing.T) {
 		}
 		if err := keysFromEnv(); err == nil {
 			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestKeySettingSurvivesWhatPlatformsDoToIt(t *testing.T) {
+	key := pemKey(t)
+	want, _, _ := pemDecodeKey(key)
+	oneLine := func(s string) string { return strings.ReplaceAll(s, "\n", "") }
+	for name, text := range map[string]string{
+		"as pasted":           key,
+		"newlines as \\n":     strings.ReplaceAll(key, "\n", `\n`),
+		"newlines as spaces":  strings.ReplaceAll(key, "\n", " "),
+		"newlines removed":    oneLine(key),
+		"windows newlines":    strings.ReplaceAll(key, "\n", "\r\n"),
+		"in quotes":           `"` + key + `"`,
+		"one line of base64":  base64.StdEncoding.EncodeToString([]byte(key)),
+		"base64, then quoted": `'` + base64.StdEncoding.EncodeToString([]byte(key)) + `'`,
+	} {
+		blocks, err := splitPEM(text)
+		if err != nil || len(blocks) != 1 {
+			t.Errorf("%s: %v (%d keys)", name, err, len(blocks))
+			continue
+		}
+		got, _, err := pemDecodeKey(string(blocks[0]))
+		if err != nil || !got.Equal(want) {
+			t.Errorf("%s: a different key came out (%v)", name, err)
+		}
+	}
+	// Two old keys run together on one line, as SIGNING_KEY_PREVIOUS.
+	if blocks, err := splitPEM(oneLine(pemKey(t) + pemKey(t))); err != nil || len(blocks) != 2 {
+		t.Errorf("two keys on one line: %v (%d keys)", err, len(blocks))
+	}
+	// A cut-off key, or a key with extra text, is refused, and the error
+	// never repeats any of it.
+	for name, text := range map[string]string{
+		"cut off":    key[:len(key)/2],
+		"extra text": key + "SIGNING_KEY=",
+		"garbage":    "hunter2",
+	} {
+		_, err := splitPEM(text)
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+		} else if strings.Contains(err.Error(), "MII") || strings.Contains(err.Error(), "hunter2") {
+			t.Errorf("%s: the error repeats the secret: %v", name, err)
 		}
 	}
 }

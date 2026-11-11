@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -146,21 +148,42 @@ func keysFromEnv() error {
 }
 
 // splitPEM splits text into its PEM blocks, re-encoded one per item.
-// Platforms often turn newlines in a setting into the two characters \n, so
-// those are turned back first.
+// Platforms' secret fields often change a pasted key on the way: newlines
+// become the two characters \n, spaces, or nothing, and quotes get added
+// around it. Only the -----BEGIN and -----END lines and the base64 between
+// them carry the key, so the key is rebuilt from those, whatever happened to
+// the spacing. A key given as one line of base64 (base64 -i key.pem) works
+// too. Errors never repeat any of the text: it is a secret.
 func splitPEM(text string) ([][]byte, error) {
-	rest := []byte(strings.ReplaceAll(text, `\n`, "\n"))
-	var out [][]byte
-	for {
-		var b *pem.Block
-		b, rest = pem.Decode(rest)
-		if b == nil {
-			break
+	text = strings.Trim(strings.TrimSpace(text), `"'`)
+	if !strings.Contains(text, "-----BEGIN") {
+		decoded, err := base64.StdEncoding.DecodeString(stripSpacing(text))
+		if err != nil || !strings.Contains(string(decoded), "-----BEGIN") {
+			return nil, fmt.Errorf("is not a key (paste the whole file, from -----BEGIN to the -----END line)")
 		}
-		out = append(out, pem.EncodeToMemory(b))
+		text = string(decoded)
 	}
-	if strings.TrimSpace(string(rest)) != "" || len(out) == 0 {
-		return nil, fmt.Errorf("is not PEM text (it should start with -----BEGIN)")
+	var out [][]byte
+	for _, m := range pemBlock.FindAllStringSubmatchIndex(text, -1) {
+		kind, end := text[m[2]:m[3]], text[m[6]:m[7]]
+		body, err := base64.StdEncoding.DecodeString(stripSpacing(text[m[4]:m[5]]))
+		if kind != end || err != nil {
+			return nil, fmt.Errorf("is not a complete key (paste the whole file, from -----BEGIN to the -----END line)")
+		}
+		out = append(out, pem.EncodeToMemory(&pem.Block{Type: kind, Bytes: body}))
+	}
+	if len(out) == 0 || stripSpacing(pemBlock.ReplaceAllString(text, "")) != "" {
+		return nil, fmt.Errorf("is not a complete key (paste the whole file, from -----BEGIN to the -----END line, and nothing else)")
 	}
 	return out, nil
+}
+
+// pemBlock matches one PEM block, however its lines were run together.
+var pemBlock = regexp.MustCompile(`(?s)-----BEGIN ([A-Z ]+)-----(.*?)-----END ([A-Z ]+)-----`)
+
+// stripSpacing removes whitespace, the two-character \n and \r that some
+// platforms store for a newline, and stray quotes.
+func stripSpacing(s string) string {
+	s = strings.NewReplacer(`\n`, "", `\r`, "", `"`, "", `'`, "").Replace(s)
+	return strings.Join(strings.Fields(s), "")
 }

@@ -74,7 +74,14 @@ go run ./cmd/nuclear keys generate login-key.pem
 go run ./cmd/nuclear keys generate oidc-key.pem
 ```
 
-Paste the whole of each file, including the `-----BEGIN` and `-----END` lines, into `SIGNING_KEY` and `OIDC_SIGNING_KEY`. Save both files in your password manager, then delete them from the computer. A key given as a setting works exactly like one given as a file (`SIGNING_KEY_FILE`); setting both is refused. To change keys later, put the old key's text in `SIGNING_KEY_PREVIOUS` for 14 days, as in docs/RUNBOOK.md.
+Paste the whole of each file, including the `-----BEGIN` and `-----END` lines, into `SIGNING_KEY` and `OIDC_SIGNING_KEY`. If the platform's secrets box takes one `KEY=value` per line, a key with line breaks won't fit; give each key as one line of base64 instead. This puts both lines on the clipboard, ready to paste, without showing them:
+
+```sh
+printf 'SIGNING_KEY=%s\nOIDC_SIGNING_KEY=%s\n' \
+  "$(base64 -i login-key.pem | tr -d '\n')" "$(base64 -i oidc-key.pem | tr -d '\n')" | pbcopy
+```
+
+(`pbcopy` is macOS; on Linux use `xclip -selection clipboard`.) The app also copes with keys whose line breaks were turned into spaces, `\n` or nothing, or that were put in quotes. Save both files in your password manager, then delete them from the computer. A key given as a setting works exactly like one given as a file (`SIGNING_KEY_FILE`); setting both is refused. To change keys later, put the old key's text in `SIGNING_KEY_PREVIOUS` for 14 days, as in docs/RUNBOOK.md.
 
 ### Check after the first deploy
 
