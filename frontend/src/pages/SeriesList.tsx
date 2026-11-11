@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PseudList } from '@/components/PseudLink';
 import { Search, Plus, User, Calendar, BookOpen, FileText } from 'lucide-react';
 import { getMySeries, createSeries, CreateSeriesRequest, PseudRef } from '@/lib/api';
 
@@ -155,7 +156,7 @@ export default function SeriesPage() {
           </a>
           <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
-            by {series.authors.length > 0 ? series.authors.map(a => a.name).join(', ') : 'Anonymous'}
+            by <PseudList pseuds={series.authors} />
           </p>
         </div>
         

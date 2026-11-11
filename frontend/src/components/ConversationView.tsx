@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Comment, CommentCreateRequest } from '@/types/comment';
+import { PseudLink } from './PseudLink';
 import { useConversationNavigation } from '@/hooks/useConversationNavigation';
 
 interface ConversationViewProps {
@@ -241,7 +242,7 @@ export default function ConversationView({
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center space-x-2 text-sm">
                 <span className="font-medium text-gray-900 dark:text-white">
-                  {comment.author_name}
+                  {comment.pseud ? <PseudLink pseud={comment.pseud} className="hover:underline" /> : comment.author_name}
                 </span>
                 {comment.author_type === 'guest' && (
                   <span className="text-xs bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded">

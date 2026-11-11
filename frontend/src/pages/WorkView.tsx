@@ -13,6 +13,7 @@ import { getWork, getWorkChapters, getMyPseuds, Gift } from '@/lib/api';
 import { useAuth } from '@/utils/auth';
 import { useReaderPreferences } from '@/hooks/useReaderPreferences';
 import { useReadingProgress } from '@/hooks/useReadingProgress';
+import { PseudLink } from '@/components/PseudLink';
 
 interface Work {
   id: string;
@@ -213,8 +214,8 @@ export default function WorkPage() {
                 <span className="text-slate-500">Anonymous</span>
               ) : (
                 authors.map((author, index) => (
-                  <span key={author.id} className="text-orange-700 font-medium">
-                    {author.name}
+                  <span key={author.id} className="font-medium">
+                    <PseudLink pseud={author} className="text-orange-700 hover:underline" />
                     {index < authors.length - 1 && ', '}
                   </span>
                 ))

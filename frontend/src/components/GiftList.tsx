@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Gift as GiftIcon } from 'lucide-react'
 import { getWorkGifts, Gift } from '@/lib/api'
+import { PseudLink } from './PseudLink'
 
 interface GiftListProps {
   workId: string;
@@ -61,8 +62,8 @@ export function GiftList({ workId, gifts: initialGifts, authToken }: GiftListPro
         Gifted to: {gifts.map((gift, index) => (
           <span key={gift.id}>
             {gift.recipient?.name ? (
-              <span className="font-medium text-purple-700">
-                {gift.recipient.name}
+              <span className="font-medium">
+                <PseudLink pseud={gift.recipient} className="text-purple-700 hover:underline" />
               </span>
             ) : (
               <span className="font-medium text-purple-700">

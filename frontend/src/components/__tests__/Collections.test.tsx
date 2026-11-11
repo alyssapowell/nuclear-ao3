@@ -93,11 +93,11 @@ describe('Collections Components', () => {
       expect(screen.getByText('Open')).toBeInTheDocument();
     });
 
-    it('should name the organising pseud, as plain text', async () => {
+    it('should name the organising pseud, linking to its pseud page only', async () => {
       render(<CollectionsPage />);
 
-      expect(await screen.findByText(/Collection by TestPseud/)).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: /TestPseud/ })).not.toBeInTheDocument();
+      const link = await screen.findByRole('link', { name: 'TestPseud' });
+      expect(link).toHaveAttribute('href', expect.stringMatching(/^\/pseuds\/[^/]+$/));
     });
 
     it('should search with the typed query', async () => {

@@ -5,6 +5,7 @@ import TagAutocomplete from '@/components/TagAutocomplete';
 import RichTextEditor from '@/components/RichTextEditor';
 import EnhancedTagProminenceSelector from '@/components/EnhancedTagProminenceSelector';
 import { createWork, CreateWorkRequest } from '@/lib/api';
+import PseudPicker from '@/components/PseudPicker';
 
 export default function NewWorkPage() {
   const [formData, setFormData] = useState({
@@ -33,6 +34,7 @@ export default function NewWorkPage() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [pseudId, setPseudId] = useState(''); // '' = the default pseud
   const [error, setError] = useState('');
   const [tagInputs, setTagInputs] = useState({
     fandom: '',
@@ -199,6 +201,7 @@ export default function NewWorkPage() {
         comment_policy: formData.commentPolicy,
         moderate_comments: formData.moderateComments,
         is_anonymous: formData.isAnonymous,
+        ...(pseudId ? { pseud_id: pseudId } : {}),
         // Enhanced tag prominence data
         tag_prominence: prominenceTags.map(tag => ({
           tag_name: tag.tagName,
@@ -230,6 +233,7 @@ export default function NewWorkPage() {
               {/* Basic Work Information */}
               <div className="space-y-4">
                 <h2 className="text-lg font-semibold text-slate-800">Work Information</h2>
+                <PseudPicker token={typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null} value={pseudId} onChange={setPseudId} label="Post as" />
                 
                 <div>
                   <label htmlFor="title" className="block text-sm font-medium text-slate-700">

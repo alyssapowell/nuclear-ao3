@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { PseudList } from './PseudLink';
 
 interface Tag {
   name: string;
@@ -11,7 +12,9 @@ interface WorkCardProps {
   work: {
     id: string;
     title: string;
-    author: string;
+    author?: string;
+    /** Creators as pseuds; empty for a work that hides its creator. */
+    authors?: Array<{ id: string; name: string }>;
     summary?: string;
     word_count: number;
     chapter_count: number;
@@ -130,7 +133,7 @@ export default function WorkCard({ work, showEnhancedFeatures = true }: WorkCard
           <Link to={`/works/${work.id}`} className="text-lg font-semibold text-blue-700 hover:text-blue-800">
             {work.title}
           </Link>
-          <p className="text-sm text-gray-700">by {work.author}</p>
+          <p className="text-sm text-gray-700">by <PseudList pseuds={work.authors} fallback={work.author} /></p>
         </div>
         
         {showEnhancedFeatures && work.tag_quality_score !== undefined && (

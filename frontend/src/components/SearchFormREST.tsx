@@ -20,7 +20,8 @@ interface SearchFilters {
 interface Work {
   id: string;
   title: string;
-  author: string;
+  author?: string;
+  authors?: Array<{ id: string; name: string }>;
   summary?: string;
   word_count: number;
   chapter_count: number;
@@ -85,6 +86,7 @@ export default function SearchFormREST({ onResults, onRecommendations }: SearchF
         id: work.id,
         title: work.title,
         author: work.author,
+        authors: work.anonymous ? [] : work.authors,
         summary: work.summary,
         word_count: work.word_count,
         chapter_count: work.chapter_count,

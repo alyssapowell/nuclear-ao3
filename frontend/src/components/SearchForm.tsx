@@ -116,7 +116,8 @@ interface SearchFilters {
 interface Work {
   id: string;
   title: string;
-  author: string;
+  author?: string;
+  authors?: Array<{ id: string; name: string }>;
   summary?: string;
   word_count: number;
   chapter_count: number;
@@ -244,6 +245,7 @@ const SearchForm = React.memo(function SearchForm({
         id: work.id ?? work.work_id,
         title: work.title,
         author: work.anonymous || !work.authors?.length ? 'Anonymous' : work.authors.map((a: any) => a.name).join(', '),
+        authors: work.anonymous ? [] : (work.authors ?? []),
         summary: work.summary,
         word_count: work.word_count ?? work.wordCount,
         chapter_count: work.chapter_count ?? work.chapterCount,

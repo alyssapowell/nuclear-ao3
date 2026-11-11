@@ -284,6 +284,7 @@ function BookmarkCard({ bookmark, onUpdate }: BookmarkCardProps) {
     id: String(work.id || ''),
     title: String(work.title || ''),
     author: String(work.author || ''),
+    authors: Array.isArray(work.authors) ? (work.authors as Array<{ id: string; name: string }>) : [],
     summary: work.summary ? String(work.summary) : undefined,
     word_count: Number(work.word_count || 0),
     chapter_count: Number(work.chapter_count || 0),

@@ -44,6 +44,19 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 		return
 	}
 
+	// A pseud may be chosen, but only one of the creator's own. Asking for
+	// anyone else's, or one that does not exist, is the same refusal.
+	if req.PseudID != nil {
+		if _, err := ws.commentPseud(userID, req.PseudID); err == errNotYourPseud {
+			c.JSON(http.StatusForbidden, gin.H{"error": "That pseud isn't yours"})
+			return
+		} else if err != nil {
+			log.Printf("create work: pseud: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})
+			return
+		}
+	}
+
 	tx, err := ws.db.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
@@ -95,7 +108,12 @@ func (ws *WorkService) CreateWork(c *gin.Context) {
 		return
 	}
 
-	pseudID, err := defaultPseud(tx, userID)
+	var pseudID uuid.UUID
+	if req.PseudID != nil {
+		pseudID = *req.PseudID
+	} else {
+		pseudID, err = defaultPseud(tx, userID)
+	}
 	if err != nil {
 		log.Printf("create work: pseud: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create work"})

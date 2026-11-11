@@ -7,7 +7,8 @@ import SmartRecommendations, { SmartRecommendation } from '@/components/SmartRec
 interface Work {
   id: string;
   title: string;
-  author: string;
+  author?: string;
+  authors?: Array<{ id: string; name: string }>;
   summary?: string;
   word_count: number;
   chapter_count: number;

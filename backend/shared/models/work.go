@@ -247,6 +247,9 @@ type CreateWorkRequest struct {
 	Relationships []string   `json:"relationships"`
 	FreeformTags  []string   `json:"freeform_tags"`
 	MaxChapters   *int       `json:"max_chapters"`
+	// PseudID is the pseud the work is posted under: one of the creator's own,
+	// or their default pseud when left out.
+	PseudID *uuid.UUID `json:"pseud_id"`
 	// First chapter data
 	ChapterTitle    string `json:"chapter_title"`
 	ChapterSummary  string `json:"chapter_summary"`
