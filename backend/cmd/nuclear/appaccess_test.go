@@ -117,6 +117,7 @@ func TestEveryRouteRefusesApps(t *testing.T) {
 		"GET /api/v1/my/comments", "GET /api/v1/export/:id/download", "GET /api/v1/admin/audit",
 		"GET /api/v1/oauth/authorized-applications", "POST /auth/token", "GET /auth/authorize", "POST /auth/register-client",
 		"GET /api/v1/wrangling/queue", "GET /api/v1/notifications", "GET /ws",
+		"POST /api/v1/support", "GET /api/v1/admin/support", "POST /api/v1/admin/support/:ticket_id/notes",
 	} {
 		if !mounted[key] {
 			t.Errorf("expected route %s is not mounted", key)

@@ -61,6 +61,7 @@ Set these in the platform's settings for the app. Put the keys in its secret set
 | `SIGNING_KEY` | the text of a key made with `nuclear keys generate` (below) |
 | `OIDC_SIGNING_KEY` | the text of a second key, made the same way |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | a real mail service. The app refuses to start without one, because nobody could confirm their account. |
+| `SUPPORT_EMAIL` | optional. Where the Contact and Feedback forms are emailed. Every message is kept as a ticket either way, and admins and moderators read and answer them at `/admin/support`. |
 
 The app listens on port 8080. If the platform checks a port, set it to 8080.
 

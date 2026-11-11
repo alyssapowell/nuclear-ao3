@@ -165,6 +165,13 @@ Status key:
 
 ## Moderation
 
+- **Contact and Feedback: Support & Feedback and Policy & Abuse requests**
+  - Intent: AO3's two forms. Guests and logged-in people write to the admins; admins and moderators read and answer.
+  - Status: Built (migration 052, `internal/support`); verified by tests against a real database. `POST /api/v1/support` (`kind` `support` or `abuse`, subject up to 200 characters, message up to 10,000, optional page address, an email address for guests; a logged-in person's account address is used instead) stores a ticket, emails `SUPPORT_EMAIL` if set and emails the sender a confirmation, all in the transaction that stores it. It is limited to 5 per hour per address and per account. Text is plain: control characters are removed and nothing is ever shown as HTML. The Contact page offers both kinds; the Feedback page is the support kind.
+  - Staff side: `GET /api/v1/admin/support` (filter `status`, `kind`), `GET .../:id`, `POST .../:id/notes` (an internal note, or with `reply: true` also emailed to the sender), `POST .../:id/close` and `.../reopen`, for moderators and administrators; page at `/admin/support`. Each note, reply, close and reopen writes an `admin_actions` row in the same transaction. Notes are append-only.
+  - Privacy: a ticket (and the sender's email or account id) is shown only to staff, never to apps (`/api/v1/support` and the admin routes are closed to them) and there is no "my tickets" page. The sender's only copy is the confirmation email.
+  - Not done: AO3's FAQ suggestions before sending, a spam check, and threads by email (a reply by email to a reply is not attached to the ticket).
+
 - **Hidden works, chapters, series, bookmarks and comments; spam; suspensions and bans; an audit log of every admin action**
   - Intent: follow AO3 (cited in migration 033 and `internal/moderation`), with the same visibility rules in every place works are listed.
   - Status: Works (verified 2026-10-30 by tests against a real database and on a local server).

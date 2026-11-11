@@ -17,6 +17,9 @@
 //	ADMIN_EMAIL        makes the account with this email address the first
 //	                   admin at startup, where "nuclear grant" can't be run;
 //	                   does nothing once the archive has an admin
+//	SUPPORT_EMAIL      where the Contact and Feedback forms are emailed
+//	                   (optional; tickets are always kept, and shown to
+//	                   admins and moderators at /admin/support)
 //	TRIAL_NO_EMAIL     set to "true" to try the archive out with no email
 //	                   service: no mail settings are required, new accounts
 //	                   are confirmed at once and no email is ever sent. Never
@@ -132,6 +135,7 @@ import (
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
+	"nuclear-ao3/internal/support"
 	"nuclear-ao3/internal/tags"
 	"nuclear-ao3/internal/works"
 	"nuclear-ao3/migrations"
@@ -237,12 +241,13 @@ func main() {
 	r.Use(platform.Metrics(), gin.Recovery(), platform.Logger(), platform.SecurityHeaders(), platform.CORS(),
 		platform.PublicCache(), websitePaths(website), authSvc.RateLimitMiddleware(), deps.AppAccess)
 	mountRoutes(r, deps, services{
-		auth:   authSvc,
-		works:  worksSvc,
-		tags:   tags.New(db),
-		notify: notifySvc,
-		export: exportSvc,
-		search: searchSvc,
+		auth:    authSvc,
+		works:   worksSvc,
+		tags:    tags.New(db),
+		notify:  notifySvc,
+		export:  exportSvc,
+		search:  searchSvc,
+		support: support.New(db, os.Getenv("SUPPORT_EMAIL")),
 
 		trialNoEmail: trial,
 	})
@@ -549,6 +554,8 @@ type services struct {
 	notify *notify.NotificationService
 	export *export.ExportService
 	search *search.Service
+	// support may be nil (the route tests mount without a database).
+	support *support.Service
 
 	// trialNoEmail is TRIAL_NO_EMAIL; /api/v1/site reports it.
 	trialNoEmail bool
@@ -567,6 +574,10 @@ func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	export.Mount(r, s.export, deps)
 	search.Mount(r, s.search, deps)
 	moderation.Mount(r, moderation.New(deps.DB), deps)
+	if s.support == nil {
+		s.support = support.New(deps.DB, "")
+	}
+	support.Mount(r, s.support, deps)
 }
 
 // siteInfo answers GET /api/v1/site.
