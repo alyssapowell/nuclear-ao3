@@ -217,7 +217,7 @@ Found and fixed 2026-10-30:
 
 Found while fixing the database setup:
 
-- ~~Every install created an `admin` account with the password `password123`~~, plus three other accounts with that password. **Fixed:** sample accounts live in `backend/migrations/dev/seed.sql`, loaded only by `make seed`. The first admin is made with `nuclear grant <username> admin`.
+- ~~Every install created an `admin` account with the password `password123`~~, plus three other accounts with that password. **Fixed:** sample accounts are made by `nuclear demo-data` (`backend/internal/demo`), run only by `make seed` or `DEMO_DATA=true` on a trial archive, and it refuses unless `TRIAL_NO_EMAIL=true`. None of them has a role. The first admin is made with `nuclear grant <username> admin`.
 - ~~The built-in `orphan_account` also had the password `password123`~~, so anyone could log in as it and edit every orphaned work. **Fixed:** it has a password hash that can never match.
 - ~~Postgres (with its default password), Redis (since removed), mail and monitoring ports were published on every network interface~~, which on a server puts them on the internet (Docker bypasses the `ufw` firewall). **Fixed:** everything but Caddy is bound to `127.0.0.1`.
 - ~~Commenting as another user's pseud~~ (see Kudos and comments).

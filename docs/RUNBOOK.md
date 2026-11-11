@@ -104,7 +104,7 @@ To see what an upgrade will change before starting it: `make migrate-status`.
 
 ### Load sample data on your own computer
 
-`make seed` adds four sample accounts (`testuser`, `author2`, `tagwrangler`, `admin`, all with password `password123`) and two works. **Never run this on a real archive.**
+`make seed` adds 25 made-up accounts (`demo01@example.org` to `demo25@example.org`, all with the password `password123456` unless you give `DEMO_PASSWORD=...`) and 150 works with chapters, comments, kudos, bookmarks, series and collections. No account has a role: use `make grant` on one if you need an admin. It refuses unless `.env` says `ENVIRONMENT=development`. **Never run this on a real archive.**
 
 ---
 

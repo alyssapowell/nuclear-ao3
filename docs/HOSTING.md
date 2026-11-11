@@ -100,6 +100,20 @@ To try the archive on a platform that has no email service, set `TRIAL_NO_EMAIL=
 
 This also removes the protection against someone signing up with another person's address. Normally an account only works once its owner has used the password and the emailed link, so a stranger cannot claim an address that is not theirs. With no email, nobody checks the address, and a lost password cannot be reset. Use it only for a private trial with people you know. Before real users arrive, turn it off and set the `SMTP_*` settings.
 
+#### Demo data
+
+To have something to look at, the trial can be filled with made-up accounts and works. The platform needs no shell for this:
+
+1. Set `DEMO_PASSWORD` to a password of 12 to 40 characters, and set `DEMO_DATA=true`.
+2. Deploy. After the database is updated, the app loads the demo data once; the log says what was loaded. It takes a few seconds.
+3. Remove `DEMO_DATA` and deploy again. (Leaving it set does no harm while `TRIAL_NO_EMAIL` is `true`: if the demo accounts are already there, nothing is loaded. If `TRIAL_NO_EMAIL` is no longer `true`, the app refuses to start with `DEMO_DATA` set, so this can never put demo accounts in a real archive.)
+
+With a shell, `nuclear demo-data` does the same thing. There is no command to take the demo data out again; to start clean, empty the trial's database.
+
+What it makes: 25 accounts, `demo01@example.org` to `demo25@example.org` (example.org never receives mail), some with two or three pseuds; about 150 works in about 400 chapters, in public-domain fandoms (Sherlock Holmes, Pride and Prejudice, Les Misérables, Dracula, Frankenstein, Little Women, Arthurian Mythology) and Original Work, with their tags; about 600 comments, including replies and guest comments; kudos from members and guests; about 200 bookmarks; 10 series; three collections (a normal one, an anonymous one and an unrevealed one); and a few anonymous works, members-only works, drafts, subscriptions, blocks and mutes. Dates are spread over the last two years. All text is made up from word lists. The data is the same every time.
+
+**Every demo account has the password in `DEMO_PASSWORD`, so anyone who knows it can log in as any of them.** Pick a real password and do not reuse one from anywhere else. None of the accounts has a role: none is an admin, moderator or tag wrangler. To make an admin, register a new account and use `nuclear grant` (see docs/RUNBOOK.md).
+
 ### What the platform must provide instead
 
 - **Backups of the database, kept off the database's own machine**, and a restore you have tried. Find out how far back a restore goes (some platforms take one full copy a day, so up to a day of changes can be lost).

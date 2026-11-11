@@ -21,6 +21,12 @@
 //	                   service: no mail settings are required, new accounts
 //	                   are confirmed at once and no email is ever sent. Never
 //	                   for real users; see docs/HOSTING.md
+//	DEMO_DATA          set to "true" to fill the archive with made-up accounts
+//	                   and works once at startup (the same as "nuclear
+//	                   demo-data"). Only with TRIAL_NO_EMAIL=true, and needs
+//	                   DEMO_PASSWORD. Remove it after the first start
+//	DEMO_PASSWORD      the password of every demo account, 12 to 40
+//	                   characters. Anyone who knows it can log in as them
 //	SIGNING_KEY_FILE   the PEM file with the key that signs logins (required;
 //	                   create it with "nuclear keys generate")
 //	SIGNING_KEY_PREVIOUS_FILES
@@ -45,6 +51,11 @@
 //	                          running and failed, and the latest failures
 //	nuclear jobs retry [id]   put a failed job (or, with no id, every failed
 //	                          job) back in the queue
+//	nuclear demo-data         load made-up accounts, works, comments and the
+//	                          rest, for trying the archive out. Refuses unless
+//	                          TRIAL_NO_EMAIL=true and DEMO_PASSWORD is set;
+//	                          does nothing if the demo accounts are already
+//	                          there. Gives no account a role.
 //	nuclear keys generate [path]
 //	                          create a new signing key file (default
 //	                          secrets/signing-key-DATE.pem) and print what to
@@ -113,6 +124,7 @@ import (
 
 	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/internal/auth"
+	"nuclear-ao3/internal/demo"
 	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/html"
 	"nuclear-ao3/internal/jobs"
@@ -167,6 +179,12 @@ func main() {
 		}
 	}
 	firstAdmin(context.Background(), db, os.Getenv("ADMIN_EMAIL"))
+
+	if os.Getenv("DEMO_DATA") == "true" {
+		if err := loadDemoData(context.Background(), db, os.Getenv); err != nil {
+			log.Fatalf("startup: DEMO_DATA: %v", err)
+		}
+	}
 
 	// Auth comes first: everything else checks logins through it.
 	var authSvc *auth.AuthService
@@ -363,6 +381,23 @@ func runCommand(db *sql.DB, args []string) int {
 		}
 		log.Printf("jobs retry: %d job(s) queued again", n)
 		return 0
+	case len(args) == 1 && args[0] == "demo-data":
+		// Migrated first, so it works on a database nobody has started the
+		// server against yet. The settings are checked before anything is
+		// changed.
+		if _, err := demo.Password(os.Getenv); err != nil {
+			log.Printf("demo-data: %v", err)
+			return 2
+		}
+		if _, err := migrations.Up(ctx, db); err != nil {
+			log.Printf("demo-data: %v", err)
+			return 1
+		}
+		if err := loadDemoData(ctx, db, os.Getenv); err != nil {
+			log.Printf("demo-data: %v", err)
+			return 1
+		}
+		return 0
 	case len(args) == 2 && args[0] == "sessions" && args[1] == "revoke-all":
 		return revokeSessions(ctx, db, "")
 	case len(args) == 3 && args[0] == "sessions" && args[1] == "revoke":
@@ -386,7 +421,7 @@ func runCommand(db *sql.DB, args []string) int {
 	if handled, code := moderationCommand(ctx, db, args); handled {
 		return code
 	}
-	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | jobs [retry [id]] | sessions revoke-all | sessions revoke <email or id> | grant <email or id> <role> | roles | apps [approve|reject|suspend <id>] | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <email or id> | audit | keys generate|show]\n", strings.Join(args, " "))
+	fmt.Fprintf(os.Stderr, "unknown command %q\nusage: nuclear [migrate [status] | demo-data | jobs [retry [id]] | sessions revoke-all | sessions revoke <email or id> | grant <email or id> <role> | roles | apps [approve|reject|suspend <id>] | hide|unhide <kind> <id> | suspend|unsuspend|ban|unban <email or id> | audit | keys generate|show]\n", strings.Join(args, " "))
 	return 2
 }
 

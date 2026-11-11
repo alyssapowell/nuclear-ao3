@@ -137,7 +137,7 @@ docker exec -it nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear
 # Apply database migrations (the app also does this on startup)
 make migrate
 
-# Load sample accounts and works (development only; password "password123")
+# Load made-up accounts and works (development only; demo01@example.org to demo25@example.org)
 make seed
 
 # Add test data only

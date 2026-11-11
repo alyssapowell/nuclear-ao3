@@ -41,10 +41,16 @@ migrate: ## Apply database migrations (the app also does this when it starts)
 migrate-status: ## List migrations that haven't been applied yet
 	@docker-compose run --rm app nuclear migrate status
 
-seed: ## Load sample accounts and works for development (password: password123)
-	@docker-compose run --rm app nuclear migrate
-	@docker exec -i nuclear-ao3-postgres psql -U ao3_user -d ao3_nuclear -v ON_ERROR_STOP=1 -1 < backend/migrations/dev/seed.sql
-	@echo "Sample data loaded. Log in as admin@example.org / password123"
+# The same command a hosted trial uses (DEMO_DATA=true, see docs/HOSTING.md),
+# run once in a container of its own with trial mode on for just that run. It
+# is for your own computer, so it refuses unless .env says ENVIRONMENT=development.
+DEMO_PASSWORD ?= password123456
+seed: ## Load ~25 made-up accounts and 150 works for development: make seed [DEMO_PASSWORD=...]
+	@if ! grep -q '^ENVIRONMENT=development' .env 2>/dev/null; then \
+		echo "make seed is for your own computer: set ENVIRONMENT=development in .env first."; \
+		echo "On a hosted trial, set DEMO_DATA=true instead (see docs/HOSTING.md)."; exit 1; fi
+	@docker-compose run --rm -e TRIAL_NO_EMAIL=true -e DEMO_PASSWORD='$(DEMO_PASSWORD)' app nuclear demo-data
+	@echo "Log in as demo01@example.org to demo25@example.org with the password $(DEMO_PASSWORD) (none has a role; make grant gives one)"
 
 # Runs inside the app image so you don't need Go installed. It runs as your
 # own user (-u) so the key file in ./secrets is yours, mode 0600, and the -v

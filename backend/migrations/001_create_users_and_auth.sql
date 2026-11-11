@@ -257,7 +257,7 @@ LEFT JOIN security_events se ON u.id = se.user_id
 WHERE u.is_active = true
 GROUP BY u.id, u.username, u.last_login_at;
 
--- Sample data lives in migrations/dev/seed.sql, which is never run in production.
+-- Sample data is made by "nuclear demo-data", which is never run in production.
 
 -- =====================================================
 -- PERFORMANCE MONITORING

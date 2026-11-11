@@ -58,8 +58,11 @@ jobs:
           go run ./cmd/nuclear migrate
           # A second run must find nothing to do.
           go run ./cmd/nuclear migrate status | grep -qx "up to date"
-          # The dev seed must still load against the current schema.
-          PGPASSWORD=postgres psql -h localhost -U postgres -d ao3_nuclear_test -v ON_ERROR_STOP=1 -1 -f migrations/dev/seed.sql
+          # The demo data must still load against the current schema, and a
+          # second load must find it there and add nothing.
+          TRIAL_NO_EMAIL=true DEMO_PASSWORD=ci-demo-password go run ./cmd/nuclear demo-data
+          again=$(TRIAL_NO_EMAIL=true DEMO_PASSWORD=ci-demo-password go run ./cmd/nuclear demo-data 2>&1)
+          grep -q "already exist" <<< "$again"
 
       - name: Run linting (advisory, does not block)
         # Advisory until the lint backlog is cleared: a failure here shows as a

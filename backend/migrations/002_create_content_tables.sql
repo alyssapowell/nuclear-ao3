@@ -439,7 +439,7 @@ LEFT JOIN work_tags wt ON t.id = wt.tag_id
 LEFT JOIN works w ON wt.work_id = w.id AND w.is_draft = false
 GROUP BY t.id;
 
--- Sample data lives in migrations/dev/seed.sql, which is never run in production.
+-- Sample data is made by "nuclear demo-data", which is never run in production.
 
 COMMENT ON TABLE works IS 'Core fanfiction works with full metadata and statistics';
 COMMENT ON TABLE tags IS 'Hierarchical tag system with canonical forms and synonyms';
