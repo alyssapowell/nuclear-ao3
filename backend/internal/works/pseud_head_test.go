@@ -8,7 +8,8 @@ import (
 )
 
 // A pseud's page head and gifts say nothing about the account or any other
-// pseud of it. Gifts from the person's own account are left out.
+// pseud of it, and what a gifts list shows doesn't depend on who created
+// the works in it.
 func TestPseudHeadAndGiftsNeverTieSiblingsTogether(t *testing.T) {
 	e := newFixEnv(t)
 	writer, writerTok := e.user("giftwriter")
@@ -50,12 +51,23 @@ func TestPseudHeadAndGiftsNeverTieSiblingsTogether(t *testing.T) {
 		if !strings.Contains(out, given.String()) || !strings.Contains(out, "Sibling Alt Pen") {
 			t.Errorf("viewer %q: the gift is missing: %s", tok, out)
 		}
-		if strings.Contains(out, own.String()) {
-			t.Errorf("viewer %q: a work by the recipient's own account is listed: %s", tok, out)
+		// A gift is listed whoever wrote it, as on the work's own page.
+		if !strings.Contains(out, own.String()) {
+			t.Errorf("viewer %q: a gift from the recipient's own account is missing: %s", tok, out)
 		}
 		// Only the creator themselves may see their own anonymous work's author.
 		if tok != writerTok && strings.Contains(out, `"name":"giftwriter"`) {
 			t.Errorf("viewer %q: the writer's default pseud appears: %s", tok, out)
 		}
+	}
+
+	// Inviting one of the recipient's account's pseuds to co-create a gift
+	// (anyone can send an invitation) must not change the list: if it did,
+	// the change would show which pseuds share an account.
+	before := e.expect(200, "GET", "/api/v1/pseuds/"+recipient.String()+"/gifts", "", nil)
+	e.exec(`INSERT INTO creatorships (creation_id, creation_type, pseud_id, approved) VALUES ($1, 'Work', $2, false)`,
+		given, recipient)
+	if after := e.expect(200, "GET", "/api/v1/pseuds/"+recipient.String()+"/gifts", "", nil); after != before {
+		t.Errorf("a co-creator invitation changed the gifts list:\nbefore %s\nafter  %s", before, after)
 	}
 }

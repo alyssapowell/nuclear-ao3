@@ -44,9 +44,13 @@ func (ws *WorkService) GetPseud(c *gin.Context) {
 
 // GetPseudGifts lists the works given to a pseud (AO3: /users/:user_id/gifts).
 // Only gifts the recipient has not refused, that no block turned away, on
-// published works the viewer may read. A work the recipient's own account
-// wrote (under another pseud) is left out: it would tie the two pseuds
-// together. A work that hides its creator is listed with no author.
+// published works the viewer may read: the same gifts the works' own pages
+// show. Nothing about who created a work changes whether it is listed.
+// Leaving out works by the recipient's own account would do the opposite of
+// what it intends: anyone can invite a pseud to co-create a work, and a gift
+// that vanished from the list when that pseud was invited would show the two
+// pseuds share an account. A work that hides its creator is listed with no
+// author.
 func (ws *WorkService) GetPseudGifts(c *gin.Context) {
 	pseud, viewer, ok := ws.loadPseudPage(c)
 	if !ok {
@@ -56,11 +60,9 @@ func (ws *WorkService) GetPseudGifts(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	where := ` WHERE g.pseud_id = $1 AND NOT g.rejected AND NOT g.shadowed
-		AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid, $3::boolean)
-		AND NOT EXISTS (SELECT 1 FROM creatorships cr JOIN pseuds cp ON cp.id = cr.pseud_id
-			WHERE cr.creation_id = w.id AND cr.creation_type = 'Work' AND cp.user_id = $4)`
+		AND w.status = 'published' AND can_user_view_work(w.id, $2::uuid, $3::boolean)`
 	from := ` FROM gifts g JOIN works w ON w.id = g.work_id`
-	args := []interface{}{pseud.ID, viewer, pseud.AsReader, pseud.OwnerID}
+	args := []interface{}{pseud.ID, viewer, pseud.AsReader}
 
 	var total int
 	if err := ws.db.QueryRowContext(ctx, `SELECT COUNT(*)`+from+where, args...).Scan(&total); err != nil {
@@ -71,7 +73,7 @@ func (ws *WorkService) GetPseudGifts(c *gin.Context) {
 	rows, err := ws.db.QueryContext(ctx, `
 		SELECT w.id, w.title, COALESCE(w.summary, ''), w.rating, w.fandoms, w.characters, w.relationships,
 			w.freeform_tags, w.word_count, w.chapter_count, w.is_complete, w.published_at, w.updated_at, g.created_at`+
-		from+where+` ORDER BY g.created_at DESC LIMIT $5 OFFSET $6`, append(args, limit, offset)...)
+		from+where+` ORDER BY g.created_at DESC LIMIT $4 OFFSET $5`, append(args, limit, offset)...)
 	if err != nil {
 		log.Printf("pseud gifts: list for pseud %s: %v", pseud.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch gifts"})
