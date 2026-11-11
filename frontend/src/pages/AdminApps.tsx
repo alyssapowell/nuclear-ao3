@@ -3,6 +3,7 @@
 // app is shown. Each decision names the version the admin looked at, so a
 // change made in between is caught instead of approved unseen.
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { listReviewApps, reviewApp, type ReviewAction, type ReviewApp, type ReviewFilter } from '@/lib/oauth';
 
 const BTN =
@@ -178,7 +179,8 @@ export default function AdminAppsPage() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">App review</h1>
       <p className="mb-4 text-sm text-gray-700">
         Apps other people registered. An app does nothing until you approve it. Rejecting or suspending an app signs
-        everyone out of it, and the owner is emailed your note.
+        everyone out of it, and the owner is emailed your note. See also{' '}
+        <Link to="/admin/support" className="underline text-orange-800">Support requests</Link>.
       </p>
       <div className="mb-4">
         <label htmlFor="filter" className="block text-sm font-medium text-gray-700">Show</label>

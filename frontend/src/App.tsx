@@ -51,6 +51,7 @@ const OAuthAuthorize = lazy(() => import('@/pages/OAuthAuthorize'))
 const ConnectedApps = lazy(() => import('@/pages/ConnectedApps'))
 const MyApps = lazy(() => import('@/pages/MyApps'))
 const AdminApps = lazy(() => import('@/pages/AdminApps'))
+const AdminSupport = lazy(() => import('@/pages/AdminSupport'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function LoggedIn() {
@@ -111,6 +112,7 @@ export default function App() {
                 <Route path="/profile/apps" element={<ConnectedApps />} />
                 <Route path="/profile/my-apps" element={<MyApps />} />
                 <Route path="/admin/apps" element={<AdminApps />} />
+                <Route path="/admin/support" element={<AdminSupport />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

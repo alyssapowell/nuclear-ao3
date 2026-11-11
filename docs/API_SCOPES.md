@@ -41,6 +41,7 @@ walks every route that is really mounted and fails if the two disagree.
 | Everything under `/auth/` (the pages and the OAuth endpoints, including `register-client`) and `/api/v1/auth/` (login, logout, register, password reset, change-password, verify-email, sessions, `me`, the admin user routes) | Sign-in and account security. `/auth/userinfo` is the one exception: it is where an app presents its own token. |
 | `/api/v1/oauth/`, `/api/v1/apps` | Consent, connected apps, managing apps. An app must not approve itself or edit its own review. |
 | `/api/v1/admin/`, `/api/v1/wrangling/` | Moderation and wrangling. The admin-only scopes can't be granted at all. |
+| `/api/v1/support` | The Contact and Feedback forms. A person writes to the admins; an app does not do that for them. |
 | `/api/v1/blocks`, `/api/v1/mutes` | They name the pseuds a person wants to avoid. |
 | `POST /pseuds`, `PUT` and `DELETE /pseuds/:id` | Pseud management. |
 | `/api/v1/my/` (works, series, collections, comments, pseuds, stats, exports) and `GET /api/v1/bookmarks` | See "The /my decision". |

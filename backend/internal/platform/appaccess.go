@@ -162,6 +162,7 @@ var appNeverPrefixes = []string{
 	"/api/v1/apps",       // managing apps
 	"/api/v1/admin/",     // every admin route
 	"/api/v1/wrangling/", // tag wrangling
+	"/api/v1/support",    // Contact and Feedback: a person writes to the admins, an app does not for them
 	"/api/v1/blocks",     // blocks and mutes: they name pseuds the person wants to avoid
 	"/api/v1/mutes",
 	"/api/v1/my/",          // dashboards that join all of a person's pseuds
