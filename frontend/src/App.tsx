@@ -51,6 +51,11 @@ const OAuthAuthorize = lazy(() => import('@/pages/OAuthAuthorize'))
 const ConnectedApps = lazy(() => import('@/pages/ConnectedApps'))
 const MyApps = lazy(() => import('@/pages/MyApps'))
 const AdminApps = lazy(() => import('@/pages/AdminApps'))
+const AdminHome = lazy(() => import('@/pages/AdminHome'))
+const AdminAccounts = lazy(() => import('@/pages/AdminAccounts'))
+const AdminContent = lazy(() => import('@/pages/AdminContent'))
+const AdminReports = lazy(() => import('@/pages/AdminReports'))
+const AdminAudit = lazy(() => import('@/pages/AdminAudit'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function LoggedIn() {
@@ -110,6 +115,11 @@ export default function App() {
                 <Route path="/profile/privacy" element={<ProfilePrivacy />} />
                 <Route path="/profile/apps" element={<ConnectedApps />} />
                 <Route path="/profile/my-apps" element={<MyApps />} />
+                <Route path="/admin" element={<AdminHome />} />
+                <Route path="/admin/accounts" element={<AdminAccounts />} />
+                <Route path="/admin/content" element={<AdminContent />} />
+                <Route path="/admin/reports" element={<AdminReports />} />
+                <Route path="/admin/audit" element={<AdminAudit />} />
                 <Route path="/admin/apps" element={<AdminApps />} />
               </Route>
 

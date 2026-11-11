@@ -20,7 +20,7 @@ export const nav = {
   },
 };
 
-async function call<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: object): Promise<Result<T>> {
+export async function call<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: object): Promise<Result<T>> {
   const headers: Record<string, string> = {};
   const token = getAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -34,7 +34,13 @@ async function call<T>(path: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   const data = await response.json().catch(() => undefined);
   if (!response.ok) {
     const code = typeof data?.error === 'string' ? (data.error as string) : undefined;
-    const description = typeof data?.error_description === 'string' ? (data.error_description as string) : undefined;
+    // OAuth routes say error_description; the admin routes say message.
+    const description =
+      typeof data?.error_description === 'string'
+        ? (data.error_description as string)
+        : typeof data?.message === 'string'
+          ? (data.message as string)
+          : undefined;
     return {
       ok: false,
       status: response.status,

@@ -36,6 +36,28 @@ func TestGetProfileReturnsOwnAccountOnly(t *testing.T) {
 	}
 }
 
+func TestMeListsOnlyTheCallersOwnRoles(t *testing.T) {
+	e := newSessionEnv(t)
+	id := e.addUser("alice", "alice@example.org", "secret1")
+	bob := e.addUser("bob", "bob@example.org", "secret1")
+	if _, err := e.as.db.Exec(`INSERT INTO user_roles (user_id, role) VALUES ($1, 'moderator'), ($1, 'tag_wrangler'), ($2, 'admin')`, id, bob); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.as.db.Exec(`INSERT INTO user_roles (user_id, role, revoked_at) VALUES ($1, 'admin', now())`, id); err != nil {
+		t.Fatal(err)
+	}
+	w := e.do("GET", "/api/v1/auth/me", e.login("alice", "secret1"), nil)
+	var got struct {
+		Roles []string `json:"roles"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Roles) != 2 || got.Roles[0] != "moderator" || got.Roles[1] != "tag_wrangler" {
+		t.Errorf("roles = %v, want moderator and tag_wrangler (not a revoked admin, not bob's)", got.Roles)
+	}
+}
+
 func TestAdminUserListIsForAdminsOnly(t *testing.T) {
 	e := newSessionEnv(t)
 	e.addUser("alice", "alice@example.org", "secret1")
