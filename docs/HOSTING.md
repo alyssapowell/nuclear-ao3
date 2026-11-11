@@ -82,6 +82,17 @@ Paste the whole of each file, including the `-----BEGIN` and `-----END` lines, i
 - Register an account and confirm it from the email.
 - The visitor's address reaches the app. Rate limits and the login guard count per visitor, so the app must see each visitor's own address, not the platform's. The app believes `X-Forwarded-For` only from private network addresses (`TRUSTED_PROXIES`), which is where most platforms' proxies are. If every visitor gets rate-limited together, the platform's proxy is somewhere else: ask the platform which addresses its proxy uses and set `TRUSTED_PROXIES` to them.
 
+### Trying it out with no email
+
+To try the archive on a platform that has no email service, set `TRIAL_NO_EMAIL=true`. Then:
+
+- Startup no longer requires `SMTP_HOST`. Every other check (an `https://` `SITE_URL`, a strong database password, and so on) still applies and still stops the server in production.
+- New accounts are confirmed at once and can log in right after signing up. Sign-up gives the same answer whether or not the address already has an account.
+- No email is ever sent: not password resets, not notifications. Queued emails are dropped, and the log records only that one was not sent and its subject.
+- Every page shows a banner saying email is off, and the log repeats a warning at every start.
+
+This also removes the protection against someone signing up with another person's address. Normally an account only works once its owner has used the password and the emailed link, so a stranger cannot claim an address that is not theirs. With no email, nobody checks the address, and a lost password cannot be reset. Use it only for a private trial with people you know. Before real users arrive, turn it off and set the `SMTP_*` settings.
+
 ### What the platform must provide instead
 
 - **Backups of the database, kept off the database's own machine**, and a restore you have tried. Find out how far back a restore goes (some platforms take one full copy a day, so up to a day of changes can be lost).

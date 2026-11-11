@@ -49,6 +49,28 @@ func TestExampleSettingsStopAProductionServer(t *testing.T) {
 	}
 }
 
+func TestTrialNoEmailSkipsOnlyTheMailCheck(t *testing.T) {
+	env := good()
+	env["SMTP_HOST"] = ""
+	env["TRIAL_NO_EMAIL"] = "true"
+	if p := Preflight(envOf(env)); len(p) != 0 {
+		t.Errorf("trial mode should not need SMTP_HOST: %v", p)
+	}
+	// Everything else is still checked, and still fatal.
+	env["SITE_URL"] = "http://archive.example.org"
+	p := Preflight(envOf(env))
+	if len(p) != 1 || !p[0].Fatal || p[0].Setting != "SITE_URL" {
+		t.Errorf("got %v, want one fatal SITE_URL problem", p)
+	}
+	// Anything but "true" leaves the mail check on.
+	env = good()
+	env["SMTP_HOST"] = ""
+	env["TRIAL_NO_EMAIL"] = "yes"
+	if p := Preflight(envOf(env)); len(p) != 1 || p[0].Setting != "SMTP_HOST" {
+		t.Errorf("got %v, want the SMTP_HOST problem", p)
+	}
+}
+
 func TestDevelopmentOnlyWarns(t *testing.T) {
 	env := map[string]string{
 		"ENVIRONMENT":  "development",

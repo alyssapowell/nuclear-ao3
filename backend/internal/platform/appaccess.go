@@ -136,6 +136,9 @@ var appRoutes = map[string]string{
 	"GET /api/v1/stats/trending":                         "read",
 	"GET /api/v1/stats/usage":                            "read",
 
+	// Which mode the archive is in; holds nothing about the person.
+	"GET /api/v1/site": "read",
+
 	// What the person follows. These hold no pseud of the person's own.
 	"GET /api/v1/subscriptions":               "read",
 	"GET /api/v1/subscription-status":         "read",

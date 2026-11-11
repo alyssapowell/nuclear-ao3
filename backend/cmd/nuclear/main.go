@@ -14,6 +14,10 @@
 //	SITE_URL           the archive's public address, for links in emails
 //	SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USERNAME, SMTP_PASSWORD
 //	                   the mail server emails are sent through
+//	TRIAL_NO_EMAIL     set to "true" to try the archive out with no email
+//	                   service: no mail settings are required, new accounts
+//	                   are confirmed at once and no email is ever sent. Never
+//	                   for real users; see docs/HOSTING.md
 //	SIGNING_KEY_FILE   the PEM file with the key that signs logins (required;
 //	                   create it with "nuclear keys generate")
 //	SIGNING_KEY_PREVIOUS_FILES
@@ -183,6 +187,11 @@ func main() {
 	notifySvc := notify.New(db, mail)
 	worksSvc.SetNotifier(notifySvc.Notifier())
 	authSvc.SetMail(mail)
+	trial := os.Getenv("TRIAL_NO_EMAIL") == "true"
+	authSvc.SetTrialNoEmail(trial)
+	if trial {
+		log.Printf("TRIAL MODE: email is off. New accounts are confirmed at once, and no email is ever sent (password resets, notifications). Only for trying the archive out; never for real users.")
+	}
 	notifySvc.Start()
 	exportSvc := export.New(db)
 	exportSvc.Start()
@@ -212,6 +221,8 @@ func main() {
 		notify: notifySvc,
 		export: exportSvc,
 		search: searchSvc,
+
+		trialNoEmail: trial,
 	})
 
 	if os.Getenv("STATIC_DIR") != "" {
@@ -220,7 +231,7 @@ func main() {
 
 	go serveMetrics(platform.Env("METRICS_ADDR", ":9091"))
 
-	stopWorkers := startWorkers(db, mail)
+	stopWorkers := startWorkers(db, mail, trial)
 	stopHits := worksSvc.StartHitFlusher()
 
 	srv := &http.Server{
@@ -255,15 +266,9 @@ func main() {
 
 // startWorkers runs background jobs until the returned function is called.
 // That function waits for jobs that are running to finish.
-func startWorkers(db *sql.DB, mail *email.Config) (stop func()) {
+func startWorkers(db *sql.DB, mail *email.Config, trial bool) (stop func()) {
 	q := jobs.New(db)
-	q.Handle("email", func(ctx context.Context, payload json.RawMessage) error {
-		var m email.Message
-		if err := json.Unmarshal(payload, &m); err != nil {
-			return err
-		}
-		return mail.Send(ctx, m)
-	})
+	q.Handle("email", emailHandler(mail, trial))
 	// Queued once by migration 031: cleans HTML that was saved before it was
 	// cleaned on write. Safe to run again.
 	q.Handle("clean-html", func(ctx context.Context, _ json.RawMessage) error {
@@ -289,6 +294,23 @@ func startWorkers(db *sql.DB, mail *email.Config) (stop func()) {
 		for i := 0; i < n; i++ {
 			<-done
 		}
+	}
+}
+
+// emailHandler sends the "email" job. In trial mode it drops the job and logs
+// only the subject: the recipient and body are never logged, because bodies
+// hold activation and reset links.
+func emailHandler(mail *email.Config, trial bool) func(context.Context, json.RawMessage) error {
+	return func(ctx context.Context, payload json.RawMessage) error {
+		var m email.Message
+		if err := json.Unmarshal(payload, &m); err != nil {
+			return err
+		}
+		if trial {
+			log.Printf("trial mode: email not sent: %s", m.Subject)
+			return nil
+		}
+		return mail.Send(ctx, m)
 	}
 }
 
@@ -488,11 +510,17 @@ type services struct {
 	notify *notify.NotificationService
 	export *export.ExportService
 	search *search.Service
+
+	// trialNoEmail is TRIAL_NO_EMAIL; /api/v1/site reports it.
+	trialNoEmail bool
 }
 
 // mountRoutes registers every API route on r.
 func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	r.GET("/health", deps.Health)
+	// Tells the website which mode the archive is in. Nothing else about the
+	// settings is ever put here. Not in publicRoutes, so it is never cached.
+	r.GET("/api/v1/site", siteInfo(s.trialNoEmail))
 	auth.Mount(r, s.auth, deps)
 	works.Mount(r, s.works, deps)
 	tags.Mount(r, s.tags, deps)
@@ -500,6 +528,13 @@ func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	export.Mount(r, s.export, deps)
 	search.Mount(r, s.search, deps)
 	moderation.Mount(r, moderation.New(deps.DB), deps)
+}
+
+// siteInfo answers GET /api/v1/site.
+func siteInfo(trialNoEmail bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"trial_no_email": trialNoEmail})
+	}
 }
 
 // serveMetrics exposes Prometheus metrics on their own port so they are never

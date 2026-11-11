@@ -154,6 +154,40 @@ func TestRegisterWithoutMail(t *testing.T) {
 	}
 }
 
+func TestTrialSignUpIsConfirmedAtOnce(t *testing.T) {
+	e := newPasswordEnv(t)
+	e.as.SetTrialNoEmail(true)
+	body := map[string]string{"pen_name": "tryer", "email": "tryer@example.org", "password": "secret1"}
+	fresh := e.do("POST", authAPI+"/register", "", body)
+	if fresh.Code != http.StatusCreated || !strings.Contains(fresh.Body.String(), "Your account is ready") {
+		t.Fatalf("register: %d %s", fresh.Code, fresh.Body)
+	}
+	var verified bool
+	e.as.db.QueryRow(`SELECT is_verified FROM users WHERE email = 'tryer@example.org'`).Scan(&verified)
+	if !verified {
+		t.Error("trial account is not verified")
+	}
+	var tokens, jobs int
+	e.as.db.QueryRow(`SELECT count(*) FROM email_verification_tokens`).Scan(&tokens)
+	e.as.db.QueryRow(`SELECT count(*) FROM jobs WHERE kind = 'email'`).Scan(&jobs)
+	if tokens != 0 || jobs != 0 {
+		t.Errorf("%d activation tokens and %d email jobs, want none", tokens, jobs)
+	}
+	if c := e.status("POST", authAPI+"/login", "", map[string]string{"email": "tryer@example.org", "password": "secret1"}); c != http.StatusOK {
+		t.Errorf("login right after sign-up: %d", c)
+	}
+
+	// A taken address gets the very same answer.
+	taken := e.do("POST", authAPI+"/register", "", body)
+	if taken.Code != fresh.Code || taken.Body.String() != fresh.Body.String() {
+		t.Errorf("taken: %d %s, new: %d %s", taken.Code, taken.Body, fresh.Code, fresh.Body)
+	}
+	other := e.do("POST", authAPI+"/register", "", map[string]string{"pen_name": "tryer2", "email": "tryer2@example.org", "password": "secret1"})
+	if other.Code != fresh.Code || other.Body.String() != fresh.Body.String() {
+		t.Errorf("second new account: %d %s", other.Code, other.Body)
+	}
+}
+
 func TestRegisterValidation(t *testing.T) {
 	e := newPasswordEnv(t)
 	for _, tc := range []struct {

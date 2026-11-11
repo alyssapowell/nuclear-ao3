@@ -1,5 +1,5 @@
 import { safeRedirect } from '@/utils/auth';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, Suspense } from 'react';
 import ResendActivation from '@/components/auth/ResendActivation';
 import { login as loginRequest } from '@/lib/api';
@@ -17,6 +17,8 @@ function LoginContent() {
   const [error, setError] = useState('');
   const [notActivated, setNotActivated] = useState(false);
   const navigate = useNavigate();
+  // Set by the sign-up page in trial mode.
+  const notice = (useLocation().state as { message?: string } | null)?.message;
   const [searchParams] = useSearchParams();
   
 
@@ -90,6 +92,10 @@ function LoginContent() {
     <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Log In</h1>
       
+      {notice && (
+        <p role="status" className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm">{notice}</p>
+      )}
+
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
           <p role="alert" className="text-red-600 text-sm">{error}</p>

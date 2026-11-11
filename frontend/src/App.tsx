@@ -7,6 +7,7 @@ import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
 import GDPRConsentBanner from '@/components/GDPRConsentBanner'
 import ServiceStatus from '@/components/ServiceStatus'
+import TrialBanner from '@/components/TrialBanner'
 import PWAInit from '@/components/PWAInit'
 import AuthGuard from '@/components/auth/AuthGuard'
 
@@ -64,6 +65,7 @@ export default function App() {
   return (
     <>
       <div className="min-h-screen flex flex-col">
+        <TrialBanner />
         <Navigation />
         <main className="flex-1">
           <Suspense fallback={<p className="p-8 text-center text-gray-700">Loading…</p>}>

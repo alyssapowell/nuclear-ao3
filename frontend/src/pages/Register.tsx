@@ -2,6 +2,7 @@ import { safeRedirect } from '@/utils/auth';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, Suspense } from 'react';
 import { register as registerRequest, PASSWORD_MIN, PASSWORD_MAX } from '@/lib/api';
+import { useSite } from '@/lib/site';
 
 interface RegisterForm {
   penName: string;
@@ -21,6 +22,7 @@ function RegisterContent() {
   const [error, setError] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { trialNoEmail } = useSite();
   const [searchParams] = useSearchParams();
   
 
@@ -61,6 +63,14 @@ function RegisterContent() {
 
       if (!result.ok) {
         setError(result.error || 'Registration failed. Please try again.');
+        return;
+      }
+
+      // In trial mode the account is ready at once: no email to wait for.
+      if (trialNoEmail) {
+        const message = (result.data as { message?: string } | undefined)?.message
+          || 'Your account is ready. Log in with your email and password.';
+        navigate('/auth/login', { state: { message } });
         return;
       }
 

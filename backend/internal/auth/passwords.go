@@ -198,6 +198,10 @@ func useToken(c *gin.Context, tx *sql.Tx, k tokenKind, token string) (userID uui
 // already had an account, so the answer can't be used to find out.
 var signUpAnswer = gin.H{"message": "Account created. Check your email for a link to activate it."}
 
+// trialSignUpAnswer is the same kind of answer for trial mode, where there
+// is no email to check.
+var trialSignUpAnswer = gin.H{"message": "Your account is ready. Log in with your email and password."}
+
 // Register creates an account that can't log in until it is activated from
 // the email sent to it. An account has an email address, a password and a
 // pen name, the name of its first, default pseud; it has no username.
@@ -252,6 +256,10 @@ func (as *AuthService) Register(c *gin.Context) {
 	if !created {
 		as.tellOwnerOfSignUp(c, req.Email)
 	}
+	if as.trialNoEmail {
+		c.JSON(http.StatusCreated, trialSignUpAnswer)
+		return
+	}
 	c.JSON(http.StatusCreated, signUpAnswer)
 }
 
@@ -269,7 +277,7 @@ func (as *AuthService) createAccount(c *gin.Context, address, hash, penName stri
 	userID := uuid.New()
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO users (id, email, password_hash, is_active, is_verified)
-		VALUES ($1, $2, $3, true, false)`, userID, address, hash)
+		VALUES ($1, $2, $3, true, $4)`, userID, address, hash, as.trialNoEmail)
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
 		return false, nil
@@ -280,6 +288,13 @@ func (as *AuthService) createAccount(c *gin.Context, address, hash, penName stri
 	if _, err = tx.ExecContext(ctx, `INSERT INTO pseuds (user_id, name, is_default) VALUES ($1, $2, true)`,
 		userID, penName); err != nil {
 		return false, fmt.Errorf("create default pseud: %w", err)
+	}
+	if as.trialNoEmail {
+		// Confirmed already: no activation token, no activation email.
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 	if as.mail == nil {
 		log.Printf("register: activation emails are off (no mail settings), so account %s can't be activated by email", userID)

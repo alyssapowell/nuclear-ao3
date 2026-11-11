@@ -70,8 +70,12 @@ func Preflight(getenv func(string) string) []Problem {
 		}
 	}
 
+	// A trial with no email service has no mail settings to check.
 	switch strings.ToLower(getenv("SMTP_HOST")) {
 	case "", "smtp", "mailhog":
+		if getenv("TRIAL_NO_EMAIL") == "true" {
+			break
+		}
 		add("SMTP_HOST", "points at the development mail catcher, which keeps every email instead of sending it; set the SMTP_* settings to a real mail service")
 	}
 

@@ -156,6 +156,8 @@ type AuthService struct {
 	// recommended); see OIDC_SIGNING_KEY_FILE.
 	oidc *JWTManager
 	mail *email.Config // nil until SetMail: no emails are sent
+	// trialNoEmail is set by SetTrialNoEmail: accounts are confirmed at once.
+	trialNoEmail bool
 	// guard holds the in-memory counters against password guessing.
 	guard loginGuard
 	// oauth holds the counters for the OAuth endpoints (oauth_limits.go).
@@ -188,6 +190,13 @@ func New(db *sql.DB) (*AuthService, error) {
 // and with links to the archive described by cfg.
 func (as *AuthService) SetMail(cfg *email.Config) {
 	as.mail = cfg
+}
+
+// SetTrialNoEmail turns on trial mode for sign-up: new accounts are verified
+// at once, with no activation link, because no email can be sent. Only for
+// trying the archive out; see TRIAL_NO_EMAIL in docs/HOSTING.md.
+func (as *AuthService) SetTrialNoEmail(on bool) {
+	as.trialNoEmail = on
 }
 
 // ValidateUserToken checks a login token and returns the user it belongs to.
