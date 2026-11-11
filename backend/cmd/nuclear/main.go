@@ -14,6 +14,9 @@
 //	SITE_URL           the archive's public address, for links in emails
 //	SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_USERNAME, SMTP_PASSWORD
 //	                   the mail server emails are sent through
+//	ADMIN_EMAIL        makes the account with this email address the first
+//	                   admin at startup, where "nuclear grant" can't be run;
+//	                   does nothing once the archive has an admin
 //	TRIAL_NO_EMAIL     set to "true" to try the archive out with no email
 //	                   service: no mail settings are required, new accounts
 //	                   are confirmed at once and no email is ever sent. Never
@@ -163,6 +166,7 @@ func main() {
 			log.Fatalf("startup: %v", err)
 		}
 	}
+	firstAdmin(context.Background(), db, os.Getenv("ADMIN_EMAIL"))
 
 	// Auth comes first: everything else checks logins through it.
 	var authSvc *auth.AuthService
