@@ -47,6 +47,8 @@ Do these now:
 2. Set SIGNING_KEY_FILE to the file's path as the app sees it (with Docker
    Compose that is /secrets/%s) and restart the app. (To sign the ID tokens
    given to other apps, make a second key and set OIDC_SIGNING_KEY_FILE.)
+   On a hosting platform with no files, paste the whole file into the
+   SIGNING_KEY (or OIDC_SIGNING_KEY) secret setting instead.
 
 To change keys later: generate a new key, set SIGNING_KEY_FILE to it, and put
 the old file in SIGNING_KEY_PREVIOUS_FILES so current logins keep working
