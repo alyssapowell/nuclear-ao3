@@ -41,6 +41,16 @@ func TestAdminEmailMakesOnlyTheFirstAdmin(t *testing.T) {
 		t.Fatal("accepted an account id")
 	}
 
+	// An unconfirmed, banned or suspended account isn't made an admin.
+	for _, set := range []string{"is_verified = false", "banned = true", "suspended = true, suspended_until = now() + interval '1 day'"} {
+		db.Exec(`UPDATE users SET `+set+` WHERE id = $1`, owner)
+		firstAdmin(ctx, db, "owner@example.org")
+		if isAdmin(owner) {
+			t.Fatalf("made an admin of an account with %s", set)
+		}
+		db.Exec(`UPDATE users SET is_verified = true, banned = false, suspended = false, suspended_until = NULL WHERE id = $1`, owner)
+	}
+
 	firstAdmin(ctx, db, " Owner@Example.org ")
 	if !isAdmin(owner) {
 		t.Fatal("the account wasn't made an admin")
@@ -57,6 +67,13 @@ func TestAdminEmailMakesOnlyTheFirstAdmin(t *testing.T) {
 	if isAdmin(other) {
 		t.Error("made a second admin; the setting must only make the first")
 	}
+	// Taking the role away doesn't re-arm the setting.
+	db.Exec(`UPDATE user_roles SET revoked_at = now() WHERE user_id = $1`, owner)
+	firstAdmin(ctx, db, "other@example.org")
+	if isAdmin(other) {
+		t.Error("the setting worked again after the only admin lost the role")
+	}
+	db.Exec(`UPDATE user_roles SET revoked_at = NULL WHERE user_id = $1`, owner)
 	// Restarting with the same setting changes nothing either.
 	firstAdmin(ctx, db, "owner@example.org")
 	db.QueryRow(`SELECT count(*) FROM admin_actions WHERE action = 'grant_role'`).Scan(&logged)
