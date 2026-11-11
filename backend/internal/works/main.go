@@ -30,6 +30,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			legacy.GET("/:work_id/comments", workService.GetComments)                     // GET /api/v1/works/123/comments
 			legacy.GET("/:work_id/kudos", workService.GetKudos)                           // GET /api/v1/works/123/kudos
 			legacy.GET("/:work_id/stats", workService.GetWorkStats)                       // GET /api/v1/works/123/stats
+			legacy.GET("/:work_id/download.:format", workService.DownloadWork)            // GET /api/v1/works/123/download.epub (epub, html, txt)
 			legacy.POST("/:work_id/comments", d.ActiveAccount, workService.CreateComment) // POST /api/v1/works/123/comments (guest + auth comments)
 		}
 
@@ -43,6 +44,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			modern.GET("/:work_id/comments", workService.GetComments)                     // GET /api/v1/work/{uuid}/comments
 			modern.GET("/:work_id/kudos", workService.GetKudos)                           // GET /api/v1/work/{uuid}/kudos
 			modern.GET("/:work_id/stats", workService.GetWorkStats)                       // GET /api/v1/work/{uuid}/stats
+			modern.GET("/:work_id/download.:format", workService.DownloadWork)            // GET /api/v1/work/{uuid}/download.epub
 			modern.POST("/:work_id/comments", d.ActiveAccount, workService.CreateComment) // POST /api/v1/work/{uuid}/comments (guest + auth comments)
 		}
 
@@ -183,6 +185,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 type WorkService struct {
 	db                  *sql.DB
 	hits                hitCounter
+	downloads           downloadLimiter
 	notificationService *notifications.NotificationService
 }
 

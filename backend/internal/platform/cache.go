@@ -26,7 +26,7 @@ const (
 // the answer depends on nothing but the address and query string: the same
 // for every logged-out visitor, with no per-IP or per-session content and no
 // side effects. Left out on purpose: everything under /auth, /oauth, /admin,
-// notifications, subscriptions, exports and /my; work kudos (it says whether
+// notifications, subscriptions and /my; work kudos (it says whether
 // this visitor's IP already gave kudos); work stats; and a user's works and
 // series lists.
 //
@@ -48,7 +48,10 @@ func buildPublicRoutes() map[string]bool {
 		// copy served by the CDN would never be counted.
 		add(base+"/:work_id",
 			base+"/:work_id/chapters",
-			base+"/:work_id/comments")
+			base+"/:work_id/comments",
+			// A download is made from the same rows a logged-out reader of
+			// the page sees, and nothing else (no view is counted).
+			base+"/:work_id/download.:format")
 	}
 	add("/api/v1/works") // the browse list
 	add("/api/v1/series", "/api/v1/series/:series_id", "/api/v1/series/:series_id/works")

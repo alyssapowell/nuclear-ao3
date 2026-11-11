@@ -96,6 +96,8 @@ var appRoutes = map[string]string{
 	"GET /api/v1/works/:work_id/chapters":                "read",
 	"GET /api/v1/works/:work_id/chapters/:chapter_id":    "read",
 	"GET /api/v1/works/:work_id/comments":                "read",
+	"GET /api/v1/works/:work_id/download.:format":        "read", // a reader's copy: epub, html, txt
+	"GET /api/v1/work/:work_id/download.:format":         "read",
 	"GET /api/v1/work/:work_id":                          "read",
 	"GET /api/v1/work/:work_id/chapters":                 "read",
 	"GET /api/v1/work/:work_id/chapters/:chapter_id":     "read",
@@ -165,7 +167,6 @@ var appNeverPrefixes = []string{
 	"/api/v1/blocks",     // blocks and mutes: they name pseuds the person wants to avoid
 	"/api/v1/mutes",
 	"/api/v1/my/",          // dashboards that join all of a person's pseuds
-	"/api/v1/export",       // personal downloads
 	"/api/v1/notification", // notifications, preferences and rules
 	"/api/v1/bookmarks",    // "my bookmarks" joins all pseuds
 	"/ws",                  // live notifications

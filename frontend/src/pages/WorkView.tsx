@@ -6,7 +6,7 @@ import { BookmarkButton } from '@/components/BookmarkButton';
 import { GiftButton } from '@/components/GiftButton';
 import { GiftList } from '@/components/GiftList';
 import { SubscriptionButton } from '@/components/SubscriptionButton';
-import RespectfulExportButton from '@/components/RespectfulExportButton';
+import DownloadMenu from '@/components/DownloadMenu';
 import ChapterNavigation from '@/components/ChapterNavigation';
 import ReaderControls from '@/components/ReaderControls';
 import { getWork, getWorkChapters, getMyPseuds, Gift } from '@/lib/api';
@@ -335,17 +335,7 @@ export default function WorkPage() {
                 targetName={work.title}
               />
 
-              <RespectfulExportButton
-                workId={work.id}
-                workTitle={work.title}
-                authToken={token || undefined}
-                authorOfflinePreference={
-                  work.offline_reading_override === 'use_default' || !work.offline_reading_override
-                    ? work.author_default_offline_reading || 'pwa_only'
-                    : work.offline_reading_override
-                }
-                isAuthor={isAuthor || false}
-              />
+              <DownloadMenu workId={work.id} authToken={token || undefined} />
             </div>
           </div>
         </div>

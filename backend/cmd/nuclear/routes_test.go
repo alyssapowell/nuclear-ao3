@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"nuclear-ao3/internal/auth"
-	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
@@ -26,7 +25,6 @@ func TestRoutesDoNotCollide(t *testing.T) {
 		works:  &works.WorkService{},
 		tags:   &tags.TagService{},
 		notify: &notify.NotificationService{},
-		export: &export.ExportService{},
 		search: &search.Service{},
 	})
 	t.Logf("%d routes mounted", len(r.Routes()))

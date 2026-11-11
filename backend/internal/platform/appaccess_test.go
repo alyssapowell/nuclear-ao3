@@ -20,7 +20,7 @@ func TestDenylistBeatsAllowlist(t *testing.T) {
 		"GET /api/v1/auth/me", "POST /api/v1/auth/login", "GET /api/v1/admin/audit",
 		"GET /api/v1/my/works", "GET /api/v1/apps", "POST /auth/token", "GET /ws",
 		"POST /api/v1/pseuds", "GET /api/v1/notifications", "GET /api/v1/bookmarks",
-		"GET /api/v1/blocks", "GET /api/v1/export/:id/download",
+		"GET /api/v1/blocks",
 	} {
 		appRoutes[route] = "read"
 		if _, ok := AppRouteScope(route); ok {
