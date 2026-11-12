@@ -127,64 +127,112 @@ func (ts *TagService) GetTag(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tag": tag})
 }
 
-// SearchTags provides advanced tag search with filtering
+// likePattern turns what a person typed into a LIKE pattern that matches it
+// literally anywhere in a name: %, _ and \ in the text are escaped.
+func likePattern(q string) string {
+	return "%" + likeEscaper.Replace(q) + "%"
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// SearchTags is tag search (AO3: Search > Tags). Parameters:
+//
+//	q          part of a tag's name (case-insensitive)
+//	type       fandom, character, relationship, freeform, ...
+//	canonical  "true": canonical tags only
+//	filterable "true": tags that can be filtered on only
+//	sort       relevance (the default when q is given), uses, name, newest;
+//	           ties are always broken by name, then id
+//	page, limit (default 20, at most 100); offset is also accepted
+//
+// use_count is the count the archive keeps for each tag: the works under it
+// that are not hidden by an admin or marked spam. It is the same for every
+// viewer. (A count of only what this viewer may see would mean checking every
+// work under every tag on the page; that is left out on purpose.)
 func (ts *TagService) SearchTags(c *gin.Context) {
-	query := c.Query("q")
+	query := strings.TrimSpace(c.Query("q"))
 	tagType := c.Query("type")
 	canonicalOnly := c.Query("canonical") == "true"
 	filterableOnly := c.Query("filterable") == "true"
-	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
 
-	limit, _ := strconv.Atoi(limitStr)
-	offset, _ := strconv.Atoi(offsetStr)
-
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 {
+		limit = 20
+	}
 	if limit > 100 {
 		limit = 100
 	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if page, err := strconv.Atoi(c.Query("page")); err == nil && page > 1 {
+		offset = (page - 1) * limit
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
-	// Build query
 	var conditions []string
 	var args []interface{}
-	argIndex := 1
+	add := func(v interface{}) string {
+		args = append(args, v)
+		return fmt.Sprintf("$%d", len(args))
+	}
 
-	baseQuery := `
-		SELECT id, name, canonical_name, type, description, is_canonical, is_filterable, use_count, created_at, updated_at
-		FROM tags
-	`
-
+	rank := "0"
 	if query != "" {
-		conditions = append(conditions, fmt.Sprintf("LOWER(name) LIKE LOWER($%d)", argIndex))
-		args = append(args, "%"+query+"%")
-		argIndex++
+		like := add(likePattern(query))
+		conditions = append(conditions, "lower(t.name::text) LIKE lower("+like+")")
 	}
-
 	if tagType != "" {
-		conditions = append(conditions, fmt.Sprintf("type = $%d", argIndex))
-		args = append(args, tagType)
-		argIndex++
+		conditions = append(conditions, "t.type = "+add(tagType))
 	}
-
 	if canonicalOnly {
-		conditions = append(conditions, "is_canonical = true")
+		conditions = append(conditions, "t.is_canonical")
 	}
-
 	if filterableOnly {
-		conditions = append(conditions, "is_filterable = true")
+		conditions = append(conditions, "t.is_filterable")
 	}
-
+	where := ""
 	if len(conditions) > 0 {
-		baseQuery += " WHERE " + strings.Join(conditions, " AND ")
+		where = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	baseQuery += " ORDER BY use_count DESC, name ASC"
-	baseQuery += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
-	args = append(args, limit, offset)
+	sortKey := c.Query("sort")
+	if sortKey == "" && query == "" {
+		sortKey = "uses"
+	}
+	var order string
+	switch sortKey {
+	case "uses":
+		order = "t.use_count DESC"
+	case "name":
+		order = "t.name::text ASC"
+	case "newest":
+		order = "t.created_at DESC"
+	default: // relevance: better matches first, then the busier tag
+		sortKey = "relevance"
+		order = "rank DESC, t.use_count DESC"
+	}
+	order += ", t.name::text ASC, t.id ASC"
 
-	// Execute query
-	rows, err := ts.db.Query(baseQuery, args...)
+	var total int
+	if err := ts.db.QueryRow("SELECT COUNT(*) FROM tags t"+where, args...).Scan(&total); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	// These are only for ordering, so they come after the count, which would
+	// not know what to make of parameters it doesn't use.
+	if query != "" {
+		exact := add(query)
+		prefix := add(likeEscaper.Replace(query) + "%")
+		rank = "CASE WHEN lower(t.name::text) = lower(" + exact + ") THEN 3 WHEN lower(t.name::text) LIKE lower(" + prefix + ") THEN 2 ELSE 1 END"
+	}
+	limitArg, offsetArg := add(limit), add(offset)
+	rows, err := ts.db.Query(`
+		SELECT t.id, t.name, t.canonical_name, t.type, t.description, t.is_canonical, t.is_filterable,
+		       t.use_count, t.created_at, t.updated_at, `+rank+` AS rank
+		FROM tags t`+where+" ORDER BY "+order+" LIMIT "+limitArg+" OFFSET "+offsetArg, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 	defer rows.Close()
@@ -192,30 +240,27 @@ func (ts *TagService) SearchTags(c *gin.Context) {
 	tags := []models.Tag{} // an empty list, not null
 	for rows.Next() {
 		var tag models.Tag
-		err := rows.Scan(
-			&tag.ID, &tag.Name, &tag.CanonicalName, &tag.Type, &tag.Description,
-			&tag.IsCanonical, &tag.IsFilterable, &tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt,
-		)
-		if err != nil {
+		var rk int
+		if err := rows.Scan(&tag.ID, &tag.Name, &tag.CanonicalName, &tag.Type, &tag.Description,
+			&tag.IsCanonical, &tag.IsFilterable, &tag.UseCount, &tag.CreatedAt, &tag.UpdatedAt, &rk); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan tag"})
 			return
 		}
 		tags = append(tags, tag)
 	}
-
-	// Get total count for pagination
-	var total int
-	countQuery := "SELECT COUNT(*) FROM tags"
-	if len(conditions) > 0 {
-		countQuery += " WHERE " + strings.Join(conditions, " AND ")
+	if err := rows.Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
 	}
-	ts.db.QueryRow(countQuery, args[:len(args)-2]...).Scan(&total)
 
 	c.JSON(http.StatusOK, gin.H{
 		"tags":   tags,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
+		"page":   offset/limit + 1,
+		"pages":  (total + limit - 1) / limit,
+		"sort":   sortKey,
 	})
 }
 

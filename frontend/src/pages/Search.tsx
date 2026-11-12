@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import SearchForm from '@/components/SearchForm';
 import SearchResults from '@/components/SearchResults';
@@ -56,6 +56,13 @@ export default function SearchPage() {
         <p className="text-gray-700">
           Search the archive with powerful filtering and get intelligent recommendations.
         </p>
+        {!hasSearched && (
+          <p className="mt-2 text-gray-700">
+            Also: <Link to="/search/tags" className="text-blue-700 hover:underline">search tags</Link>
+            {' · '}
+            <Link to="/search/people" className="text-blue-700 hover:underline">search people</Link>
+          </p>
+        )}
       </div>
 
       {/* Search Form */}

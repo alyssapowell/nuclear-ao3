@@ -58,6 +58,7 @@ func buildPublicRoutes() map[string]bool {
 	add("/api/v1/collections", "/api/v1/collections/:collection_id", "/api/v1/collections/:collection_id/works")
 	add("/api/v1/users/:user_id/bookmarks") // public bookmarks only when logged out
 	add("/api/v1/search/works", "/api/v1/search/suggestions")
+	add("/api/v1/pseuds/search") // People Search: a logged-out reader sees only public works
 	// Tag pages and tag lists.
 	add("/api/v1/tags", "/api/v1/tags/search", "/api/v1/tags/autocomplete",
 		"/api/v1/tags/:tag_id", "/api/v1/tags/:tag_id/related", "/api/v1/tags/:tag_id/works",

@@ -110,6 +110,7 @@ var appRoutes = map[string]string{
 	"GET /api/v1/series/:series_id/works":                "read",
 	"GET /api/v1/collections":                            "read",
 	"GET /api/v1/collections/:collection_id":             "read",
+	"GET /api/v1/pseuds/search":                          "read",
 	"GET /api/v1/pseuds/:pseud_id":                       "read",
 	"GET /api/v1/pseuds/:pseud_id/gifts":                 "read",
 	"GET /api/v1/pseuds/:pseud_id/works":                 "read",
