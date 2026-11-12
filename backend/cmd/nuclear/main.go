@@ -254,7 +254,7 @@ func main() {
 
 	go serveMetrics(platform.Env("METRICS_ADDR", ":9091"))
 
-	stopWorkers := startWorkers(db, mail, trial)
+	stopWorkers := startWorkers(db, mail, trial, notifySvc)
 	stopHits := worksSvc.StartHitFlusher()
 
 	srv := &http.Server{
@@ -289,9 +289,10 @@ func main() {
 
 // startWorkers runs background jobs until the returned function is called.
 // That function waits for jobs that are running to finish.
-func startWorkers(db *sql.DB, mail *email.Config, trial bool) (stop func()) {
+func startWorkers(db *sql.DB, mail *email.Config, trial bool, notifySvc *notify.NotificationService) (stop func()) {
 	q := jobs.New(db)
 	q.Handle("email", emailHandler(mail, trial))
+	q.Handle(notify.PostedJobKind, notifySvc.HandlePosted)
 	// Queued once by migration 031: cleans HTML that was saved before it was
 	// cleaned on write. Safe to run again.
 	q.Handle("clean-html", func(ctx context.Context, _ json.RawMessage) error {

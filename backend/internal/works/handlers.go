@@ -16,6 +16,7 @@ import (
 
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/html"
+	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/shared/models"
 	"nuclear-ao3/shared/notifications"
@@ -385,9 +386,24 @@ func (ws *WorkService) UpdateWork(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+	// Subscribers hear about a work the first time it is posted, not again
+	// when it goes back to draft and is re-posted.
+	firstPost := false
+	if posting {
+		if err = tx.QueryRow(`SELECT published_at IS NULL FROM works WHERE id = $1 FOR UPDATE`, workID).Scan(&firstPost); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
+			return
+		}
+	}
 	if _, err = tx.Exec(query, args...); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
 		return
+	}
+	if firstPost {
+		if err = notify.EnqueuePosted(c.Request.Context(), tx, workID, nil); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update work"})
+			return
+		}
 	}
 	// Posting a draft work posts its draft chapters with it, as on AO3.
 	if posting {
@@ -1181,6 +1197,15 @@ func (ws *WorkService) CreateChapter(c *gin.Context) {
 		return
 	}
 
+	// A new posted chapter of a posted work is announced to subscribers; a
+	// draft chapter, or a chapter of a draft work, is not.
+	if chapter.Status == "posted" {
+		if err = enqueueChapterPosted(c.Request.Context(), tx, workID, chapter.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create chapter"})
+			return
+		}
+	}
+
 	if err = tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
@@ -1335,6 +1360,12 @@ func (ws *WorkService) UpdateChapter(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update chapter"})
 		return
+	}
+	if req.Status != nil && *req.Status == "posted" && existingChapter.Status == "draft" {
+		if err = enqueueChapterPosted(c.Request.Context(), tx, workID, chapterID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update chapter"})
+			return
+		}
 	}
 
 	// Update work's updated_at timestamp and word count if content changed
@@ -6999,4 +7030,18 @@ func (ws *WorkService) triggerWorkNotification(ctx context.Context, workID uuid.
 	if err := ws.notificationService.ProcessEvent(ctx, event); err != nil {
 		log.Printf("Failed to process notification event for work %s: %v", workID, err)
 	}
+}
+
+// enqueueChapterPosted queues the subscriber announcement for a chapter that
+// has just been posted, when its work is itself posted. (Posting a draft work
+// announces the work instead, once.)
+func enqueueChapterPosted(ctx context.Context, tx *sql.Tx, workID, chapterID uuid.UUID) error {
+	var posted bool
+	if err := tx.QueryRowContext(ctx, `SELECT status = 'published' AND NOT is_draft FROM works WHERE id = $1`, workID).Scan(&posted); err != nil {
+		return err
+	}
+	if !posted {
+		return nil
+	}
+	return notify.EnqueuePosted(ctx, tx, workID, &chapterID)
 }

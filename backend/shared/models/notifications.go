@@ -213,6 +213,12 @@ func DefaultNotificationPreferences(userID uuid.UUID) NotificationPreferences {
 				Frequency: FrequencyImmediate,
 				Priority:  PriorityMedium,
 			},
+			EventNewWork: {
+				Enabled:   true,
+				Channels:  []DeliveryChannel{ChannelEmail, ChannelInApp},
+				Frequency: FrequencyImmediate,
+				Priority:  PriorityMedium,
+			},
 			EventCommentReceived: {
 				Enabled:   true,
 				Channels:  []DeliveryChannel{ChannelEmail, ChannelInApp},

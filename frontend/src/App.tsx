@@ -14,6 +14,8 @@ import AuthGuard from '@/components/auth/AuthGuard'
 // Each page is downloaded only when someone first visits it, so the first
 // visit to the site stays fast.
 const Home = lazy(() => import('@/pages/Home'))
+const TagSearch = lazy(() => import('@/pages/TagSearch'))
+const PeopleSearch = lazy(() => import('@/pages/PeopleSearch'))
 const About = lazy(() => import('@/pages/About'))
 const Accessibility = lazy(() => import('@/pages/Accessibility'))
 const ApiDocs = lazy(() => import('@/pages/ApiDocs'))
@@ -96,6 +98,8 @@ export default function App() {
               {/* Handles its own login redirect, so it can come back to the same request */}
               <Route path="/oauth/authorize" element={<OAuthAuthorize />} />
               <Route path="/search" element={<Search />} />
+              <Route path="/search/tags" element={<TagSearch />} />
+              <Route path="/search/people" element={<PeopleSearch />} />
               <Route path="/works" element={<WorkList />} />
               <Route path="/works/:id" element={<WorkView />} />
               <Route path="/series" element={<SeriesList />} />
