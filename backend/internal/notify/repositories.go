@@ -484,6 +484,15 @@ func (r *PreferenceRepositoryImpl) GetPreferences(ctx context.Context, userID uu
 	preferences.MinTimeBetweenSimilar = time.Duration(minTimeBetweenSimilarNs)
 	json.Unmarshal(eventPreferencesJSON, &preferences.EventPreferences)
 
+	// Preferences saved before new-work announcements existed have no entry
+	// for them; until the person chooses, they get the default.
+	if _, ok := preferences.EventPreferences[models.EventNewWork]; !ok {
+		if preferences.EventPreferences == nil {
+			preferences.EventPreferences = map[models.NotificationEvent]models.EventPreference{}
+		}
+		preferences.EventPreferences[models.EventNewWork] = models.DefaultNotificationPreferences(userID).EventPreferences[models.EventNewWork]
+	}
+
 	return &preferences, nil
 }
 
