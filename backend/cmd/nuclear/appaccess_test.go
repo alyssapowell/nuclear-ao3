@@ -112,7 +112,7 @@ func TestEveryRouteRefusesApps(t *testing.T) {
 		"POST /api/v1/auth/reset-password", "POST /api/v1/auth/verify-email",
 		"GET /api/v1/apps", "POST /api/v1/apps", "GET /api/v1/blocks", "POST /api/v1/mutes",
 		"POST /api/v1/pseuds", "PUT /api/v1/pseuds/:pseud_id", "GET /api/v1/my/works", "GET /api/v1/my/pseuds",
-		"GET /api/v1/my/comments", "GET /api/v1/admin/audit", "GET /api/v1/admin/accounts", "GET /api/v1/admin/abuse-reports",
+		"GET /api/v1/my/comments", "GET /api/v1/my/history", "DELETE /api/v1/my/history", "PUT /api/v1/my/history/:work_id/marked", "GET /api/v1/admin/audit", "GET /api/v1/admin/accounts", "GET /api/v1/admin/abuse-reports",
 		"POST /api/v1/admin/abuse-reports/:kind/:report_id/resolve", "POST /api/v1/admin/users/:user_id/logout-everywhere", "POST /api/v1/admin/chapters/:chapter_id/hide",
 		"GET /api/v1/oauth/authorized-applications", "POST /auth/token", "GET /auth/authorize", "POST /auth/register-client",
 		"GET /api/v1/wrangling/queue", "GET /api/v1/notifications", "GET /ws",

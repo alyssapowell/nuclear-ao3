@@ -124,6 +124,9 @@ func (ws *WorkService) StartHitFlusher() (stop func()) {
 				if err := ws.FlushHits(ctx); err != nil {
 					log.Printf("works: %v", err)
 				}
+				if err := ws.FlushReadings(ctx); err != nil {
+					log.Printf("works: %v", err)
+				}
 			}
 		}
 	}()
@@ -133,6 +136,9 @@ func (ws *WorkService) StartHitFlusher() (stop func()) {
 		flushCtx, flushCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer flushCancel()
 		if err := ws.FlushHits(flushCtx); err != nil {
+			log.Printf("works: final %v", err)
+		}
+		if err := ws.FlushReadings(flushCtx); err != nil {
 			log.Printf("works: final %v", err)
 		}
 	}

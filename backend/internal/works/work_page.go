@@ -57,6 +57,8 @@ func (ws *WorkService) GetWorkWithAuthors(c *gin.Context) {
 		return
 	}
 
+	ws.recordReading(c, workID, 0)
+
 	// A reader who is blocked from this work's creators still reads it, but
 	// sees comments as disabled and no comment count. (Not on a work that
 	// hides its creators: there the block is silent, blockedFromWork is false,

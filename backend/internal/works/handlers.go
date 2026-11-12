@@ -1063,6 +1063,7 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 
 	// Increment work hit count when chapter is viewed
 	ws.incrementHits(workID)
+	ws.recordReading(c, workID, chapterNumber)
 
 	c.JSON(http.StatusOK, gin.H{"chapter": chapter})
 }
