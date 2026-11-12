@@ -156,25 +156,19 @@ export default function APIDocsPage() {
     },
     {
       title: 'Search',
-      description: 'Enhanced search with AI features and smart filtering',
+      description: 'Work search and suggestions',
       endpoints: [
         {
-          method: 'POST',
-          path: '/api/v1/search/enhanced',
-          description: 'AI-powered enhanced search',
-          body: [
-            { name: 'query', type: 'string', required: true, description: 'Natural language search query' },
-            { name: 'filters', type: 'object', required: false, description: 'Advanced filters' },
-            { name: 'semantic', type: 'boolean', required: false, description: 'Enable semantic search' }
+          method: 'GET',
+          path: '/api/v1/search/works',
+          description: 'Search works with filters',
+          params: [
+            { name: 'q', type: 'string', required: false, description: 'Search text' },
+            { name: 'page', type: 'number', required: false, description: 'Page number' },
+            { name: 'sort', type: 'string', required: false, description: 'relevance, updated_at, published_at, title, word_count, hits, kudos, comments or bookmarks' }
           ],
-          response: '{ "results": Work[], "suggestions": string[], "analytics": SearchAnalytics }',
-          example: `curl -X POST http://localhost:8080/api/v1/search/enhanced \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "enemies to lovers harry draco",
-    "semantic": true,
-    "filters": {"rating": "Teen And Up Audiences"}
-  }'`
+          response: '{ "works": Work[], "total": number, "pagination": PaginationInfo, "facets": object }',
+          example: `curl "http://localhost:8080/api/v1/search/works?q=enemies+to+lovers"`
         },
         {
           method: 'GET',
@@ -202,48 +196,38 @@ export default function APIDocsPage() {
             { name: 'limit', type: 'number', required: false, description: 'Max results (default: 10)' }
           ],
           response: '{ "tags": Tag[] }'
-        },
-        {
-          method: 'GET',
-          path: '/api/v1/tags/popular',
-          description: 'Get popular tags by category',
-          params: [
-            { name: 'type', type: 'string', required: false, description: 'Tag type (fandom, character, etc.)' },
-            { name: 'limit', type: 'number', required: false, description: 'Max results (default: 20)' }
-          ],
-          response: '{ "tags": Tag[] }'
         }
       ]
     },
     {
-      title: 'Users',
-      description: 'User profiles and social features',
+      title: 'Pseuds',
+      description: 'The public page of a pseud (creators are shown by pseud only)',
       endpoints: [
         {
           method: 'GET',
-          path: '/api/v1/users/:id',
-          description: 'Get user profile',
+          path: '/api/v1/pseuds/:id',
+          description: 'Get a pseud',
           params: [
-            { name: 'id', type: 'string', required: true, description: 'User UUID' }
+            { name: 'id', type: 'string', required: true, description: 'Pseud UUID' }
           ],
-          response: '{ "user": UserProfile }'
+          response: '{ "pseud": Pseud }'
         },
         {
           method: 'GET',
-          path: '/api/v1/users/:id/works',
-          description: 'Get works by user',
+          path: '/api/v1/pseuds/:id/works',
+          description: 'Get works by a pseud',
           params: [
-            { name: 'id', type: 'string', required: true, description: 'User UUID' },
+            { name: 'id', type: 'string', required: true, description: 'Pseud UUID' },
             { name: 'page', type: 'number', required: false, description: 'Page number' }
           ],
-          response: '{ "works": Work[], "pagination": PaginationInfo }'
+          response: '{ "pseud": Pseud, "works": Work[], "pagination": PaginationInfo }'
         },
         {
           method: 'GET',
-          path: '/api/v1/users/:id/bookmarks',
-          description: 'Get user bookmarks',
+          path: '/api/v1/pseuds/:id/bookmarks',
+          description: 'Get public bookmarks by a pseud',
           params: [
-            { name: 'id', type: 'string', required: true, description: 'User UUID' }
+            { name: 'id', type: 'string', required: true, description: 'Pseud UUID' }
           ],
           response: '{ "bookmarks": Bookmark[] }'
         }

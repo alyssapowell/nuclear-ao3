@@ -18,9 +18,7 @@ export interface Comment {
   is_moderated: boolean;
   is_spam: boolean;
   thread_level: number;
-  kudos_count: number;
   reply_count: number;
-  has_kudos?: boolean;
   created_at: string;
   updated_at: string;
   edited_at?: string;

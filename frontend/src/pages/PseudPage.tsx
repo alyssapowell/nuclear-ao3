@@ -20,6 +20,7 @@ import { getSeriesUrl, getWorkUrl } from '@/lib/urls';
 import { SafeHtml } from '@/lib/safeHtml';
 import { PseudList } from '@/components/PseudLink';
 import { SubscriptionButton } from '@/components/SubscriptionButton';
+import UserBlockingButton from '@/components/UserBlockingButton';
 
 type TabId = 'works' | 'series' | 'bookmarks' | 'gifts';
 
@@ -227,7 +228,10 @@ export default function PseudPage() {
                 Manage my pseuds
               </Link>
             ) : user ? (
-              <SubscriptionButton type="author" targetId={head.id} targetName={head.name} />
+              <div className="flex items-center gap-4">
+                <SubscriptionButton type="author" targetId={head.id} targetName={head.name} />
+                <UserBlockingButton pseudId={head.id} pseudName={head.name} />
+              </div>
             ) : (
               <Link to={`/auth/login?redirect=${encodeURIComponent(`/pseuds/${head.id}`)}`} className="text-sm text-blue-700 hover:underline">
                 Sign in to subscribe

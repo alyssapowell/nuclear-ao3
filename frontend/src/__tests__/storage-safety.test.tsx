@@ -129,7 +129,6 @@ describe('Storage Safety', () => {
         () => import('../components/auth/AuthGuard'),
         () => import('../components/Navigation'),
         () => import('../components/notifications/NotificationBell'),
-        () => import('../components/privacy/PrivacyWizard'),
         () => import('../pages/Profile'),
         () => import('../pages/Dashboard'),
         () => import('../pages/Login'),

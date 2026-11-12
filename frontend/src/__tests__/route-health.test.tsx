@@ -123,15 +123,6 @@ describe('Route Health Checks', () => {
       // The AuthGuard should handle the redirect
       expect(document.querySelector('body')).toBeInTheDocument();
     });
-
-    test('Onboarding page (/onboarding) renders privacy wizard', async () => {
-      const OnboardingPage = await testPageComponent(() => import('../pages/Onboarding'));
-      
-      render(<OnboardingPage />);
-      
-      // Should not crash during render
-      expect(document.querySelector('body')).toBeInTheDocument();
-    });
   });
 
   describe('Component Import Safety', () => {
@@ -142,7 +133,6 @@ describe('Route Health Checks', () => {
         () => import('../pages/Register'),
         () => import('../pages/Profile'),
         () => import('../pages/Dashboard'),
-        () => import('../pages/Onboarding'),
         () => import('../pages/WorkList'),
         () => import('../pages/Search'),
       ];
@@ -157,7 +147,6 @@ describe('Route Health Checks', () => {
       const criticalComponents = [
         () => import('../components/Navigation'),
         () => import('../components/auth/AuthGuard'),
-        () => import('../components/privacy/PrivacyWizard'),
         () => import('../components/notifications/NotificationBell'),
       ];
 
