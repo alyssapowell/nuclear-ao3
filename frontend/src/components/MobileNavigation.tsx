@@ -103,6 +103,7 @@ export default function MobileNavigation({ user }: MobileNavigationProps) {
     { name: 'Series', href: '/series', requiresAuth: false },
     { name: 'Reading History', href: '/dashboard/history', requiresAuth: true },
     { name: 'Subscriptions', href: '/dashboard/subscriptions', requiresAuth: true },
+    { name: 'My Pseuds', href: '/my/pseuds', requiresAuth: true },
     { name: 'Settings', href: '/dashboard/settings', requiresAuth: true },
     { name: 'Help', href: '/help', requiresAuth: false },
     { name: 'About', href: '/about', requiresAuth: false }

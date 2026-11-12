@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth, penNameOf } from '@/utils/auth';
 import { getMyWorks, getMyBookmarks, getUserSubscriptions, deleteWork } from '@/lib/api';
+import { PseudLink } from '@/components/PseudLink';
 
 interface Work {
   id: string;
@@ -475,7 +476,13 @@ export default function DashboardPage() {
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-slate-900">{subscription.target_name}</h3>
+                          <h3 className="text-lg font-semibold text-slate-900">
+                            {subscription.type === 'author' ? (
+                              <PseudLink pseud={{ id: subscription.target_id, name: subscription.target_name }} className="hover:underline" />
+                            ) : (
+                              subscription.target_name
+                            )}
+                          </h3>
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                             {subscription.type}
                           </span>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { PseudList } from '@/components/PseudLink';
 import { Search, Plus, User, Calendar, BookOpen, Users, Lock } from 'lucide-react';
 import { getMyCollections, getCollectionWorks, createCollection, CreateCollectionRequest, browseCollections } from '@/lib/api';
 
@@ -164,7 +165,7 @@ export default function CollectionsPage() {
           </a>
           <p className="text-sm text-gray-700 flex items-center mt-1">
             <User className="w-4 h-4 mr-1" />
-            Collection by {organisers?.length ? organisers.map((o) => o.name).join(', ') : collection.name}
+            Collection by {organisers?.length ? <PseudList pseuds={organisers} /> : collection.name}
           </p>
         </div>
         

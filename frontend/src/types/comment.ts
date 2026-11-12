@@ -11,6 +11,8 @@ export interface Comment {
   guest_name?: string;
   guest_email?: string;
   author_name: string;
+  /** The commenting pseud, when the comment is by a signed-in person and not hidden. */
+  pseud?: { id: string; name: string } | null;
   author_type: 'user' | 'guest' | 'unknown';
   is_deleted: boolean;
   is_moderated: boolean;

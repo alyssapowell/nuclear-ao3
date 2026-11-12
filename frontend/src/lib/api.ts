@@ -317,6 +317,8 @@ export interface CreateWorkRequest {
   moderate_comments?: boolean;
   disable_comments?: boolean;
   is_anonymous?: boolean;
+  /** One of the creator's own pseuds; their default if left out. */
+  pseud_id?: string;
 }
 
 export interface UpdateWorkRequest {
@@ -696,6 +698,8 @@ export interface CreateCommentRequest {
   chapter_id?: string;
   parent_comment_id?: string;
   is_anonymous?: boolean;
+  /** One of the commenter's own pseuds; their default if left out. */
+  pseudonym_id?: string;
 }
 
 // Get work comments
@@ -1719,6 +1723,8 @@ export interface Bookmark {
 }
 
 export interface CreateBookmarkRequest {
+  /** One of the person's own pseuds; their default if left out. */
+  pseud_id?: string;
   notes?: string;
   tags?: string[];
   is_private?: boolean;
@@ -2379,6 +2385,127 @@ export async function getMyPseuds(authToken?: string): Promise<PseudRef[]> {
   }
   const data = await response.json();
   return (data.pseuds || []).map((p: PseudRef) => ({ id: p.id, name: p.name }));
+}
+
+// ---- Pseuds: the public page of a pseud, and managing one's own ----------
+
+/** The head of a pseud's page. Nothing in it names the account or other pseuds. */
+export interface PseudPageHead {
+  id: string;
+  name: string;
+  description: string;
+  icon_url: string;
+  icon_alt_text: string;
+  icon_comment_text: string;
+  /** True only for the person behind the pseud, at their own browser. */
+  owned: boolean;
+}
+
+/** One of the signed-in person's own pseuds (GET /my/pseuds). Never shown to anyone else. */
+export interface MyPseud {
+  id: string;
+  name: string;
+  description: string;
+  is_default: boolean;
+  icon_url: string;
+  icon_alt_text: string;
+  icon_comment_text: string;
+}
+
+export interface PseudInput {
+  name?: string;
+  description?: string;
+  is_default?: boolean;
+  icon_url?: string;
+  icon_alt_text?: string;
+  icon_comment_text?: string;
+}
+
+export interface PseudPageParams { page?: number; limit?: number }
+
+export interface PseudListPagination { page: number; limit: number; total: number; total_pages: number }
+
+/** What the pseud pages need of a work to show a blurb. */
+export interface PseudPageWork {
+  id: string;
+  title: string;
+  summary?: string;
+  rating?: string;
+  status?: string;
+  language?: string;
+  fandoms?: string[];
+  characters?: string[];
+  relationships?: string[];
+  freeform_tags?: string[];
+  word_count: number;
+  chapter_count: number;
+  max_chapters?: number | null;
+  is_complete?: boolean;
+  published_at?: string | null;
+  updated_at?: string;
+  hits?: number;
+  kudos?: number;
+  comments?: number;
+  bookmarks?: number;
+  authors?: PseudRef[];
+}
+
+async function pseudRequest<T>(method: string, path: string, authToken?: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const response = await fetch(`${API_GATEWAY_URL}/api/v1${path}`, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+function pageQuery(params?: PseudPageParams): string {
+  const q = new URLSearchParams();
+  if (params?.page) q.append('page', String(params.page));
+  if (params?.limit) q.append('limit', String(params.limit));
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+export async function getPseud(pseudId: string, authToken?: string): Promise<PseudPageHead> {
+  const data = await pseudRequest<{ pseud: PseudPageHead }>('GET', `/pseuds/${encodeURIComponent(pseudId)}`, authToken);
+  return data.pseud;
+}
+
+export function getPseudWorks(pseudId: string, params?: PseudPageParams, authToken?: string) {
+  return pseudRequest<{ pseud: PseudRef; works: PseudPageWork[]; pagination: PseudListPagination }>(
+    'GET', `/pseuds/${encodeURIComponent(pseudId)}/works${pageQuery(params)}`, authToken);
+}
+
+export function getPseudGifts(pseudId: string, params?: PseudPageParams, authToken?: string) {
+  return pseudRequest<{ pseud: PseudRef; gifts: Array<{ work: PseudPageWork; created_at: string }>; pagination: PseudListPagination }>(
+    'GET', `/pseuds/${encodeURIComponent(pseudId)}/gifts${pageQuery(params)}`, authToken);
+}
+
+export async function listMyPseuds(authToken?: string): Promise<MyPseud[]> {
+  const data = await pseudRequest<{ pseuds: MyPseud[] }>('GET', '/my/pseuds', authToken);
+  return data.pseuds || [];
+}
+
+export async function createPseud(input: PseudInput, authToken?: string): Promise<MyPseud> {
+  const data = await pseudRequest<{ pseud: MyPseud }>('POST', '/pseuds', authToken, input);
+  return data.pseud;
+}
+
+export async function updatePseud(pseudId: string, input: PseudInput, authToken?: string): Promise<MyPseud> {
+  const data = await pseudRequest<{ pseud: MyPseud }>('PUT', `/pseuds/${encodeURIComponent(pseudId)}`, authToken, input);
+  return data.pseud;
+}
+
+export async function deletePseud(pseudId: string, authToken?: string): Promise<{ message: string; moved_to: string }> {
+  return pseudRequest('DELETE', `/pseuds/${encodeURIComponent(pseudId)}`, authToken);
 }
 
 // Create pseudonym

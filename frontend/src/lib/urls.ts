@@ -36,6 +36,15 @@ export function getSeriesUrl(seriesId: string): string {
 }
 
 /**
+ * Generate a URL for a pseud's page. A pseud is the only public face of an
+ * account, so this is the one URL an author name links to. The id is the
+ * pseud's own; no account id or name of an account ever goes in a URL.
+ */
+export function getPseudUrl(pseudId: string): string {
+  return `/pseuds/${encodeURIComponent(pseudId)}`;
+}
+
+/**
  * Generate a URL for a collection page
  */
 export function getCollectionUrl(collectionId: string): string {
@@ -278,6 +287,7 @@ export default {
   getConversationUrl,
   getChapterUrl,
   getSeriesUrl,
+  getPseudUrl,
   getCollectionUrl,
   getSearchUrl,
   parseConversationUrl,

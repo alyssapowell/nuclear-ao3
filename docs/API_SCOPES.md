@@ -25,7 +25,7 @@ walks every route that is really mounted and fails if the two disagree.
 | Comments | `GET /works/:id/comments`, `/work/:id/comments` | `read` | |
 | Series | `GET /series`, `/series/:id`, `/series/:id/works` | `read` | |
 | Collections | `GET /collections`, `/collections/:id` | `read` | `/collections/:id/works` is not open to apps: an organiser sees unapproved items there, so the answer would show which collections the person runs. |
-| Pseud pages | `GET /pseuds/:id/works`, `/series`, `/bookmarks` | `read` | An app sees the person's own pseud page as any other logged-in reader would (no drafts, no private bookmarks, no works that hide their creator). |
+| Pseud pages | `GET /pseuds/:id`, `/pseuds/:id/works`, `/series`, `/bookmarks`, `/gifts` | `read` | An app sees the person's own pseud page as any other logged-in reader would (no drafts, no private bookmarks, no works that hide their creator). |
 | Search | `GET /search/works`, `/search/suggestions` | `read` | |
 | Tags | `GET /tags`, `/tags/search`, `/tags/autocomplete`, `/tags/:id`, `/tags/:id/related`, `/tags/:id/works`, fandoms, characters, relationships, hierarchy, and `/stats/popular`, `/stats/trending`, `/stats/usage` | `read` | |
 | What the person follows | `GET /subscriptions`, `/subscription-status`, `/user/tags/followed` | `read` | Lists targets (other pseuds, works, tags), never the person's own pseuds. |

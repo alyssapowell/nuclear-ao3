@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos, WorkComment, CreateCommentRequest, CommentUpdateRequest } from '@/lib/api';
 import { getConversationUrl, navigation, routes } from '@/lib/urls';
 import SlideoutPanel from './SlideoutPanel';
+import { PseudLink } from './PseudLink';
+import PseudPicker from './PseudPicker';
 import ConversationView from './ConversationView';
 
 interface CommentsProps {
@@ -27,6 +29,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
   const [replyContent, setReplyContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [pseudId, setPseudId] = useState(''); // '' = the default pseud
   const [kudosLoading, setKudosLoading] = useState<Set<string>>(new Set());
   const [conversationView, setConversationView] = useState<{
     threadId: string;
@@ -123,6 +126,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
         chapter_id: chapterId,
         parent_comment_id: parentId,
         is_anonymous: isAnonymous,
+        ...(pseudId ? { pseudonym_id: pseudId } : {}),
       };
 
       const response = await createComment(workId, commentData, authToken);
@@ -266,7 +270,11 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900">
-                {comment.pseud?.name || comment.guest_name || (comment.anonymous_creator ? 'Anonymous Creator' : 'Anonymous')}
+                {comment.pseud ? (
+                  <PseudLink pseud={comment.pseud} className="text-slate-900 hover:underline" />
+                ) : (
+                  comment.guest_name || (comment.anonymous_creator ? 'Anonymous Creator' : 'Anonymous')
+                )}
               </span>
               {comment.status === 'pending' && (
                 <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
@@ -400,9 +408,11 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
                 placeholder="Write your reply..."
+                aria-label="Your reply"
                 className="form-textarea mb-3"
                 rows={3}
               />
+              <PseudPicker token={authToken} value={pseudId} onChange={setPseudId} label="Reply as" className="mb-3" />
               <div className="flex items-center justify-between">
                 <label className="flex items-center text-sm text-slate-600">
                   <input
@@ -543,9 +553,11 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               placeholder="Share your thoughts about this work..."
+              aria-label="Your comment"
               className="form-textarea mb-4"
               rows={4}
             />
+            <PseudPicker token={authToken} value={pseudId} onChange={setPseudId} label="Comment as" className="mb-4" />
             <div className="flex items-center justify-between">
               <label className="flex items-center text-sm text-slate-600">
                 <input

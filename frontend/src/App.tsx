@@ -45,6 +45,8 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Bookmarks = lazy(() => import('@/pages/Bookmarks'))
 const Subscriptions = lazy(() => import('@/pages/Subscriptions'))
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
+const PseudPage = lazy(() => import('@/pages/PseudPage'))
+const MyPseuds = lazy(() => import('@/pages/MyPseuds'))
 const Profile = lazy(() => import('@/pages/Profile'))
 const ProfilePrivacy = lazy(() => import('@/pages/ProfilePrivacy'))
 const OAuthAuthorize = lazy(() => import('@/pages/OAuthAuthorize'))
@@ -93,6 +95,7 @@ export default function App() {
               <Route path="/works/:id" element={<WorkView />} />
               <Route path="/series" element={<SeriesList />} />
               <Route path="/series/:id" element={<SeriesView />} />
+              <Route path="/pseuds/:id" element={<PseudPage />} />
               <Route path="/collections" element={<CollectionList />} />
               <Route path="/collections/:id" element={<CollectionView />} />
 
@@ -106,6 +109,7 @@ export default function App() {
                 <Route path="/bookmarks" element={<Bookmarks />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
                 <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/my/pseuds" element={<MyPseuds />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/password" element={<ChangePassword />} />
                 <Route path="/profile/privacy" element={<ProfilePrivacy />} />

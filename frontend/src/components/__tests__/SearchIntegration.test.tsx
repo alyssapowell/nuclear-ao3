@@ -129,7 +129,8 @@ describe('Search Integration Tests', () => {
       // Two of the three works are in this fandom.
       expect(screen.getAllByText('Marvel Cinematic Universe')).toHaveLength(2);
       expect(screen.getByText('MagicWriter')).toBeInTheDocument();
-      expect(screen.getByText('Second, Third')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Second' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Third' })).toBeInTheDocument();
     });
 
     it('names no author on an anonymous work', async () => {
@@ -143,15 +144,16 @@ describe('Search Integration Tests', () => {
       expect(screen.queryByText('SecretPseud')).not.toBeInTheDocument();
     });
 
-    it('does not turn authors or tags into links', async () => {
+    it('links authors to their pseud page and nothing else', async () => {
       const user = userEvent.setup();
       render(<SearchPage />);
 
       await search(user, 'Agatha');
       await screen.findByRole('heading', { name: 'Search Results' });
 
-      // Nothing in the results links to a pseud or user page.
-      expect(screen.queryAllByRole('link')).toHaveLength(0);
+      // The only links in the results are author names, and they go to a pseud page by the pseud's own id.
+      const links = screen.queryAllByRole('link');
+      expect(links.map((l) => l.getAttribute('href'))).toEqual(['/pseuds/pseud-1', '/pseuds/pseud-3', '/pseuds/pseud-4']);
     });
 
     it('opens a work when its title is clicked', async () => {

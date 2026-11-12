@@ -75,6 +75,8 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 		pseuds := api.Group("/pseuds")
 		pseuds.Use(d.OptionalUser)
 		{
+			pseuds.GET("/:pseud_id", workService.GetPseud)                    // GET /api/v1/pseuds/{uuid}
+			pseuds.GET("/:pseud_id/gifts", workService.GetPseudGifts)         // GET /api/v1/pseuds/{uuid}/gifts
 			pseuds.GET("/:pseud_id/works", workService.GetPseudWorks)         // GET /api/v1/pseuds/{uuid}/works
 			pseuds.GET("/:pseud_id/series", workService.GetPseudSeries)       // GET /api/v1/pseuds/{uuid}/series
 			pseuds.GET("/:pseud_id/bookmarks", workService.GetPseudBookmarks) // GET /api/v1/pseuds/{uuid}/bookmarks

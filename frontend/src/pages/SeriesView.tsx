@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { getSeries, getSeriesWorks, getMyPseuds, Series } from '@/lib/api';
 import { useAuth } from '@/utils/auth';
 import WorkCard from '@/components/WorkCard';
+import { PseudList } from '@/components/PseudLink';
 
 interface Work {
   id: string;
@@ -120,8 +121,8 @@ export default function SeriesPage() {
             <h1 className="text-3xl font-bold text-slate-900 mb-2">{series.title}</h1>
             <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
               <span>by</span>
-              <span className="text-orange-700 font-medium">
-                {series.authors.length > 0 ? series.authors.map(a => a.name).join(', ') : 'Anonymous'}
+              <span className="font-medium">
+                <PseudList pseuds={series.authors} className="text-orange-700 hover:underline" />
               </span>
             </div>
           </div>

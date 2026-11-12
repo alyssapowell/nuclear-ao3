@@ -14,11 +14,13 @@ import {
   Info
 } from 'lucide-react';
 import { SafeHtml } from '../lib/safeHtml';
+import { PseudList } from './PseudLink';
 
 interface Work {
   id: string;
   title: string;
-  author: string;
+  author?: string;
+  authors?: Array<{ id: string; name: string }>;
   summary?: string;
   word_count: number;
   chapter_count: number;
@@ -365,7 +367,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
                   <div className="flex items-center gap-2 text-gray-700 mb-2">
                     <User className="h-4 w-4" aria-hidden="true" />
-                    <span>by <strong>{work.author}</strong></span>
+                    <span>by <strong><PseudList pseuds={work.authors} fallback={work.author} /></strong></span>
                   </div>
 
                   {/* Metadata */}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
+import PseudPicker from '@/components/PseudPicker';
 import { createBookmark, deleteBookmark, isWorkBookmarked, type CreateBookmarkRequest } from '@/lib/api';
 
 interface BookmarkButtonProps {
@@ -111,6 +112,7 @@ export function BookmarkButton({
           onSubmit={handleCreateBookmark}
           onCancel={handleCancelBookmark}
           isLoading={isLoading}
+          authToken={authToken}
         />
       )}
     </>
@@ -121,12 +123,14 @@ interface BookmarkDialogProps {
   onSubmit: (data: CreateBookmarkRequest) => void;
   onCancel: () => void;
   isLoading: boolean;
+  authToken?: string;
 }
 
-function BookmarkDialog({ onSubmit, onCancel, isLoading }: BookmarkDialogProps) {
+function BookmarkDialog({ onSubmit, onCancel, isLoading, authToken }: BookmarkDialogProps) {
   const [notes, setNotes] = useState('');
   const [tags, setTags] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [pseudId, setPseudId] = useState(''); // '' = the default pseud
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +144,7 @@ function BookmarkDialog({ onSubmit, onCancel, isLoading }: BookmarkDialogProps) 
       notes: notes || undefined,
       tags: tagArray.length > 0 ? tagArray : undefined,
       is_private: isPrivate,
+      ...(pseudId ? { pseud_id: pseudId } : {}),
     });
   };
 
@@ -149,6 +154,7 @@ function BookmarkDialog({ onSubmit, onCancel, isLoading }: BookmarkDialogProps) 
         <h2 className="text-xl font-bold mb-4">Add Bookmark</h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          <PseudPicker token={authToken} value={pseudId} onChange={setPseudId} label="Bookmark as" />
           <div>
             <label htmlFor="notes" className="block text-sm font-medium mb-1">
               Notes (optional)

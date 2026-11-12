@@ -21,6 +21,7 @@ import {
   DialogTrigger 
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { PseudLink } from '@/components/PseudLink'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Bell, Settings, Trash2, Edit } from 'lucide-react'
 
@@ -237,7 +238,11 @@ export default function SubscriptionsPage() {
                     <span className="text-2xl">{getTypeIcon(subscription.type)}</span>
                     <div>
                       <CardTitle className="text-lg">
-                        {subscription.target_name}
+                        {subscription.type === 'author' ? (
+                          <PseudLink pseud={{ id: subscription.target_id, name: subscription.target_name }} />
+                        ) : (
+                          subscription.target_name
+                        )}
                       </CardTitle>
                       <CardDescription>
                         {subscription.type.charAt(0).toUpperCase() + subscription.type.slice(1)} subscription
