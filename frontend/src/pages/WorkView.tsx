@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Comments from '@/components/Comments';
 import KudosButton from '@/components/KudosButton';
 import { BookmarkButton } from '@/components/BookmarkButton';
+import { MarkForLaterButton } from '@/components/MarkForLaterButton';
 import { GiftButton } from '@/components/GiftButton';
 import { GiftList } from '@/components/GiftList';
 import { SubscriptionButton } from '@/components/SubscriptionButton';
@@ -321,6 +322,8 @@ export default function WorkPage() {
                   console.log('Bookmark status changed:', isBookmarked);
                 }}
               />
+
+              <MarkForLaterButton workId={work.id} authToken={token || undefined} />
 
               <GiftButton
                 workId={work.id}

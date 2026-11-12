@@ -392,7 +392,7 @@ func TestDemoAnswersHaveNoUsername(t *testing.T) {
 		"/api/v1/pseuds/" + one(`SELECT id::text FROM pseuds ORDER BY id LIMIT 1`) + "/series",
 		"/api/v1/pseuds/" + one(`SELECT id::text FROM pseuds ORDER BY id LIMIT 1`) + "/bookmarks",
 		"/api/v1/search/works?q=tea", "/api/v1/tags/" + one(`SELECT id::text FROM tags WHERE type = 'fandom' ORDER BY use_count DESC LIMIT 1`) + "/works",
-		"/api/v1/tags/search?q=a", "/api/v1/auth/me", "/api/v1/my/works", "/api/v1/my/pseuds", "/api/v1/my/comments", "/api/v1/my/series",
+		"/api/v1/tags/search?q=a", "/api/v1/auth/me", "/api/v1/my/works", "/api/v1/my/pseuds", "/api/v1/my/comments", "/api/v1/my/history", "/api/v1/my/history-settings", "/api/v1/my/series",
 		"/api/v1/my/collections", "/api/v1/bookmarks", "/api/v1/subscriptions", "/api/v1/blocks", "/api/v1/mutes", "/api/v1/notifications",
 	}
 	checked := 0

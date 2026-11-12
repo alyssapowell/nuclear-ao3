@@ -158,6 +158,15 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			protected.GET("/my/comments", workService.GetMyComments)       // GET /api/v1/my/comments
 			protected.GET("/my/stats", workService.GetMyStats)             // GET /api/v1/my/stats
 
+			// Reading history and Marked for Later. Under /my/, so never open to apps.
+			protected.GET("/my/history", workService.GetMyHistory)                      // GET /api/v1/my/history?show=to-read
+			protected.DELETE("/my/history", workService.ClearMyHistory)                 // DELETE /api/v1/my/history
+			protected.GET("/my/history/:work_id", workService.GetMyHistoryEntry)        // GET /api/v1/my/history/{uuid}
+			protected.DELETE("/my/history/:work_id", workService.DeleteMyHistoryEntry)  // DELETE /api/v1/my/history/{uuid}
+			protected.PUT("/my/history/:work_id/marked", workService.SetMarkedForLater) // PUT /api/v1/my/history/{uuid}/marked
+			protected.GET("/my/history-settings", workService.GetHistorySettings)       // GET /api/v1/my/history-settings
+			protected.PUT("/my/history-settings", workService.SetHistorySettings)       // PUT /api/v1/my/history-settings
+
 			// Subscriptions
 			protected.POST("/subscriptions", workService.CreateSubscription)           // POST /api/v1/subscriptions
 			protected.GET("/subscriptions", workService.GetUserSubscriptions)          // GET /api/v1/subscriptions
@@ -187,6 +196,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 type WorkService struct {
 	db                  *sql.DB
 	hits                hitCounter
+	readings            readingBuffer
 	downloads           downloadLimiter
 	notificationService *notifications.NotificationService
 }

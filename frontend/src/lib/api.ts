@@ -2828,3 +2828,47 @@ export async function downloadWork(workId: string, format: DownloadFormat, authT
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Reading history and Marked for Later. Only the person's own browser may
+// call these; apps are refused.
+export interface HistoryReading {
+  work_id: string;
+  /** False when the work has since been hidden or restricted: no work is given. */
+  available: boolean;
+  last_visited: string;
+  visit_count: number;
+  last_chapter?: number;
+  marked_for_later: boolean;
+  work?: PseudPageWork;
+}
+
+export function getMyHistory(params: { show?: 'to-read'; page?: number }, authToken?: string) {
+  const q = new URLSearchParams();
+  if (params.show) q.append('show', params.show);
+  if (params.page && params.page > 1) q.append('page', String(params.page));
+  const s = q.toString();
+  return pseudRequest<{ history_enabled: boolean; readings: HistoryReading[]; pagination: PseudListPagination }>(
+    'GET', `/my/history${s ? `?${s}` : ''}`, authToken);
+}
+
+export function getHistoryEntry(workId: string, authToken?: string) {
+  return pseudRequest<{ history_enabled: boolean; marked_for_later: boolean }>(
+    'GET', `/my/history/${encodeURIComponent(workId)}`, authToken);
+}
+
+export function setMarkedForLater(workId: string, marked: boolean, authToken?: string) {
+  return pseudRequest<{ marked_for_later: boolean }>(
+    'PUT', `/my/history/${encodeURIComponent(workId)}/marked`, authToken, { marked });
+}
+
+export function deleteHistoryEntry(workId: string, authToken?: string) {
+  return pseudRequest<{ message: string }>('DELETE', `/my/history/${encodeURIComponent(workId)}`, authToken);
+}
+
+export function clearMyHistory(authToken?: string) {
+  return pseudRequest<{ message: string }>('DELETE', '/my/history', authToken);
+}
+
+export function setHistoryEnabled(enabled: boolean, authToken?: string) {
+  return pseudRequest<{ history_enabled: boolean }>('PUT', '/my/history-settings', authToken, { history_enabled: enabled });
+}

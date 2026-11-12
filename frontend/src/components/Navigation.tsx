@@ -155,6 +155,7 @@ export default function Navigation() {
   const libraryLinks = user ? [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
     { href: '/bookmarks', label: 'Bookmarks', icon: <Bookmark className="w-4 h-4" /> },
+    { href: '/my/history', label: 'History', icon: <Bookmark className="w-4 h-4" /> },
     { href: '/subscriptions', label: 'Subscriptions', icon: <Heart className="w-4 h-4" /> },
     { href: '/my/pseuds', label: 'My Pseuds', icon: <User className="w-4 h-4" /> },
   ] : [];

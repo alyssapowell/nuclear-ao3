@@ -43,6 +43,7 @@ const CollectionView = lazy(() => import('@/pages/CollectionView'))
 const CollectionNew = lazy(() => import('@/pages/CollectionNew'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Bookmarks = lazy(() => import('@/pages/Bookmarks'))
+const History = lazy(() => import('@/pages/History'))
 const Subscriptions = lazy(() => import('@/pages/Subscriptions'))
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const PseudPage = lazy(() => import('@/pages/PseudPage'))
@@ -112,6 +113,7 @@ export default function App() {
                 <Route path="/collections/new" element={<CollectionNew />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/bookmarks" element={<Bookmarks />} />
+                <Route path="/my/history" element={<History />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/my/pseuds" element={<MyPseuds />} />
