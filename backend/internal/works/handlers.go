@@ -1061,8 +1061,8 @@ func (ws *WorkService) GetChapter(c *gin.Context) {
 		chapter.PublishedAt = &publishedAt.Time
 	}
 
-	// Increment work hit count when chapter is viewed
-	ws.incrementHits(workID)
+	// Views are counted by RecordHit, which the work page calls, so this
+	// answer can be cached.
 	ws.recordReading(c, workID, chapterNumber)
 
 	c.JSON(http.StatusOK, gin.H{"chapter": chapter})

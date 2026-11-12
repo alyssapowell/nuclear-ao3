@@ -130,7 +130,7 @@ func TestPublicCacheKeepsOtherVaryAndDropsRateLimit(t *testing.T) {
 
 func TestPublicRoutesHoldNothingPersonal(t *testing.T) {
 	for p := range publicRoutes {
-		for _, bad := range []string{"/auth", "/admin", "/my/", "notification", "subscription", "export", "kudos", "/oauth", "/user/", "chapters/:chapter_id"} {
+		for _, bad := range []string{"/auth", "/admin", "/my/", "notification", "subscription", "export", "kudos", "/oauth", "/user/", "/hit"} {
 			if strings.Contains(p, bad) {
 				t.Errorf("%s must not be cacheable", p)
 			}

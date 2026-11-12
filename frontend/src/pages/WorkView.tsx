@@ -10,7 +10,7 @@ import { SubscriptionButton } from '@/components/SubscriptionButton';
 import DownloadMenu from '@/components/DownloadMenu';
 import ChapterNavigation from '@/components/ChapterNavigation';
 import ReaderControls from '@/components/ReaderControls';
-import { getWork, getWorkChapters, getMyPseuds, Gift } from '@/lib/api';
+import { getWork, getWorkChapters, recordHit, getMyPseuds, Gift } from '@/lib/api';
 import { useAuth } from '@/utils/auth';
 import { useReaderPreferences } from '@/hooks/useReaderPreferences';
 import { useReadingProgress } from '@/hooks/useReadingProgress';
@@ -119,6 +119,7 @@ export default function WorkPage() {
       const data = await getWork(workId, token || undefined);
       setWork(data.work);
       setAuthors(data.authors || []);
+      recordHit(workId, token || undefined);
     } catch (err) {
       if (err instanceof Error && err.message.includes('400')) {
         setError('Work not found. Please check the Work ID.');

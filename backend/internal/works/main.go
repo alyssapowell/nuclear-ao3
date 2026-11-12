@@ -32,6 +32,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			legacy.GET("/:work_id/stats", workService.GetWorkStats)                       // GET /api/v1/works/123/stats
 			legacy.GET("/:work_id/download.:format", workService.DownloadWork)            // GET /api/v1/works/123/download.epub (epub, html, txt)
 			legacy.POST("/:work_id/comments", d.ActiveAccount, workService.CreateComment) // POST /api/v1/works/123/comments (guest + auth comments)
+			legacy.POST("/:work_id/hit", workService.RecordHit)                           // POST /api/v1/works/123/hit (counts a view; never cached)
 		}
 
 		// Modern routes (singular - UUID-based permanent URLs)
@@ -46,6 +47,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 			modern.GET("/:work_id/stats", workService.GetWorkStats)                       // GET /api/v1/work/{uuid}/stats
 			modern.GET("/:work_id/download.:format", workService.DownloadWork)            // GET /api/v1/work/{uuid}/download.epub
 			modern.POST("/:work_id/comments", d.ActiveAccount, workService.CreateComment) // POST /api/v1/work/{uuid}/comments (guest + auth comments)
+			modern.POST("/:work_id/hit", workService.RecordHit)                           // POST /api/v1/work/{uuid}/hit (counts a view; never cached)
 		}
 
 		// Series endpoints
@@ -196,6 +198,7 @@ func Mount(r *gin.Engine, workService *WorkService, d *platform.Deps) {
 type WorkService struct {
 	db                  *sql.DB
 	hits                hitCounter
+	hitSeen             hitSeen
 	readings            readingBuffer
 	downloads           downloadLimiter
 	notificationService *notifications.NotificationService

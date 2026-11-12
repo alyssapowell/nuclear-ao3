@@ -246,8 +246,6 @@ func (ws *WorkService) GetWorkWithTags(c *gin.Context) {
 			"tags": []models.Tag{},
 		})
 	}
-
-	ws.incrementHits(workID)
 }
 
 // getWorkTags returns the tags attached to a work.

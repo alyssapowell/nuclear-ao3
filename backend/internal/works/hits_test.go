@@ -3,10 +3,14 @@ package works
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"nuclear-ao3/internal/testdb"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -114,5 +118,78 @@ func TestStopHitFlusherFlushes(t *testing.T) {
 	stop()
 	if got := storedHits(t, ws.db, workID); got != 2 {
 		t.Errorf("hits = %d, want 2", got)
+	}
+}
+
+func TestHitCountsOncePerVisitorPerDay(t *testing.T) {
+	var h hitSeen
+	w1, w2 := uuid.New(), uuid.New()
+	day := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	if h.seen(w1, "203.0.113.7", day) {
+		t.Fatal("first view counted as seen")
+	}
+	if !h.seen(w1, "203.0.113.7", day.Add(5*time.Hour)) {
+		t.Error("the same visitor's second view on the same day counted again")
+	}
+	if h.seen(w2, "203.0.113.7", day) || h.seen(w1, "198.51.100.1", day) {
+		t.Error("another work, or another visitor, was treated as already seen")
+	}
+	if h.seen(w1, "203.0.113.7", day.Add(24*time.Hour)) {
+		t.Error("the next day's view wasn't counted")
+	}
+}
+
+func TestRecordHitCountsReadersNotCreatorsOrHiddenWorks(t *testing.T) {
+	ws, workID := newHitsEnv(t)
+	var creator uuid.UUID
+	ws.db.QueryRow(`SELECT user_id FROM works WHERE id = $1`, workID).Scan(&creator)
+	pseud := uuid.New()
+	ws.db.Exec(`INSERT INTO pseuds (id, user_id, name, is_default) VALUES ($1, $2, 'writerpen', false)`, pseud, creator)
+	ws.db.Exec(`INSERT INTO creatorships (creation_id, creation_type, pseud_id, approved) VALUES ($1, 'Work', $2, true)`, workID, pseud)
+
+	gin.SetMode(gin.TestMode)
+	hit := func(id uuid.UUID, ip string, user *uuid.UUID) int {
+		r := gin.New()
+		r.POST("/works/:work_id/hit", func(c *gin.Context) {
+			if user != nil {
+				c.Set("user_uuid", *user)
+			}
+			ws.RecordHit(c)
+		})
+		req := httptest.NewRequest("POST", "/works/"+id.String()+"/hit", nil)
+		req.RemoteAddr = ip + ":1000"
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+	flushed := func() int {
+		if err := ws.FlushHits(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return storedHits(t, ws.db, workID)
+	}
+
+	before := flushed()
+	hit(workID, "203.0.113.1", nil)
+	hit(workID, "203.0.113.1", nil) // same visitor, same day
+	hit(workID, "2001:db8:1:2::1", nil)
+	hit(workID, "2001:db8:1:2::99", nil) // same IPv6 /64
+	if got := flushed() - before; got != 2 {
+		t.Errorf("%d views counted, want 2 (one per visitor per day)", got)
+	}
+	before = flushed()
+	hit(workID, "198.51.100.9", &creator)
+	if got := flushed() - before; got != 0 {
+		t.Errorf("the creator's own view counted (%d)", got)
+	}
+	ws.db.Exec(`UPDATE works SET status = 'draft' WHERE id = $1`, workID)
+	if code := hit(workID, "198.51.100.10", nil); code != http.StatusNoContent {
+		t.Errorf("a draft answered %d, want the same 204 as any work", code)
+	}
+	if code := hit(uuid.New(), "198.51.100.11", nil); code != http.StatusNoContent {
+		t.Errorf("a missing work answered %d, want 204", code)
+	}
+	if got := flushed() - before; got != 0 {
+		t.Errorf("a view of a draft counted (%d)", got)
 	}
 }

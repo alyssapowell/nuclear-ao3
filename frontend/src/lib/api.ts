@@ -252,6 +252,22 @@ export async function getWorks(searchParams?: WorkListParams) {
   }
 }
 
+// recordHit tells the archive a work page was opened, which counts one view.
+// It is its own small request so the work and its chapters can be cached; the
+// server counts each visitor once a day and never the work's own creators.
+// Failures are ignored: a missed view must never break reading.
+export function recordHit(workId: string, authToken?: string): void {
+  const headers: Record<string, string> = {};
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+  fetch(`${API_GATEWAY_URL}/api/v1/works/${encodeURIComponent(workId)}/hit`, {
+    method: 'POST',
+    headers,
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export async function getWork(id: string, authToken?: string) {
   try {
     const headers: Record<string, string> = {

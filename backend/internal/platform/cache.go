@@ -44,10 +44,11 @@ func buildPublicRoutes() map[string]bool {
 	// Works: the same pages are reachable under /works (numeric or UUID ids)
 	// and /work (UUID only).
 	for _, base := range []string{"/api/v1/works", "/api/v1/work"} {
-		// Not .../chapters/:chapter_id: reading a chapter counts a hit, and a
-		// copy served by the CDN would never be counted.
+		// Views are counted by a separate POST .../hit from the work page,
+		// so the chapters themselves can be cached.
 		add(base+"/:work_id",
 			base+"/:work_id/chapters",
+			base+"/:work_id/chapters/:chapter_id",
 			base+"/:work_id/comments",
 			// A download is made from the same rows a logged-out reader of
 			// the page sees, and nothing else (no view is counted).
