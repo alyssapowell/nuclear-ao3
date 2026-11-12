@@ -2477,7 +2477,7 @@ export function getMyHistory(params: { show?: 'to-read'; page?: number }, authTo
   if (params.page && params.page > 1) q.append('page', String(params.page));
   const s = q.toString();
   return pseudRequest<{ history_enabled: boolean; readings: HistoryReading[]; pagination: PseudListPagination }>(
-    'GET', `/my/history${s ? `?${s}` : ''}`, authToken);
+    'GET', `/my/history${s ? '?' + s : ''}`, authToken);
 }
 
 export function getHistoryEntry(workId: string, authToken?: string) {

@@ -26,6 +26,10 @@
 /api/v1/collections	frontend/src/lib/api.ts
 /api/v1/collections/:p	frontend/src/lib/api.ts
 /api/v1/comments/:p	frontend/src/lib/api.ts
+/api/v1/my/history	frontend/src/lib/api.ts
+/api/v1/my/history-settings	frontend/src/lib/api.ts
+/api/v1/my/history/:p	frontend/src/lib/api.ts
+/api/v1/my/history/:p/marked	frontend/src/lib/api.ts
 /api/v1/my/pseuds	frontend/src/lib/api.ts
 /api/v1/my/works	frontend/src/lib/api.ts
 /api/v1/notifications	frontend/src/hooks/useNotifications.ts
