@@ -44,7 +44,6 @@ const CollectionNew = lazy(() => import('@/pages/CollectionNew'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Bookmarks = lazy(() => import('@/pages/Bookmarks'))
 const Subscriptions = lazy(() => import('@/pages/Subscriptions'))
-const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const PseudPage = lazy(() => import('@/pages/PseudPage'))
 const MyPseuds = lazy(() => import('@/pages/MyPseuds'))
 const Profile = lazy(() => import('@/pages/Profile'))
@@ -113,7 +112,6 @@ export default function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/bookmarks" element={<Bookmarks />} />
                 <Route path="/subscriptions" element={<Subscriptions />} />
-                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/my/pseuds" element={<MyPseuds />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/password" element={<ChangePassword />} />

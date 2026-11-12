@@ -2,7 +2,7 @@ import type { MockedFunction } from 'vitest';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Comments from '../Comments';
-import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos } from '@/lib/api';
+import { getWorkComments, createComment, updateComment, deleteComment } from '@/lib/api';
 
 // Mock the API functions
 vi.mock('@/lib/api', () => ({
@@ -10,16 +10,12 @@ vi.mock('@/lib/api', () => ({
   createComment: vi.fn(),
   updateComment: vi.fn(),
   deleteComment: vi.fn(),
-  giveCommentKudos: vi.fn(),
-  removeCommentKudos: vi.fn(),
 }));
 
 const mockGetWorkComments = getWorkComments as MockedFunction<typeof getWorkComments>;
 const mockCreateComment = createComment as MockedFunction<typeof createComment>;
 const mockUpdateComment = updateComment as MockedFunction<typeof updateComment>;
 const mockDeleteComment = deleteComment as MockedFunction<typeof deleteComment>;
-const mockGiveCommentKudos = giveCommentKudos as MockedFunction<typeof giveCommentKudos>;
-const mockRemoveCommentKudos = removeCommentKudos as MockedFunction<typeof removeCommentKudos>;
 
 // Helper function to render Comments component wrapped in act
 const renderCommentsWithAct = async (props: any) => {
@@ -79,8 +75,6 @@ describe('Comments', () => {
         updated_at: '2024-01-01T02:00:00Z',
       }
     });
-    mockGiveCommentKudos.mockResolvedValue({ success: true });
-    mockRemoveCommentKudos.mockResolvedValue({ success: true });
   });
 
   it('renders comments correctly', async () => {
@@ -283,119 +277,6 @@ describe('Comments', () => {
     });
   });
 
-  it('displays kudos count and button for each comment', async () => {
-    await renderCommentsWithAct({ workId: "work-1" });
-
-    await waitFor(() => {
-      // Check first comment kudos (not given by user)
-      const kudosButtons = screen.getAllByRole('button');
-      const firstCommentKudos = kudosButtons.find(button => 
-        button.textContent?.includes('5')
-      );
-      expect(firstCommentKudos).toBeInTheDocument();
-
-      // Check second comment kudos (given by user)
-      const secondCommentKudos = kudosButtons.find(button => 
-        button.textContent?.includes('2')
-      );
-      expect(secondCommentKudos).toBeInTheDocument();
-    });
-  });
-
-  it('gives kudos to a comment when clicked', async () => {
-    await renderCommentsWithAct({ workId: "work-1", authToken: "test-token" });
-
-    await waitFor(() => {
-      expect(screen.getByText('This is a great story!')).toBeInTheDocument();
-    });
-
-    // Find and click the kudos button for the first comment
-    const kudosButtons = screen.getAllByRole('button');
-    const firstCommentKudosButton = kudosButtons.find(button => 
-      button.textContent?.includes('5')
-    );
-    
-    if (firstCommentKudosButton) {
-      fireEvent.click(firstCommentKudosButton);
-    }
-
-    await waitFor(() => {
-      expect(mockGiveCommentKudos).toHaveBeenCalledWith('work-1', '1', 'test-token');
-    });
-  });
-
-  it('removes kudos from a comment when clicked if already given', async () => {
-    // Mock successful API response for getting comments
-    mockGetWorkComments.mockResolvedValue({ comments: mockComments });
-    
-    // Mock successful remove kudos response
-    mockRemoveCommentKudos.mockResolvedValue({ success: true, message: 'Kudos removed' });
-
-    await renderCommentsWithAct({ workId: "work-1", authToken: "test-token" });
-
-    await waitFor(() => {
-      expect(screen.getByText('This is a great story!')).toBeInTheDocument();
-    });
-
-    // Find and click the kudos button for the second comment (which has_kudos: true)
-    const secondComment = screen.getByText('Thank you for reading!').closest('.prose')!.parentElement!;
-    const secondCommentKudosButton = within(secondComment).getByRole('button', { name: '2' });
-
-    await act(async () => {
-      fireEvent.click(secondCommentKudosButton);
-    });
-
-    await waitFor(() => {
-      expect(mockRemoveCommentKudos).toHaveBeenCalledWith('work-1', '2', 'test-token');
-    });
-  });
-
-  it('shows error when trying to give kudos without auth token', async () => {
-    await renderCommentsWithAct({ workId: "work-1" });
-
-    await waitFor(() => {
-      expect(screen.getByText('This is a great story!')).toBeInTheDocument();
-    });
-
-    // Find and click the kudos button for the first comment
-    const kudosButtons = screen.getAllByRole('button');
-    const firstCommentKudosButton = kudosButtons.find(button => 
-      button.textContent?.includes('5')
-    );
-    
-    if (firstCommentKudosButton) {
-      fireEvent.click(firstCommentKudosButton);
-    }
-
-    await waitFor(() => {
-      expect(screen.getByText('You must be logged in to give kudos')).toBeInTheDocument();
-    });
-  });
-
-  it('handles kudos API errors gracefully', async () => {
-    mockGiveCommentKudos.mockRejectedValue(new Error('Kudos failed'));
-    
-    await renderCommentsWithAct({ workId: "work-1", authToken: "test-token" });
-
-    await waitFor(() => {
-      expect(screen.getByText('This is a great story!')).toBeInTheDocument();
-    });
-
-    // Find and click the kudos button for the first comment
-    const kudosButtons = screen.getAllByRole('button');
-    const firstCommentKudosButton = kudosButtons.find(button => 
-      button.textContent?.includes('5')
-    );
-    
-    if (firstCommentKudosButton) {
-      fireEvent.click(firstCommentKudosButton);
-    }
-
-    await waitFor(() => {
-      expect(screen.getByText('Kudos failed')).toBeInTheDocument();
-    });
-  });
-
   describe('Comment editing', () => {
     it('should show edit button for user comments when authenticated', async () => {
       const commentsWithAuthType = mockComments.map(comment => ({
@@ -482,7 +363,6 @@ describe('Comments', () => {
       
       await waitFor(() => {
         expect(mockUpdateComment).toHaveBeenCalledWith(
-          'work-1',
           '1',
           { content: 'Updated comment content' },
           'test-token'
@@ -579,7 +459,7 @@ describe('Comments', () => {
       fireEvent.click(confirmButton);
       
       await waitFor(() => {
-        expect(mockDeleteComment).toHaveBeenCalledWith('work-1', '1', 'test-token');
+        expect(mockDeleteComment).toHaveBeenCalledWith('1', 'test-token');
       });
     });
 

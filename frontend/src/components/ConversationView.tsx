@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Comment, CommentCreateRequest } from '@/types/comment';
+import { Comment } from '@/types/comment';
+import { getWorkComments, createComment } from '@/lib/api';
+import { getAuthToken } from '@/utils/auth';
 import { PseudLink } from './PseudLink';
 import { useConversationNavigation } from '@/hooks/useConversationNavigation';
 
@@ -50,11 +52,8 @@ export default function ConversationView({
       setError(null);
 
       // Fetch all comments for the work first
-      const response = await fetch(`/api/works/${workId}/comments?threaded=true`);
-      if (!response.ok) throw new Error('Failed to fetch comments');
-      
-      const data = await response.json();
-      const allComments = data.comments || [];
+      const data = await getWorkComments(workId, getAuthToken() ?? undefined);
+      const allComments = nestComments((data.comments || []) as Comment[]);
 
       // Find the thread starting with threadId
       const thread = findCommentThread(allComments, threadId);
@@ -71,6 +70,19 @@ export default function ConversationView({
     } finally {
       setLoading(false);
     }
+  };
+
+  // The server lists comments flat, each naming its parent; nest them.
+  const nestComments = (flat: Comment[]): Comment[] => {
+    const byId = new Map<string, Comment>();
+    flat.forEach(c => byId.set(c.id, { ...c, replies: [] }));
+    const roots: Comment[] = [];
+    byId.forEach(c => {
+      const parent = c.parent_comment_id ? byId.get(c.parent_comment_id) : undefined;
+      if (parent) parent.replies!.push(c);
+      else roots.push(c);
+    });
+    return roots;
   };
 
   // Find a specific comment thread by ID
@@ -117,21 +129,11 @@ export default function ConversationView({
     try {
       setSubmitting(true);
       
-      const replyData: CommentCreateRequest = {
-        work_id: workId,
-        content: replyContent.trim(),
-        parent_comment_id: targetCommentId || rootComment?.id
-      };
-
-      const response = await fetch(`/api/works/${workId}/comments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(replyData),
-      });
-
-      if (!response.ok) throw new Error('Failed to post reply');
+      await createComment(
+        workId,
+        { content: replyContent.trim(), parent_comment_id: targetCommentId || rootComment?.id },
+        getAuthToken() ?? undefined,
+      );
 
       // Refresh the conversation
       await fetchConversation();
@@ -258,14 +260,6 @@ export default function ConversationView({
                   </span>
                 )}
               </div>
-              
-              <div className="flex items-center space-x-2">
-                {comment.kudos_count > 0 && (
-                  <span className="text-xs text-gray-700 dark:text-gray-400">
-                    ❤️ {comment.kudos_count}
-                  </span>
-                )}
-              </div>
             </div>
 
             {/* Comment Content */}
@@ -283,7 +277,6 @@ export default function ConversationView({
               >
                 Reply
               </button>
-              {/* Add kudos button, etc. */}
             </div>
 
             {/* Reply Form */}

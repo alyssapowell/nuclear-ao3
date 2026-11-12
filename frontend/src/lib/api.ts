@@ -686,8 +686,6 @@ export interface WorkComment {
   is_deleted?: boolean;
   is_moderated?: boolean;
   is_spam?: boolean;
-  kudos_count?: number;
-  has_kudos?: boolean;
   created_at: string;
   updated_at: string;
   edited_at?: string;
@@ -764,64 +762,8 @@ export async function createComment(workId: string, commentData: CreateCommentRe
   }
 }
 
-// Give kudos to a comment
-export async function giveCommentKudos(workId: string, commentId: string, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/comments/${commentId}/kudos`, {
-      method: 'POST',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Give comment kudos error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Remove kudos from a comment
-export async function removeCommentKudos(workId: string, commentId: string, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/comments/${commentId}/kudos`, {
-      method: 'DELETE',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Remove comment kudos error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
 // Update comment
-export async function updateComment(workId: string, commentId: string, commentData: CommentUpdateRequest, authToken?: string) {
+export async function updateComment(commentId: string, commentData: CommentUpdateRequest, authToken?: string) {
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -832,7 +774,7 @@ export async function updateComment(workId: string, commentId: string, commentDa
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/comments/${commentId}`, {
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/comments/${commentId}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(commentData),
@@ -851,7 +793,7 @@ export async function updateComment(workId: string, commentId: string, commentDa
 }
 
 // Delete comment
-export async function deleteComment(workId: string, commentId: string, authToken?: string) {
+export async function deleteComment(commentId: string, authToken?: string) {
   try {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
@@ -861,7 +803,7 @@ export async function deleteComment(workId: string, commentId: string, authToken
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/works/${workId}/comments/${commentId}`, {
+    const response = await fetch(`${API_GATEWAY_URL}/api/v1/comments/${commentId}`, {
       method: 'DELETE',
       headers,
     });
@@ -2074,7 +2016,6 @@ export interface UserProfile {
   hide_warnings?: boolean;
   minimize_warnings?: boolean;
   show_stats?: boolean;
-  allow_friend_requests?: boolean;
   show_bookmarks?: boolean;
   show_works?: boolean;
   created_at: string;
@@ -2089,18 +2030,6 @@ export interface UserPseudonym {
   is_default: boolean;
   created_at: string;
   updated_at: string;
-}
-
-export interface UserRelationship {
-  id: string;
-  requester_id: string;
-  requested_id: string;
-  status: 'pending' | 'accepted' | 'blocked';
-  type: 'friend' | 'block_user' | 'block_comments' | 'block_works';
-  created_at: string;
-  updated_at: string;
-  requester?: UserProfile;
-  requested?: UserProfile;
 }
 
 export interface UpdateProfileRequest {
@@ -2121,52 +2050,8 @@ export interface UpdateProfileRequest {
   hide_warnings?: boolean;
   minimize_warnings?: boolean;
   show_stats?: boolean;
-  allow_friend_requests?: boolean;
   show_bookmarks?: boolean;
   show_works?: boolean;
-}
-
-export interface CreatePseudonymRequest {
-  name: string;
-  description?: string;
-  is_default?: boolean;
-}
-
-export interface FriendRequestRequest {
-  user_id: string;
-}
-
-export interface BlockUserRequest {
-  user_id: string;
-  type: 'block_user' | 'block_comments' | 'block_works';
-}
-
-// Get user profile
-export async function getUserProfile(userId: string, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/users/${userId}/profile`, {
-      method: 'GET',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Get user profile error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
 }
 
 // Get current user's profile
@@ -2223,133 +2108,6 @@ export async function updateProfile(profileData: UpdateProfileRequest, authToken
     return await response.json();
   } catch (error) {
     console.error('Update profile error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Privacy Settings Management
-export interface PrivacySettingsRequest {
-  // Content Filtering
-  show_explicit_content?: boolean;
-  show_mature_content?: boolean;
-  hide_unrated_content?: boolean;
-  hide_creator_chose_not_to_warn?: boolean;
-  hide_archive_warnings?: string[];
-  
-  // Profile Privacy
-  profile_visibility?: 'public' | 'logged_in_only' | 'private';
-  show_stats_publicly?: boolean;
-  show_email_to_users?: boolean;
-  allow_user_contact?: boolean;
-  
-  // Reading & Interaction Privacy
-  show_reading_history?: boolean;
-  show_bookmarks_publicly?: boolean;
-  enable_comment_notifications?: boolean;
-  enable_kudos_notifications?: boolean;
-  
-  // Work Posting Defaults
-  default_work_privacy?: 'public' | 'unrevealed' | 'anonymous';
-  default_comment_policy?: 'open' | 'registered_users' | 'disabled';
-  allow_concrit?: boolean;
-  
-  // Email & Notifications
-  email_on_comments?: boolean;
-  email_on_kudos?: boolean;
-  email_on_bookmarks?: boolean;
-  email_on_subscriptions?: boolean;
-  email_digest_frequency?: 'none' | 'daily' | 'weekly';
-}
-
-export interface PrivacySettingsResponse {
-  // Content Filtering
-  show_explicit_content: boolean;
-  show_mature_content: boolean;
-  hide_unrated_content: boolean;
-  hide_creator_chose_not_to_warn: boolean;
-  hide_archive_warnings: string[];
-  
-  // Profile Privacy
-  profile_visibility: 'public' | 'logged_in_only' | 'private';
-  show_stats_publicly: boolean;
-  show_email_to_users: boolean;
-  allow_user_contact: boolean;
-  
-  // Reading & Interaction Privacy
-  show_reading_history: boolean;
-  show_bookmarks_publicly: boolean;
-  enable_comment_notifications: boolean;
-  enable_kudos_notifications: boolean;
-  
-  // Work Posting Defaults
-  default_work_privacy: 'public' | 'unrevealed' | 'anonymous';
-  default_comment_policy: 'open' | 'registered_users' | 'disabled';
-  allow_concrit: boolean;
-  
-  // Email & Notifications
-  email_on_comments: boolean;
-  email_on_kudos: boolean;
-  email_on_bookmarks: boolean;
-  email_on_subscriptions: boolean;
-  email_digest_frequency: 'none' | 'daily' | 'weekly';
-  
-  updated_at: string;
-}
-
-// Get user privacy settings
-export async function getPrivacySettings(authToken?: string): Promise<PrivacySettingsResponse> {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/privacy`, {
-      method: 'GET',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Get privacy settings error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Update user privacy settings
-export async function updatePrivacySettings(settingsData: PrivacySettingsRequest, authToken?: string): Promise<PrivacySettingsResponse> {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/privacy`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify(settingsData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Update privacy settings error:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -2508,151 +2266,6 @@ export async function deletePseud(pseudId: string, authToken?: string): Promise<
   return pseudRequest('DELETE', `/pseuds/${encodeURIComponent(pseudId)}`, authToken);
 }
 
-// Create pseudonym
-export async function createPseudonym(pseudonymData: CreatePseudonymRequest, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/pseudonyms`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(pseudonymData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Create pseudonym error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Send friend request
-export async function sendFriendRequest(requestData: FriendRequestRequest, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/friends/request`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Send friend request error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Accept friend request
-export async function acceptFriendRequest(requestId: string, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/friends/${requestId}/accept`, {
-      method: 'POST',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Accept friend request error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Block user
-export async function blockUser(blockData: BlockUserRequest, authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/block`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(blockData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Block user error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-// Get user dashboard with statistics
-export async function getUserDashboard(authToken?: string) {
-  try {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    };
-    
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/v1/profile/dashboard`, {
-      method: 'GET',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `API responded with status ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Get user dashboard error:', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
 // =============================================================================
 // AUTHENTICATION
 // =============================================================================

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { getWorkComments, createComment, updateComment, deleteComment, giveCommentKudos, removeCommentKudos, WorkComment, CreateCommentRequest, CommentUpdateRequest } from '@/lib/api';
+import { getWorkComments, createComment, updateComment, deleteComment, WorkComment, CreateCommentRequest, CommentUpdateRequest } from '@/lib/api';
 import { getConversationUrl, navigation, routes } from '@/lib/urls';
 import SlideoutPanel from './SlideoutPanel';
 import { PseudLink } from './PseudLink';
@@ -30,7 +30,6 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
   const [submitting, setSubmitting] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [pseudId, setPseudId] = useState(''); // '' = the default pseud
-  const [kudosLoading, setKudosLoading] = useState<Set<string>>(new Set());
   const [conversationView, setConversationView] = useState<{
     threadId: string;
     open: boolean;
@@ -155,46 +154,6 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
     }
   };
 
-  const handleCommentKudos = async (commentId: string) => {
-    if (!authToken) {
-      setError('You must be logged in to give kudos');
-      return;
-    }
-
-    try {
-      setKudosLoading(prev => new Set(prev).add(commentId));
-      
-      const comment = comments.find(c => c.id === commentId);
-      if (!comment) return;
-
-      if (comment.has_kudos) {
-        await removeCommentKudos(workId, commentId, authToken);
-        // Update local state
-        setComments(prev => prev.map(c => 
-          c.id === commentId 
-            ? { ...c, has_kudos: false, kudos_count: (c.kudos_count || 1) - 1 }
-            : c
-        ));
-      } else {
-        await giveCommentKudos(workId, commentId, authToken);
-        // Update local state
-        setComments(prev => prev.map(c => 
-          c.id === commentId 
-            ? { ...c, has_kudos: true, kudos_count: (c.kudos_count || 0) + 1 }
-            : c
-        ));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update kudos');
-    } finally {
-      setKudosLoading(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(commentId);
-        return newSet;
-      });
-    }
-  };
-
   const handleEditComment = async (commentId: string, content: string) => {
     if (!content.trim() || !authToken) return;
 
@@ -204,7 +163,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
         content: content.trim(),
       };
 
-      const response = await updateComment(workId, commentId, updateData, authToken);
+      const response = await updateComment(commentId, updateData, authToken);
       
       // Update local state
       setComments(prev => prev.map(c => 
@@ -229,7 +188,7 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
     try {
       setSubmitting(true);
       
-      await deleteComment(workId, commentId, authToken);
+      await deleteComment(commentId, authToken);
       
       // Remove comment from local state
       setComments(prev => prev.filter(c => c.id !== commentId));
@@ -303,26 +262,6 @@ export default function Comments({ workId, chapterId, allowComments = true, auth
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Kudos button */}
-            <button
-              onClick={() => handleCommentKudos(comment.id)}
-              disabled={kudosLoading.has(comment.id)}
-              className={`flex items-center gap-1 text-sm transition-colors ${
-                comment.has_kudos 
-                  ? 'text-red-600 hover:text-red-700' 
-                  : 'text-slate-500 hover:text-red-600'
-              }`}
-            >
-              {kudosLoading.has(comment.id) ? (
-                <div className="w-4 h-4 loading-spinner"></div>
-              ) : (
-                <svg className="w-4 h-4" fill={comment.has_kudos ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              )}
-              {comment.kudos_count || 0}
-            </button>
-
             {canReply && (
               <button
                 onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}

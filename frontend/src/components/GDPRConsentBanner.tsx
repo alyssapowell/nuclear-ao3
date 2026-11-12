@@ -50,40 +50,13 @@ export default function GDPRConsentBanner({ onConsentUpdate, className = '' }: G
     });
   };
 
-  const saveConsent = async (consentData: ConsentState) => {
+  const saveConsent = (consentData: ConsentState) => {
     try {
       // Save to localStorage
       if (typeof window !== 'undefined') {
         localStorage.setItem('nuclear-ao3-gdpr-consent', JSON.stringify(consentData));
         localStorage.setItem('nuclear-ao3-gdpr-consent-date', new Date().toISOString());
         localStorage.setItem('nuclear-ao3-privacy-policy-version', '1.0');
-      }
-
-      // Send to backend with timeout and error handling
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        const response = await fetch('/api/v1/gdpr/consent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            consent: consentData,
-            privacy_policy_version: '1.0',
-            timestamp: new Date().toISOString(),
-          }),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          console.warn('Failed to save consent to backend, but proceeding with local storage');
-        }
-      } catch (fetchError) {
-        console.warn('Network error saving consent to backend, proceeding with local storage:', fetchError);
       }
 
       // Notify parent component

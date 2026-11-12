@@ -105,10 +105,6 @@ Toggle switch component for boolean settings.
 
 ## User Interface Components
 
-### UserProfileSettings.tsx
-Comprehensive user profile management interface.
-
-
 ### BookmarkButton.tsx
 Work bookmarking functionality component.
 
