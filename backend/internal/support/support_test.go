@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -226,8 +227,9 @@ func TestRateLimit(t *testing.T) {
 	e.expect(201, "POST", "/api/v1/support", "", m)
 	e.expect(201, "POST", "/api/v1/support", "", m)
 	e.expect(429, "POST", "/api/v1/support", "", m)
-	// A refused request stores nothing and queues nothing.
-	if e.count(`SELECT count(*) FROM support_tickets`) != 2 || e.count(`SELECT count(*) FROM jobs WHERE kind = 'email'`) != 2 {
+	// A refused request stores nothing and queues nothing. (The two kept
+	// messages share an address, so they get one confirmation between them.)
+	if e.count(`SELECT count(*) FROM support_tickets`) != 2 || e.count(`SELECT count(*) FROM jobs WHERE kind = 'email'`) != 1 {
 		t.Error("a limited request left something behind")
 	}
 }
@@ -383,11 +385,18 @@ func TestRateLimitCannotBeDodged(t *testing.T) {
 	if code := from("[2001:db8:1:2:ffff::9]:1000", "c@example.org"); code != 429 {
 		t.Errorf("a third address in the same /64 got %d, want 429", code)
 	}
-	// One recipient can't be sent confirmations from many places.
-	if from("198.51.100.1:1000", "target@example.org") != 201 || from("198.51.100.2:1000", "target@example.org") != 201 {
-		t.Fatal("first two to the target refused")
+	// Typing someone else's address over and over neither blocks them from
+	// writing in nor floods their inbox: every message is kept, and the
+	// address gets one confirmation an hour.
+	for i := 1; i <= 3; i++ {
+		if code := from(fmt.Sprintf("198.51.100.%d:1000", i), "target@example.org"); code != 201 {
+			t.Fatalf("message %d naming the target got %d, want 201", i, code)
+		}
 	}
-	if code := from("198.51.100.3:1000", "Target@Example.org"); code != 429 {
-		t.Errorf("a third message to the same address got %d, want 429", code)
+	if n := len(e.emails()["target@example.org"]); n != 1 {
+		t.Errorf("%d confirmations to one address within the hour, want 1", n)
+	}
+	if n := e.count(`SELECT count(*) FROM support_tickets WHERE reporter_email = 'target@example.org'`); n != 3 {
+		t.Errorf("%d messages kept, want 3", n)
 	}
 }

@@ -216,10 +216,20 @@ func (s *Service) Submit(ctx context.Context, user *uuid.UUID, sub Submission) (
 	}
 	// The confirmation repeats nothing the sender wrote. A guest's address
 	// isn't checked, so anything copied in here could be sent to a stranger
-	// in the archive's name.
+	// in the archive's name. For the same reason one address gets at most
+	// one confirmation an hour; the message itself is always kept.
+	var confirmedRecently bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
+		WHERE kind = 'email' AND payload->>'to' = $1 AND payload->>'subject' = $2
+		  AND created_at > now() - interval '1 hour')`, to, confirmationSubject).Scan(&confirmedRecently); err != nil {
+		return uuid.Nil, err
+	}
+	if confirmedRecently {
+		return id, tx.Commit()
+	}
 	err = jobs.Enqueue(ctx, tx, "email", email.Message{
 		To:      to,
-		Subject: "We received your message",
+		Subject: confirmationSubject,
 		Text: "Thank you for writing to us. We have received your " + label + " request and a volunteer will read it.\n\n" +
 			"If you didn't send a message to us, you can ignore this email.\n",
 	})
@@ -228,6 +238,10 @@ func (s *Service) Submit(ctx context.Context, user *uuid.UUID, sub Submission) (
 	}
 	return id, tx.Commit()
 }
+
+// confirmationSubject is the subject of the email that tells a sender their
+// message arrived.
+const confirmationSubject = "We received your message"
 
 // Ticket is a ticket as administrators see it.
 type Ticket struct {
