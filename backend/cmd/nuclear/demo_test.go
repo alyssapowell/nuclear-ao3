@@ -17,7 +17,6 @@ import (
 
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/demo"
-	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
@@ -130,7 +129,7 @@ func newDemoEnv(t *testing.T) *demoEnv {
 	r.Use(deps.AppAccess)
 	mountRoutes(r, deps, services{
 		auth: authSvc, works: worksSvc, tags: tags.New(db), search: search.New(db),
-		notify: notify.New(db, nil), export: export.New(db),
+		notify: notify.New(db, nil),
 	})
 	return &demoEnv{db: db, r: r}
 }

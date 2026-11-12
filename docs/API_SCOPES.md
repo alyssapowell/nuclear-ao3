@@ -21,6 +21,7 @@ walks every route that is really mounted and fails if the two disagree.
 | Route group | Routes | Scope | Notes |
 |---|---|---|---|
 | Works and chapters | `GET /api/v1/works`, `/works/:id`, `/works/:id/chapters`, `/works/:id/chapters/:id`, and the `/work/:id...` aliases | `read` | Includes members-only works the person can see. |
+| Downloads | `GET /works/:id/download.epub`, `.html`, `.txt`, and the `/work/:id...` alias | `read` | A reader's copy: the same chapters, names and refusals as reading the work. |
 | Comments | `GET /works/:id/comments`, `/work/:id/comments` | `read` | |
 | Series | `GET /series`, `/series/:id`, `/series/:id/works` | `read` | |
 | Collections | `GET /collections`, `/collections/:id` | `read` | `/collections/:id/works` is not open to apps: an organiser sees unapproved items there, so the answer would show which collections the person runs. |
@@ -44,8 +45,7 @@ walks every route that is really mounted and fails if the two disagree.
 | `/api/v1/support` | The Contact and Feedback forms. A person writes to the admins; an app does not do that for them. |
 | `/api/v1/blocks`, `/api/v1/mutes` | They name the pseuds a person wants to avoid. |
 | `POST /pseuds`, `PUT` and `DELETE /pseuds/:id` | Pseud management. |
-| `/api/v1/my/` (works, series, collections, comments, pseuds, stats, exports) and `GET /api/v1/bookmarks` | See "The /my decision". |
-| `/api/v1/export...` | Personal downloads. |
+| `/api/v1/my/` (works, series, collections, comments, pseuds, stats) and `GET /api/v1/bookmarks` | See "The /my decision". |
 | `/api/v1/notification...` and `/ws` | Notifications, preferences, rules and live updates. They announce activity on all of a person's pseuds at once. |
 | `GET /works/:id/kudos`, `/work/:id/kudos`, `/works/:id/stats`, `/work/:id/stats`, `/works/:id/authors`, `/works/:id/gifts`, `/works/:id/bookmark-status` | The answer depends on whether the caller is the creator or has already acted ("have I given kudos", owner analytics). That difference would tell an app which works and pseuds belong to the person. |
 | Creating, editing and deleting works, chapters, series, collections; co-authors, gifts, orphaning; editing or deleting a comment or bookmark; kudos; reports; tag creation and merging | Not opened yet. Succeeding or failing on an id the app already knows would show whether the person made it. The `write`, `works:manage` and `collections:manage` scopes can still be requested, but open no route in this release. |

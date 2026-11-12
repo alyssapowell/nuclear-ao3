@@ -145,9 +145,13 @@ Status key:
 
 ## Export / download
 
-- **Download works as EPUB and other formats**
+- **Download works** (AO3's Download menu)
   - Intent: readers can keep a copy, which is core to AO3's archival mission.
-  - Status: **Stub**. `processExport` is a TODO. The API accepts requests but never produces a file. It now requires login, and the requester comes from the token instead of the request body.
+  - Status: **Working** (tested against a real database: `backend/internal/works/download_test.go`, `backend/internal/export/export_test.go`; the EPUB is checked structurally, not yet with epubcheck or on a device). `GET /api/v1/works/:work_id/download.:format` (and the `/work/` alias) makes **EPUB 3, HTML and plain text** when asked for and streams it, with a `Content-Disposition` name from the title (ASCII fallback plus `filename*`). Files carry AO3's preface (title, pseud bylines, rating, warnings, category, fandom, relationships, characters, tags, language, series, stats, summary, notes, link) and an afterword. Chapter text is cleaned again with `internal/html` and rewritten as well-formed XHTML; everything else is escaped.
+  - Who may download is who may read: `can_user_view_work` and `can_user_view_chapter` decide (members-only works need a login; a blocked reader still downloads, as on the work page; an app with `read` gets the reader's copy, see API_SCOPES.md). A work that hides its creator names nobody and shows no series, for its own creators too. Drafts, works hidden by an admin or marked spam, and works in a collection that has not revealed them are refused (404) for everybody, creators and staff included. A draft chapter is only in a creator's own copy; a chapter an admin hid is in no copy.
+  - A logged-out answer may be kept by a CDN like other public reads (`publicRoutes`); a logged-in one is `private, no-store`. 30 downloads a minute per address.
+  - **Not offered: PDF, AZW3, MOBI.** PDF needs a layout engine and fonts (no small pure-Go option that is good enough for long fiction); AZW3/MOBI have no maintained pure-Go writer. EPUB opens on Kindle apps and by email conversion. The menu lists only what exists.
+  - The old request-a-file export endpoints (`/api/v1/export`, `/my/exports`, `/admin/exports/cleanup`) and the website's export dialogs are removed: they never produced a file. The `exports` table from migration 016 is unused. Downloads are not counted yet (AO3 keeps a download count; the import drops it). The "offline reading" author preference does not gate downloads, as AO3 has no such switch.
 
 ## Privacy and safety
 
@@ -239,7 +243,7 @@ These were fixed by merging the backend into one program with one login check (`
 2. ~~Tag and search had no-op login and role checks.~~ **Fixed:** wrangler and admin routes check `user_roles`.
 3. ~~**Every** "admin only" check let any logged-in user through~~; even auth's was a TODO. **Fixed:** the same real role check is used everywhere.
 4. ~~The notification service accepted any bearer token~~, and its WebSocket took `user_id` from the URL. **Fixed.**
-5. ~~The export service had no auth~~ and took the user ID from the request body. **Fixed.**
+5. ~~The export service had no auth~~ and took the user ID from the request body. **Fixed** by removing the service; downloads are made on request (see Export / download).
 6. ~~Every service port was published to the host.~~ **Fixed:** one app container, published on localhost only; Caddy is the public entrance. Metrics are on a separate private port.
 7. ~~The guest-comment auth exemption matched any POST ending in `/comments`.~~ **Removed:** guest comments go through optional login like the rest of the public routes.
 8. ~~CORS reflected any origin, with credentials, when `GIN_MODE` was unset.~~ **Fixed:** there is an explicit allowlist (`CORS_ORIGINS`).

@@ -2646,3 +2646,58 @@ export function getSessions(token: string | null): Promise<AccountResult<Session
 export function revokeSession(id: string, token: string | null): Promise<AccountResult> {
   return accountCall(`sessions/${encodeURIComponent(id)}`, 'DELETE', undefined, token);
 }
+
+// Downloads (GET /api/v1/works/:id/download.:format). Generated when asked
+// for, with the same visibility as reading the work. The formats the server
+// offers; PDF, AZW3 and MOBI are not among them.
+export const DOWNLOAD_FORMATS = [
+  { ext: 'epub', label: 'EPUB' },
+  { ext: 'html', label: 'HTML' },
+  { ext: 'txt', label: 'Text' },
+] as const;
+
+export type DownloadFormat = (typeof DOWNLOAD_FORMATS)[number]['ext'];
+
+export function workDownloadUrl(workId: string, format: DownloadFormat): string {
+  return `${API_GATEWAY_URL}/api/v1/works/${workId}/download.${format}`;
+}
+
+// The name the server chose (Content-Disposition), or a fallback.
+function downloadFilename(header: string | null, fallback: string): string {
+  if (header) {
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star) {
+      try {
+        return decodeURIComponent(star[1]);
+      } catch {
+        // fall through to the plain name
+      }
+    }
+    const plain = /filename="([^"]+)"/i.exec(header);
+    if (plain) return plain[1];
+  }
+  return fallback;
+}
+
+// Fetches a download with the reader's login (a plain link cannot send it;
+// members-only works need it) and hands the file to the browser.
+export async function downloadWork(workId: string, format: DownloadFormat, authToken?: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const response = await fetch(workDownloadUrl(workId, format), { method: 'GET', headers });
+  if (!response.ok) {
+    throw new Error(
+      response.status === 429 ? 'Too many downloads. Please try again in a minute.' : `Download failed (${response.status})`
+    );
+  }
+  const blob = await response.blob();
+  const name = downloadFilename(response.headers.get('Content-Disposition'), `work.${format}`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

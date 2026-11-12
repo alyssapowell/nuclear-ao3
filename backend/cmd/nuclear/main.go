@@ -128,7 +128,6 @@ import (
 	"nuclear-ao3/internal/audit"
 	"nuclear-ao3/internal/auth"
 	"nuclear-ao3/internal/demo"
-	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/html"
 	"nuclear-ao3/internal/jobs"
 	"nuclear-ao3/internal/moderation"
@@ -219,8 +218,6 @@ func main() {
 		log.Printf("TRIAL MODE: email is off. New accounts are confirmed at once, and no email is ever sent (password resets, notifications). Only for trying the archive out; never for real users.")
 	}
 	notifySvc.Start()
-	exportSvc := export.New(db)
-	exportSvc.Start()
 	searchSvc := search.New(db)
 
 	if os.Getenv("GIN_MODE") == "" {
@@ -245,7 +242,6 @@ func main() {
 		works:   worksSvc,
 		tags:    tags.New(db),
 		notify:  notifySvc,
-		export:  exportSvc,
 		search:  searchSvc,
 		support: support.New(db, os.Getenv("SUPPORT_EMAIL")),
 
@@ -552,7 +548,6 @@ type services struct {
 	works  *works.WorkService
 	tags   *tags.TagService
 	notify *notify.NotificationService
-	export *export.ExportService
 	search *search.Service
 	// support may be nil (the route tests mount without a database).
 	support *support.Service
@@ -571,7 +566,6 @@ func mountRoutes(r *gin.Engine, deps *platform.Deps, s services) {
 	works.Mount(r, s.works, deps)
 	tags.Mount(r, s.tags, deps)
 	notify.Mount(r, s.notify, deps)
-	export.Mount(r, s.export, deps)
 	search.Mount(r, s.search, deps)
 	moderation.Mount(r, moderation.New(deps.DB), deps)
 	if s.support == nil {

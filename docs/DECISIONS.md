@@ -89,7 +89,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 
 **How the rules are met at publishing (2026-11-02, audit phase 5):**
 - *No linking across apps / pseud rules:* the subject is per app (phase 2). On the API side, an app reaches only the routes in `docs/API_SCOPES.md`, which answer by pseud. Routes that join a person's pseuds (`/my/*`, "my bookmarks", notifications) or answer differently for a creator (kudos state, work stats, the authors list) are denied to apps. App writes go under the one pseud shared at consent, and asking for another pseud gets the same answer whether or not it is the person's. App views of the person's own pseud pages are the public view.
-- *Only what the person approved:* a gate refuses an app token on every route that is not in the allowlist (default deny), and on listed routes unless the token holds the scope (`403 insufficient_scope`). A hard denylist (sign-in, account, sessions, apps, admin, wrangling, blocks and mutes, pseud management, export) can't be opened by adding a scope. Staff accounts can't use app tokens, so an app never sees staff-only content.
+- *Only what the person approved:* a gate refuses an app token on every route that is not in the allowlist (default deny), and on listed routes unless the token holds the scope (`403 insufficient_scope`). A hard denylist (sign-in, account, sessions, apps, admin, wrangling, blocks and mutes, pseud management) can't be opened by adding a scope. Staff accounts can't use app tokens, so an app never sees staff-only content.
 - *Apps are vetted:* the token only resolves while the app is `approved` and the person is in good standing; suspending an app or banning a person stops their tokens on the next request.
 - *Everything can be undone:* revoking an app ends its tokens (existing behaviour); `last_used` is kept on each token (at most one write a minute) and shown on the Connected apps page. Apps are limited to 120 requests a minute per (app, person), separate from logged-in browsing.
 - *Left for later:* opening writes to works, chapters, series and collections, and closing the creator-only single-item views, need an "as a reader, not an author" flag in `can_user_view_*` (see API_SCOPES.md "Known limits").
@@ -247,7 +247,7 @@ AO3 is run by volunteers. Its outages over the last two years have come from upg
 - `nuclear jobs` shows what's waiting, running and failed, and why. `nuclear jobs retry [id]` sends failed jobs again.
 - Email is the first kind of job. `shared/email` sends it: a 30-second limit per email, TLS whenever the mail server offers it, a password only over TLS, and headers built so nothing in a title or pen name can add headers. Notification emails are plain text, because they quote titles and names anyone can write.
 - Removed: `shared/messaging`, about 4,900 lines for channels, templates, telemetry and rate limits. Nothing was registered with it, so it delivered nothing, and no notification email was ever sent.
-- Still to move onto the queue: exports (still a stub) and notification batching, which keeps waiting notifications in memory and loses them on restart.
+- Still to move onto the queue: notification batching, which keeps waiting notifications in memory and loses them on restart.
 
 ## 2026-10-29: One Go binary instead of six services and a gateway
 

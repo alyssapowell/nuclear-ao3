@@ -17,7 +17,6 @@ import (
 	"github.com/google/uuid"
 
 	"nuclear-ao3/internal/auth"
-	"nuclear-ao3/internal/export"
 	"nuclear-ao3/internal/notify"
 	"nuclear-ao3/internal/platform"
 	"nuclear-ao3/internal/search"
@@ -47,7 +46,6 @@ func stubRouter(d *platform.Deps) *gin.Engine {
 		works:  &works.WorkService{},
 		tags:   &tags.TagService{},
 		notify: &notify.NotificationService{},
-		export: &export.ExportService{},
 		search: &search.Service{},
 	})
 	return r
@@ -114,7 +112,7 @@ func TestEveryRouteRefusesApps(t *testing.T) {
 		"POST /api/v1/auth/reset-password", "POST /api/v1/auth/verify-email",
 		"GET /api/v1/apps", "POST /api/v1/apps", "GET /api/v1/blocks", "POST /api/v1/mutes",
 		"POST /api/v1/pseuds", "PUT /api/v1/pseuds/:pseud_id", "GET /api/v1/my/works", "GET /api/v1/my/pseuds",
-		"GET /api/v1/my/comments", "GET /api/v1/export/:id/download", "GET /api/v1/admin/audit",
+		"GET /api/v1/my/comments", "GET /api/v1/admin/audit",
 		"GET /api/v1/oauth/authorized-applications", "POST /auth/token", "GET /auth/authorize", "POST /auth/register-client",
 		"GET /api/v1/wrangling/queue", "GET /api/v1/notifications", "GET /ws",
 		"POST /api/v1/support", "GET /api/v1/admin/support", "POST /api/v1/admin/support/:ticket_id/notes",
@@ -249,7 +247,7 @@ func newAppEnv(t *testing.T, limit int) *appEnv {
 	r.Use(d.AppAccess)
 	mountRoutes(r, d, services{
 		auth: authSvc, works: worksSvc, tags: tags.New(db), search: search.New(db),
-		notify: notify.New(db, nil), export: export.New(db),
+		notify: notify.New(db, nil),
 	})
 	e.r = r
 
