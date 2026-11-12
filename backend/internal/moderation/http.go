@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +33,8 @@ func Mount(r *gin.Engine, s *Service, d *platform.Deps) {
 		mod.POST("/works/:work_id/unspam", h.workSpam(false))
 		mod.POST("/works/:work_id/chapters/:chapter_id/hide", h.hide(Chapter, "chapter_id", true))
 		mod.POST("/works/:work_id/chapters/:chapter_id/unhide", h.hide(Chapter, "chapter_id", false))
+		mod.POST("/chapters/:chapter_id/hide", h.hide(Chapter, "chapter_id", true))
+		mod.POST("/chapters/:chapter_id/unhide", h.hide(Chapter, "chapter_id", false))
 		mod.POST("/series/:series_id/hide", h.hide(Series, "series_id", true))
 		mod.POST("/series/:series_id/unhide", h.hide(Series, "series_id", false))
 		mod.POST("/bookmarks/:bookmark_id/hide", h.hide(Bookmark, "bookmark_id", true))
@@ -54,6 +57,14 @@ func Mount(r *gin.Engine, s *Service, d *platform.Deps) {
 		mod.POST("/users/:user_id/unban", h.userAction("unban", func(c *gin.Context, a audit.Actor, id uuid.UUID, reason string) error {
 			return s.UnbanUser(c.Request.Context(), a, id, reason)
 		}))
+
+		// What the admin screens need: find an account, end its sessions,
+		// and work through abuse reports.
+		mod.GET("/accounts", h.findAccount)
+		mod.POST("/users/:user_id/logout-everywhere", h.logoutEverywhere)
+		mod.GET("/abuse-reports", h.listAbuseReports)
+		mod.POST("/abuse-reports/:kind/:report_id/resolve", h.closeReport("resolved"))
+		mod.POST("/abuse-reports/:kind/:report_id/dismiss", h.closeReport("dismissed"))
 	}
 
 	adm := r.Group("/api/v1/admin", d.RequireUser, d.ActiveAccount, d.RequireRole())
@@ -250,30 +261,58 @@ func (h *handlers) userAction(_ string, do func(c *gin.Context, a audit.Actor, i
 }
 
 func (h *handlers) auditLog(c *gin.Context) {
-	var since time.Time
+	var f audit.Filter
 	if v := c.Query("since"); v != "" {
 		t, err := ParseSince(v)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": err.Error()})
 			return
 		}
-		since = t
+		f.Since = t
 	}
-	limit := 50
+	if v := c.Query("until"); v != "" {
+		t, err := ParseSince(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "until must be a date like 2026-10-01 or a time like 2026-10-01T00:00:00Z"})
+			return
+		}
+		// A bare date means the whole of that day.
+		if _, derr := time.Parse("2006-01-02", v); derr == nil {
+			t = t.Add(24 * time.Hour)
+		}
+		f.Until = t
+	}
+	f.Action = strings.TrimSpace(c.Query("action"))
+	f.Actor = strings.TrimSpace(c.Query("actor"))
+	f.Limit = 50
 	if v := c.Query("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 1000 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "limit must be 1 to 1000"})
 			return
 		}
-		limit = n
+		f.Limit = n
 	}
-	entries, err := audit.List(c.Request.Context(), h.db, since, limit)
+	if v := c.Query("offset"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bad_request", "message": "offset must be 0 or more"})
+			return
+		}
+		f.Offset = n
+	}
+	// One more than asked for tells us whether there is a next page.
+	f.Limit++
+	entries, err := audit.Search(c.Request.Context(), h.db, f)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "server_error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"actions": entries})
+	more := len(entries) >= f.Limit
+	if more {
+		entries = entries[:f.Limit-1]
+	}
+	c.JSON(http.StatusOK, gin.H{"actions": entries, "has_more": more})
 }
 
 // ParseSince reads the start of an audit listing: a date like 2026-10-01 or

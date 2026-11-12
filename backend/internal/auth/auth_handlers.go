@@ -125,6 +125,10 @@ func (as *AuthService) GetProfile(c *gin.Context) {
 		IsVerified   bool               `json:"is_verified"`
 		CreatedAt    time.Time          `json:"created_at"`
 		DefaultPseud *models.PseudClaim `json:"default_pseud,omitempty"`
+		// Roles are the person's own staff roles (admin, moderator,
+		// tag_wrangler); the website uses them to show or hide admin links.
+		// The server checks them again on every admin request.
+		Roles []string `json:"roles"`
 	}
 	err := as.db.QueryRowContext(c, `
 		SELECT id, email, COALESCE(display_name, ''), is_verified, created_at
@@ -139,6 +143,17 @@ func (as *AuthService) GetProfile(c *gin.Context) {
 		return
 	}
 	u.DefaultPseud = defaultPseud(c.Request.Context(), as.db, userID)
+	u.Roles = []string{}
+	if rows, err := as.db.QueryContext(c, `SELECT role FROM user_roles
+		WHERE user_id = $1 AND revoked_at IS NULL AND role <> 'user' ORDER BY role`, userID); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var r string
+			if rows.Scan(&r) == nil {
+				u.Roles = append(u.Roles, r)
+			}
+		}
+	}
 	c.JSON(http.StatusOK, u)
 }
 

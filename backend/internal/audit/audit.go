@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/user"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -115,6 +116,63 @@ func List(ctx context.Context, db *sql.DB, since time.Time, limit int) ([]Entry,
 		}
 		if actorID.Valid {
 			if id, err := uuid.Parse(actorID.String); err == nil {
+				e.ActorUserID = &id
+			}
+		}
+		e.Details = details
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// Filter narrows what Search returns. Zero values mean "no filter".
+type Filter struct {
+	Since, Until time.Time // Since is inclusive, Until is exclusive
+	Action       string    // exact action name, e.g. "ban"
+	Actor        string    // an actor's account id, or part of the actor label
+	Limit        int
+	Offset       int
+}
+
+// Search returns the newest rows first that match f.
+func Search(ctx context.Context, db *sql.DB, f Filter) ([]Entry, error) {
+	if f.Limit < 1 {
+		f.Limit = 50
+	}
+	var actorID any
+	if id, err := uuid.Parse(f.Actor); err == nil {
+		actorID = id
+	}
+	// Escape LIKE wildcards so the text is matched as typed.
+	esc := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(f.Actor)
+	var until any
+	if !f.Until.IsZero() {
+		until = f.Until
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, at, actor_user_id, actor_label, action, target_type, target_id,
+		       COALESCE(reason, ''), details
+		FROM admin_actions
+		WHERE at >= $1
+		  AND ($2::timestamptz IS NULL OR at < $2)
+		  AND ($3 = '' OR action = $3)
+		  AND ($4 = '' OR actor_user_id = $5::uuid OR actor_label ILIKE '%' || $6 || '%')
+		ORDER BY at DESC, id DESC
+		LIMIT $7 OFFSET $8`, f.Since, until, f.Action, f.Actor, actorID, esc, f.Limit, f.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Entry{}
+	for rows.Next() {
+		var e Entry
+		var actorUser sql.NullString
+		var details []byte
+		if err := rows.Scan(&e.ID, &e.At, &actorUser, &e.Actor, &e.Action, &e.TargetType, &e.TargetID, &e.Reason, &details); err != nil {
+			return nil, err
+		}
+		if actorUser.Valid {
+			if id, err := uuid.Parse(actorUser.String); err == nil {
 				e.ActorUserID = &id
 			}
 		}

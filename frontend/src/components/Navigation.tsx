@@ -3,6 +3,8 @@ import { logout } from '@/utils/auth';
 import { useState, useEffect, useRef } from 'react';
 import { Search, Menu, X, User, Bell, LogOut, Settings, ChevronDown, BookOpen, Library, FolderOpen, Plus, Bookmark, Heart, LayoutDashboard } from 'lucide-react';
 import { NotificationBell } from './notifications';
+import { useRoles } from '@/hooks/useRoles';
+import { hasRole } from '@/lib/admin';
 
 interface User {
   id: string;
@@ -71,6 +73,9 @@ export default function Navigation() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  // Admin links are for convenience only; the server checks the role on every admin request.
+  const { roles } = useRoles();
+  const showAdmin = !!user && hasRole(roles, 'moderator');
 
   // Check for authentication and listen for changes
   useEffect(() => {
@@ -321,6 +326,16 @@ export default function Navigation() {
                       <Settings className="w-4 h-4 mr-2" />
                       Password and Sessions
                     </Link>
+                    {showAdmin && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Admin
+                      </Link>
+                    )}
                     <hr className="my-1" />
                     <button
                       onClick={handleSignOut}
@@ -492,6 +507,15 @@ export default function Navigation() {
                   >
                     Profile Settings
                   </Link>
+                  {showAdmin && (
+                    <Link
+                      to="/admin"
+                      className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Admin
+                    </Link>
+                  )}
                   <button
                     onClick={handleSignOut}
                     className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-orange-700 hover:bg-gray-50 transition-colors"
