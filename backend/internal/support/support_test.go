@@ -388,15 +388,15 @@ func TestRateLimitCannotBeDodged(t *testing.T) {
 	// Typing someone else's address over and over neither blocks them from
 	// writing in nor floods their inbox: every message is kept, and the
 	// address gets one confirmation an hour.
-	for i := 1; i <= 3; i++ {
-		if code := from(fmt.Sprintf("198.51.100.%d:1000", i), "target@example.org"); code != 201 {
-			t.Fatalf("message %d naming the target got %d, want 201", i, code)
+	for i, addr := range []string{"target@example.org", "Target@Example.org", "TARGET@EXAMPLE.ORG"} {
+		if code := from(fmt.Sprintf("198.51.100.%d:1000", i+1), addr); code != 201 {
+			t.Fatalf("message %d naming the target got %d, want 201", i+1, code)
 		}
 	}
-	if n := len(e.emails()["target@example.org"]); n != 1 {
+	if n := e.count(`SELECT count(*) FROM jobs WHERE kind = 'email' AND lower(payload->>'to') = 'target@example.org'`); n != 1 {
 		t.Errorf("%d confirmations to one address within the hour, want 1", n)
 	}
-	if n := e.count(`SELECT count(*) FROM support_tickets WHERE reporter_email = 'target@example.org'`); n != 3 {
+	if n := e.count(`SELECT count(*) FROM support_tickets WHERE lower(reporter_email) = 'target@example.org'`); n != 3 {
 		t.Errorf("%d messages kept, want 3", n)
 	}
 }

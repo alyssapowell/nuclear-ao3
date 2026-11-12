@@ -218,9 +218,14 @@ func (s *Service) Submit(ctx context.Context, user *uuid.UUID, sub Submission) (
 	// isn't checked, so anything copied in here could be sent to a stranger
 	// in the archive's name. For the same reason one address gets at most
 	// one confirmation an hour; the message itself is always kept.
+	// The lock makes messages naming the same address (in any case) wait
+	// for each other, so two sent at once can't both get a confirmation.
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('support-confirm:' || lower($1)))`, to); err != nil {
+		return uuid.Nil, err
+	}
 	var confirmedRecently bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM jobs
-		WHERE kind = 'email' AND payload->>'to' = $1 AND payload->>'subject' = $2
+		WHERE kind = 'email' AND lower(payload->>'to') = lower($1) AND payload->>'subject' = $2
 		  AND created_at > now() - interval '1 hour')`, to, confirmationSubject).Scan(&confirmedRecently); err != nil {
 		return uuid.Nil, err
 	}
